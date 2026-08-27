@@ -13,7 +13,7 @@ import { applicationsApi, departmentsApi } from '../../services/domains';
 import { APPLICATION_STATUS_OPTIONS, PRIORITY_OPTIONS, INDUSTRY_OPTIONS, FUNCTIONAL_AREA_OPTIONS } from '../../constants/options';
 
 const EMPTY_VALUES = {
-  name: '', description: '', status: 'planning', priority: 'medium',
+  name: '', description: '', status: 'development', priority: 'medium',
   departmentId: '', industry: '', functionalArea: '', startDate: '', releaseDate: '',
   repositoryUrl: '', deploymentUrl: '',
 };
@@ -44,7 +44,7 @@ export default function ApplicationFormDialog({ open, onClose, onSaved, applicat
     setSubmitError(null);
     reset(application ? {
       name: application.name || '', description: application.description || '',
-      status: application.status || 'planning', priority: application.priority || 'medium',
+      status: application.status || 'development', priority: application.priority || 'medium',
       departmentId: application.department?.id || application.departmentId || '',
       industry: application.industry || '', functionalArea: application.functionalArea || '',
       startDate: application.startDate || '', releaseDate: application.releaseDate || '',

@@ -46,7 +46,7 @@ components:
         name: { type: string }
         description: { type: string }
         category: { type: string }
-        status: { type: string, enum: [planning, in_progress, completed, on_hold, deprecated] }
+        status: { type: string, enum: [development, testing, deployment] }
         priority: { type: string, enum: [low, medium, high, critical] }
         currentVersion: { type: string }
         repositoryUrl: { type: string }

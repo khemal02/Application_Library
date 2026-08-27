@@ -9,9 +9,9 @@ module.exports = (sequelize, DataTypes) => {
     ownerId: { type: DataTypes.UUID, allowNull: true },
     departmentId: { type: DataTypes.UUID, allowNull: true },
     status: {
-      type: DataTypes.ENUM('planning', 'in_progress', 'completed', 'on_hold', 'deprecated'),
+      type: DataTypes.ENUM('development', 'testing', 'deployment'),
       allowNull: false,
-      defaultValue: 'planning',
+      defaultValue: 'development',
     },
     priority: { type: DataTypes.ENUM('low', 'medium', 'high', 'critical'), allowNull: false, defaultValue: 'medium' },
     startDate: { type: DataTypes.DATEONLY },

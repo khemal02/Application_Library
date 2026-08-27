@@ -30,8 +30,8 @@ export default function ApplicationsListPage() {
 
   const columns = [
     { key: 'name', label: 'Project Name', sortable: true },
-    { key: 'department', label: 'Department', render: (row) => row.department?.name || '—' },
     { key: 'owner', label: 'Owner', render: (row) => row.owner?.name || '—' },
+    { key: 'department', label: 'Department', render: (row) => row.department?.name || '—' },
     { key: 'industry', label: 'Industry', render: (row) => (row.industry ? humanize(row.industry) : '—') },
     { key: 'functionalArea', label: 'Functional Area', render: (row) => (row.functionalArea ? humanize(row.functionalArea) : '—') },
     { key: 'status', label: 'Status', sortable: true, render: (row) => <StatusBadge value={row.status} /> },

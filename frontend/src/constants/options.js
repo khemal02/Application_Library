@@ -6,7 +6,7 @@ export const PRIORITY_OPTIONS = toOptions(['low', 'medium', 'high', 'critical'])
 export const SEVERITY_OPTIONS = toOptions(['low', 'medium', 'high', 'critical']);
 export const COMPLEXITY_OPTIONS = toOptions(['low', 'medium', 'high']);
 
-export const APPLICATION_STATUS_OPTIONS = toOptions(['planning', 'in_progress', 'completed', 'on_hold', 'deprecated']);
+export const APPLICATION_STATUS_OPTIONS = toOptions(['development', 'testing', 'deployment']);
 export const FEATURE_STATUS_OPTIONS = toOptions(['planned', 'in_progress', 'completed', 'blocked']);
 export const BUG_STATUS_OPTIONS = toOptions(['open', 'in_progress', 'resolved', 'wont_fix']);
 export const KNOWN_ISSUE_STATUS_OPTIONS = toOptions(['active', 'monitoring', 'resolved']);

@@ -163,6 +163,11 @@ export default function IdeaPanelCard({
       { value: 'reject', title: 'Not supported' },
     ];
 
+  // 'request_changes' only ever appears in the reviewer's three-tier options above, so this can't
+  // fire for an approver/tie-break's binary choice — a note is optional there either way.
+  const noteRequired = voteDecision === 'request_changes';
+  const noteMissing = noteRequired && !voteNote.trim();
+
   const doSubmit = async () => {
     const ok = await onSubmitReview();
     if (ok) setEditingMyResponse(false);
@@ -311,8 +316,12 @@ export default function IdeaPanelCard({
             )}
 
             <TextField
-              fullWidth size="small" multiline minRows={2} label="Note(Optional)" 
+              fullWidth size="small" multiline minRows={2}
+              label={noteRequired ? 'Note (Required)' : 'Note (Optional)'}
               value={voteNote} onChange={(e) => onVoteNoteChange(e.target.value)}
+              required={noteRequired}
+              error={noteMissing}
+              helperText={noteRequired ? 'Explain what changes are needed before this can be submitted.' : ''}
             />
 
             {requiresOwner && (
@@ -333,7 +342,7 @@ export default function IdeaPanelCard({
 
             <Stack direction="row" spacing={1}>
               <Button
-                variant="contained" disabled={submitting || !voteDecision || (requiresOwner && !ownerId)}
+                variant="contained" disabled={submitting || !voteDecision || noteMissing || (requiresOwner && !ownerId)}
                 onClick={handleSubmitClick}
               >
                 {isTieBreak ? 'Break the Tie' : (isApproverRow ? (myRosterEntry?.decision ? 'Update decision' : 'Submit decision') : (myRosterEntry?.decision ? 'Update review' : 'Submit review'))}

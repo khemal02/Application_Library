@@ -449,6 +449,9 @@ async function submitReview(id, { decision, note, ownerId }, req) {
   if (!myRow) return submitTieBreak(idea, { decision, note, ownerId }, req);
 
   if (myRow.kind === 'reviewer') {
+    if (decision === 'request_changes' && !note?.trim()) {
+      throw ApiError.badRequest('A note is required when requesting changes.');
+    }
     await myRow.update({ decision, note: note ?? null });
     return getById(id, req);
   }

@@ -9,8 +9,8 @@ async function getSummary() {
     recentApplications, recentActivity,
   ] = await Promise.all([
     Application.count(),
-    Application.count({ where: { status: 'in_progress' } }),
-    Application.count({ where: { status: 'completed' } }),
+    Application.count({ where: { status: { [Op.in]: ['development', 'testing'] } } }),
+    Application.count({ where: { status: 'deployment' } }),
     Idea.count({ where: { status: 'submitted' } }),
     Idea.count({ where: { status: 'approved' } }),
     Idea.count({ where: { status: { [Op.in]: ['discussion', 'review'] } } }),

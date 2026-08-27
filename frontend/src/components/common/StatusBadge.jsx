@@ -7,7 +7,10 @@ import humanize from '../../utils/humanize';
 const COLOR_MAP = {
   // generic
   active: 'success', inactive: 'default', open: 'warning', resolved: 'success', monitoring: 'info', wont_fix: 'default',
-  // applications
+  // applications — planning/in_progress/completed/on_hold/deprecated are historical-only now
+  // (retired by 20260130000027-restrict-application-status.js), kept here only so old audit-log
+  // entries still render a color instead of falling back to default.
+  development: 'default', testing: 'info', deployment: 'success',
   planning: 'default', in_progress: 'info', completed: 'success', on_hold: 'warning', deprecated: 'default',
   // features / roadmap / timeline
   planned: 'default', blocked: 'error', proposed: 'default', done: 'success', upcoming: 'default', delayed: 'warning',
