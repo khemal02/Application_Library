@@ -1,0 +1,412 @@
+openapi: 3.0.3
+info:
+  title: Application Library and Management System API
+  description: >
+    REST API for the Application Library and Management System — Application Tracking &
+    Documentation, New Application Ideas, and Existing Application Review & Improvement modules.
+  version: 1.0.0
+servers:
+  - url: /api
+tags:
+  - name: Auth
+  - name: Applications
+  - name: Application Documentation
+  - name: Ideas
+  - name: Suggestions
+  - name: Dashboard
+  - name: Search
+  - name: Administration
+  - name: Collaboration
+  - name: Notifications
+  - name: Audit Logs
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ApiResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data: {}
+    PaginationMeta:
+      type: object
+      properties:
+        page: { type: integer }
+        limit: { type: integer }
+        totalItems: { type: integer }
+        totalPages: { type: integer }
+    Application:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        category: { type: string }
+        status: { type: string, enum: [planning, in_progress, completed, on_hold, deprecated] }
+        priority: { type: string, enum: [low, medium, high, critical] }
+        currentVersion: { type: string }
+        repositoryUrl: { type: string }
+        deploymentUrl: { type: string }
+    Idea:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        description: { type: string }
+        status: { type: string, enum: [submitted, discussion, technical_review_1, technical_review_2, review, approved, rejected, development_ready] }
+        priority: { type: string, enum: [low, medium, high, critical] }
+    Suggestion:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        departmentId: { type: string, format: uuid, nullable: true }
+        status: { type: string, enum: [submitted, technical_review, discussion, approved, assigned, implemented, closed] }
+security:
+  - bearerAuth: []
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in with email and password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: JWT + user profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '401':
+          description: Invalid credentials
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get the current authenticated user's profile + permissions
+      responses:
+        '200': { description: Current user }
+  /applications:
+    get:
+      tags: [Applications]
+      summary: List applications (paginated, sortable, filterable, searchable)
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: status
+          schema: { type: string }
+        - in: query
+          name: sort
+          schema: { type: string, example: -createdAt }
+      responses:
+        '200':
+          description: Paginated list of applications
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+    post:
+      tags: [Applications]
+      summary: Create an application
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Application' }
+      responses:
+        '201': { description: Created }
+        '400': { description: Validation error }
+        '403': { description: Forbidden — missing applications:create permission }
+  /applications/{id}:
+    get:
+      tags: [Applications]
+      summary: Get an application with its full documentation (tech stack, features, AI prompts, architecture/API/DB docs, releases, bugs, roadmap, timeline)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Application detail }
+        '404': { description: Not found }
+    put:
+      tags: [Applications]
+      summary: Update an application
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Updated }
+    delete:
+      tags: [Applications]
+      summary: Delete an application
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Deleted }
+  /ideas:
+    get:
+      tags: [Ideas]
+      summary: List submitted application ideas
+      responses:
+        '200': { description: Paginated list of ideas }
+    post:
+      tags: [Ideas]
+      summary: Submit a new application idea
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Idea' }
+      responses:
+        '201': { description: Created }
+  /ideas/analytics:
+    get:
+      tags: [Ideas]
+      summary: Most popular ideas, most reviewed ideas, and top contributors
+      responses:
+        '200': { description: Analytics summary }
+  /suggestions:
+    get:
+      tags: [Suggestions]
+      summary: List improvement suggestions filed against applications
+      responses:
+        '200': { description: Paginated list of suggestions }
+    post:
+      tags: [Suggestions]
+      summary: Submit an improvement suggestion (feature request, bug, security, performance, etc.)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Suggestion' }
+      responses:
+        '201': { description: Created }
+  /suggestions/{id}/status:
+    patch:
+      tags: [Suggestions]
+      summary: Move a suggestion through its workflow (submitted -> technical_review -> discussion -> approved -> assigned -> implemented -> closed)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Status updated }
+  /dashboard:
+    get:
+      tags: [Dashboard]
+      summary: Aggregated stats + recent activity for the home dashboard
+      responses:
+        '200': { description: Dashboard summary }
+  /search:
+    get:
+      tags: [Search]
+      summary: Global full-text search across applications, ideas, suggestions, and AI prompts
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Grouped search results }
+
+  # ---------------------------------------------------------------------------
+  # Application Documentation sub-resources — every one of these follows the same shape:
+  #   GET    /applications/{applicationId}/<resource>          list (paginated/sortable/filterable)
+  #   GET    /applications/{applicationId}/<resource>/{id}     get one
+  #   POST   /applications/{applicationId}/<resource>          create (requires owner/department access)
+  #   PUT    /applications/{applicationId}/<resource>/{id}     update (requires owner/department access)
+  #   DELETE /applications/{applicationId}/<resource>/{id}     delete (requires owner/department access)
+  # `architecture-docs` is the one exception: PUT is an upsert keyed by docType instead of by id.
+  # ---------------------------------------------------------------------------
+  /applications/{applicationId}/tech-stack:
+    get:
+      tags: [Application Documentation]
+      summary: List an application's technology stack entries
+      parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Paginated list } }
+    post:
+      tags: [Application Documentation]
+      summary: Add a technology stack entry
+      parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }]
+      responses: { '201': { description: Created }, '403': { description: Not the application's owner/department } }
+  /applications/{applicationId}/tech-stack/{id}:
+    put:
+      tags: [Application Documentation]
+      summary: Update a technology stack entry
+      parameters:
+        - { in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses: { '200': { description: Updated } }
+    delete:
+      tags: [Application Documentation]
+      summary: Remove a technology stack entry
+      parameters:
+        - { in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses: { '204': { description: Deleted } }
+  /applications/{applicationId}/features:
+    get: { tags: [Application Documentation], summary: List application features, parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Paginated list } } }
+    post: { tags: [Application Documentation], summary: "Add a feature (supports dependencyIds on other features)", parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '201': { description: Created } } }
+  /applications/{applicationId}/ai-prompts:
+    get: { tags: [Application Documentation], summary: List the AI Prompt Library entries for an application, parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Paginated list } } }
+    post: { tags: [Application Documentation], summary: "Add an AI prompt (title, prompt text, model, category, version)", parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '201': { description: Created } } }
+  /applications/{applicationId}/architecture-docs:
+    get: { tags: [Application Documentation], summary: "List architecture docs (high level, folder structure, API flow, DB design, auth flow, microservice/deployment diagrams)", parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: List (one entry per docType) } } }
+    put: { tags: [Application Documentation], summary: Upsert an architecture doc by docType, parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Saved } } }
+  /applications/{applicationId}/api-docs:
+    get: { tags: [Application Documentation], summary: List documented API endpoints, parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Paginated list } } }
+    post: { tags: [Application Documentation], summary: "Document an API endpoint (method, path, request/response/error schemas)", parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '201': { description: Created } } }
+  /applications/{applicationId}/db-docs:
+    get: { tags: [Application Documentation], summary: List documented database tables, parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Paginated list } } }
+    post: { tags: [Application Documentation], summary: "Document a database table (columns, relationships, constraints)", parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '201': { description: Created } } }
+  /applications/{applicationId}/releases:
+    get: { tags: [Application Documentation], summary: List release notes / version history, parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Paginated list } } }
+    post: { tags: [Application Documentation], summary: "Add a release (version, new features, bug fixes, breaking changes)", parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '201': { description: Created } } }
+  /applications/{applicationId}/bugs:
+    get: { tags: [Application Documentation], summary: List bug history, parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Paginated list } } }
+    post: { tags: [Application Documentation], summary: Log a bug, parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '201': { description: Created } } }
+  /applications/{applicationId}/known-issues:
+    get: { tags: [Application Documentation], summary: List known issues, parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Paginated list } } }
+    post: { tags: [Application Documentation], summary: Add a known issue (with workaround), parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '201': { description: Created } } }
+  /applications/{applicationId}/roadmap:
+    get: { tags: [Application Documentation], summary: List future roadmap items, parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Paginated list } } }
+    post: { tags: [Application Documentation], summary: Add a roadmap item, parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '201': { description: Created } } }
+  /applications/{applicationId}/timeline:
+    get: { tags: [Application Documentation], summary: List development timeline milestones, parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Paginated list } } }
+    post: { tags: [Application Documentation], summary: Add a timeline milestone, parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '201': { description: Created } } }
+
+  # ---------------------------------------------------------------------------
+  # Administration
+  # ---------------------------------------------------------------------------
+  /users:
+    get: { tags: [Administration], summary: "List users (paginated/filterable by role, department, status)", responses: { '200': { description: Paginated list } } }
+    post: { tags: [Administration], summary: Create a user (requires users:create), responses: { '201': { description: Created } } }
+  /users/{id}:
+    put: { tags: [Administration], summary: Update a user, parameters: [{ in: path, name: id, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Updated } } }
+    delete: { tags: [Administration], summary: Delete a user, parameters: [{ in: path, name: id, required: true, schema: { type: string, format: uuid } }], responses: { '204': { description: Deleted } } }
+  /users/me/profile:
+    patch: { tags: [Administration], summary: Update the current user's own name/avatar, responses: { '200': { description: Updated } } }
+  /roles:
+    get: { tags: [Administration], summary: List roles with their permissions, responses: { '200': { description: List of roles } } }
+  /roles/{id}/permissions:
+    put: { tags: [Administration], summary: Replace a role's full permission set, parameters: [{ in: path, name: id, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Updated } } }
+  /departments:
+    get: { tags: [Administration], summary: List departments, responses: { '200': { description: List } } }
+    post: { tags: [Administration], summary: Create a department, responses: { '201': { description: Created } } }
+
+  # ---------------------------------------------------------------------------
+  # Collaboration — generic, reused across applications/ideas/suggestions via entityType+entityId
+  # ---------------------------------------------------------------------------
+  /comments:
+    get:
+      tags: [Collaboration]
+      summary: List threaded comments for an entity
+      parameters:
+        - { in: query, name: entityType, required: true, schema: { type: string, enum: [application, idea, suggestion] } }
+        - { in: query, name: entityId, required: true, schema: { type: string, format: uuid } }
+      responses: { '200': { description: Nested comment tree } }
+    post:
+      tags: [Collaboration]
+      summary: Post a comment or reply (set parentCommentId to reply)
+      responses: { '201': { description: Created } }
+  /comments/{id}:
+    delete:
+      tags: [Collaboration]
+      summary: Delete a comment (own comment, or admin)
+      parameters: [{ in: path, name: id, required: true, schema: { type: string, format: uuid } }]
+      responses: { '204': { description: Deleted } }
+  /votes/toggle:
+    post:
+      tags: [Collaboration]
+      summary: Toggle an upvote/bookmark on an entity (idempotent — calling again removes it)
+      responses: { '200': { description: '{ voted: boolean }' } }
+  /votes/summary:
+    get:
+      tags: [Collaboration]
+      summary: Get vote counts by type + the current user's votes for an entity
+      parameters:
+        - { in: query, name: entityType, required: true, schema: { type: string } }
+        - { in: query, name: entityId, required: true, schema: { type: string, format: uuid } }
+      responses: { '200': { description: '{ counts, userVotes }' } }
+  /tags:
+    get: { tags: [Collaboration], summary: Search/autocomplete tags, responses: { '200': { description: List of tags } } }
+  /tags/for-entity:
+    get: { tags: [Collaboration], summary: List tags attached to an entity, responses: { '200': { description: List of tags } } }
+    put: { tags: [Collaboration], summary: Replace the tag set on an entity, responses: { '200': { description: Updated tags } } }
+  /attachments:
+    get:
+      tags: [Collaboration]
+      summary: List attachments for an entity
+      parameters:
+        - { in: query, name: entityType, required: true, schema: { type: string } }
+        - { in: query, name: entityId, required: true, schema: { type: string, format: uuid } }
+      responses: { '200': { description: List of attachments (each with a downloadable url) } }
+    post:
+      tags: [Collaboration]
+      summary: Upload a file attachment (multipart/form-data — allow-listed types only, size-limited)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+                entityType: { type: string }
+                entityId: { type: string, format: uuid }
+      responses: { '201': { description: Uploaded }, '400': { description: File type not allowed or too large } }
+  /attachments/{id}:
+    delete:
+      tags: [Collaboration]
+      summary: Delete an attachment
+      parameters: [{ in: path, name: id, required: true, schema: { type: string, format: uuid } }]
+      responses: { '204': { description: Deleted } }
+
+  # ---------------------------------------------------------------------------
+  # Notifications
+  # ---------------------------------------------------------------------------
+  /notifications:
+    get: { tags: [Notifications], summary: List the current user's notifications, responses: { '200': { description: Paginated list } } }
+  /notifications/unread-count:
+    get: { tags: [Notifications], summary: Get the current user's unread notification count, responses: { '200': { description: '{ count }' } } }
+  /notifications/{id}/read:
+    patch: { tags: [Notifications], summary: Mark one notification as read, parameters: [{ in: path, name: id, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Updated } } }
+  /notifications/read-all:
+    patch: { tags: [Notifications], summary: Mark all of the current user's notifications as read, responses: { '200': { description: Updated } } }
+
+  # ---------------------------------------------------------------------------
+  # Audit Logs
+  # ---------------------------------------------------------------------------
+  /audit-logs:
+    get:
+      tags: [Audit Logs]
+      summary: List audit log entries (admin only) — filterable by entityType, entityId, userId, action
+      responses: { '200': { description: Paginated list } }
