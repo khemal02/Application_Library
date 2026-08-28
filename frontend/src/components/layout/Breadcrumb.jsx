@@ -8,7 +8,7 @@ const LABELS = {
   'feature-requests': 'Modify Current Application',
   admin: 'Administration', users: 'Users', roles: 'Roles & Permissions',
   departments: 'Departments', 'audit-logs': 'Audit Logs', profile: 'Profile',
-  new: 'New', settings: 'Settings',
+  new: 'New', settings: 'Settings', stages: 'Stages',
 };
 
 export default function Breadcrumb() {

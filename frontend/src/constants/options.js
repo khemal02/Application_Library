@@ -12,6 +12,7 @@ export const BUG_STATUS_OPTIONS = toOptions(['open', 'in_progress', 'resolved', 
 export const KNOWN_ISSUE_STATUS_OPTIONS = toOptions(['active', 'monitoring', 'resolved']);
 export const ROADMAP_STATUS_OPTIONS = toOptions(['proposed', 'planned', 'in_progress', 'done']);
 export const TIMELINE_STATUS_OPTIONS = toOptions(['upcoming', 'in_progress', 'completed', 'delayed']);
+export const CHANGE_REQUEST_STATUS_OPTIONS = toOptions(['pending', 'in_review', 'approved', 'rejected', 'implemented']);
 // Role-based display names for the Ideas workflow stages — the enum values (used everywhere else:
 // TRANSITIONS, status_history rows, StatusBadge's COLOR_MAP keys) never change, only what's printed.
 // Mirrored verbatim in backend/src/modules/ideas/ideas.constants.js so the API's 403 messages and

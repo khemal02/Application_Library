@@ -21,6 +21,8 @@ const COLOR_MAP = {
   review: 'warning', under_review: 'warning', approved: 'success', rejected: 'error', development_ready: 'success',
   // suggestions
   technical_review: 'warning', assigned: 'info', implemented: 'success', closed: 'default',
+  // change requests
+  pending: 'default', in_review: 'warning',
   // priority / severity
   low: 'default', medium: 'info', high: 'warning', critical: 'error',
 };

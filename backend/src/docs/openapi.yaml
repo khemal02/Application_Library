@@ -302,6 +302,9 @@ paths:
   /applications/{applicationId}/timeline:
     get: { tags: [Application Documentation], summary: List development timeline milestones, parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Paginated list } } }
     post: { tags: [Application Documentation], summary: Add a timeline milestone, parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '201': { description: Created } } }
+  /applications/{applicationId}/change-requests:
+    get: { tags: [Application Documentation], summary: List change requests, parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Paginated list, newest first } } }
+    post: { tags: [Application Documentation], summary: Submit a change request, parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '201': { description: Created } } }
 
   # ---------------------------------------------------------------------------
   # Administration

@@ -5,6 +5,7 @@ import LoginPage from '../pages/Auth/LoginPage';
 import DashboardPage from '../pages/Dashboard/DashboardPage';
 import ApplicationsListPage from '../pages/Applications/ApplicationsListPage';
 import ApplicationDetailPage from '../pages/Applications/ApplicationDetailPage';
+import ApplicationStagesPage from '../pages/Applications/ApplicationStagesPage';
 import IdeasListPage from '../pages/Ideas/IdeasListPage';
 import IdeaDetailPage from '../pages/Ideas/IdeaDetailPage';
 import FeatureRequestsListPage from '../pages/Ideas/FeatureRequestsListPage';
@@ -36,6 +37,7 @@ export default function AppRoutes() {
 
       <Route path="/applications" element={<Protected><ApplicationsListPage /></Protected>} />
       <Route path="/applications/:id" element={<Protected><ApplicationDetailPage /></Protected>} />
+      <Route path="/applications/:id/stages" element={<Protected><ApplicationStagesPage /></Protected>} />
 
       <Route path="/ideas" element={<Protected><IdeasListPage /></Protected>} />
       <Route path="/ideas/:id" element={<Protected><IdeaDetailPage /></Protected>} />

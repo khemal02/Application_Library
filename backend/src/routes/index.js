@@ -30,6 +30,7 @@ router.use('/applications/:applicationId/bugs', require('../modules/bugs/bugs.ro
 router.use('/applications/:applicationId/known-issues', require('../modules/knownIssues/knownIssues.routes'));
 router.use('/applications/:applicationId/roadmap', require('../modules/roadmap/roadmap.routes'));
 router.use('/applications/:applicationId/timeline', require('../modules/timeline/timeline.routes'));
+router.use('/applications/:applicationId/change-requests', require('../modules/changeRequests/changeRequests.routes'));
 
 // Module 2: New Application Ideas
 router.use('/ideas', require('../modules/ideas/ideas.routes'));

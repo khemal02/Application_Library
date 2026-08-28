@@ -50,6 +50,7 @@ export const bugsApi = createNestedResourceApi((appId) => `/applications/${appId
 export const knownIssuesApi = createNestedResourceApi((appId) => `/applications/${appId}/known-issues`);
 export const roadmapApi = createNestedResourceApi((appId) => `/applications/${appId}/roadmap`);
 export const timelineApi = createNestedResourceApi((appId) => `/applications/${appId}/timeline`);
+export const changeRequestsApi = createNestedResourceApi((appId) => `/applications/${appId}/change-requests`);
 
 export const architectureDocsApi = {
   list: (appId, params) => api.get(`/applications/${appId}/architecture-docs`, { params }).then((r) => r.data),

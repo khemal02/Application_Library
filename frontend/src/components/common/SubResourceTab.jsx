@@ -129,10 +129,12 @@ function FieldRow({ field, value, canEdit, onSave, excludeValue }) {
 
 /** One record rendered as fields stacked top to bottom, each independently editable in place. */
 function RecordCard({
-  record, fields, entityLabel, canEdit, canDelete, onSaveField, onDeleteRequest, toFormValue,
+  record, fields, entityLabel, canEdit, canDelete, onSaveField, onDeleteRequest, toFormValue, renderMeta,
+  hideFieldList, metaPosition = 'top',
 }) {
   const formValue = toFormValue(record);
   const heading = record.title || record.name || record.docTableName || record.endpoint || record.version || entityLabel;
+  const meta = renderMeta?.(record);
 
   return (
     <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
@@ -144,18 +146,26 @@ function RecordCard({
           </IconButton>
         )}
       </Stack>
-      <Stack divider={<Divider />}>
-        {fields.map((field) => (
-          <FieldRow
-            key={field.name}
-            field={field}
-            value={formValue[field.name]}
-            canEdit={canEdit}
-            onSave={(draft) => onSaveField(record, field, draft)}
-            excludeValue={field.type === 'multiselect' ? record.id : undefined}
-          />
-        ))}
-      </Stack>
+      {meta && metaPosition === 'top' && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>{meta}</Typography>
+      )}
+      {!hideFieldList && (
+        <Stack divider={<Divider />}>
+          {fields.map((field) => (
+            <FieldRow
+              key={field.name}
+              field={field}
+              value={formValue[field.name]}
+              canEdit={canEdit}
+              onSave={(draft) => onSaveField(record, field, draft)}
+              excludeValue={field.type === 'multiselect' ? record.id : undefined}
+            />
+          ))}
+        </Stack>
+      )}
+      {meta && metaPosition === 'bottom' && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'right', mt: 1 }}>{meta}</Typography>
+      )}
     </Paper>
   );
 }
@@ -169,7 +179,7 @@ function RecordCard({
  */
 export default function SubResourceTab({
   api, applicationId, fields, title, entityLabel, canCreate = true, canEdit = true, canDelete = true,
-  transformBeforeSubmit, transformToForm, onDataChange,
+  transformBeforeSubmit, transformToForm, onDataChange, renderMeta, hideFieldList, metaPosition,
 }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -252,7 +262,10 @@ export default function SubResourceTab({
             fields={fields}
             entityLabel={entityLabel}
             canEdit={canEdit}
-            canDelete={canDelete}
+            canDelete={typeof canDelete === 'function' ? canDelete(record) : canDelete}
+            renderMeta={renderMeta}
+            hideFieldList={hideFieldList}
+            metaPosition={metaPosition}
             onSaveField={handleSaveField}
             onDeleteRequest={setDeleting}
             toFormValue={toFormValue}
