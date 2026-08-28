@@ -35,10 +35,10 @@ Application_Library/
 │       ├── config/               env.js, database.js, logger.js
 │       ├── docs/                 openapi.yaml — served at /api-docs via swagger-ui-express
 │       ├── middlewares/          auth, rbac, ownership, validate, error, requestLogger, rateLimit, upload
-│       ├── migrations/           34 files, timestamp-prefixed — see §7
+│       ├── migrations/           40 files, timestamp-prefixed — see §7
 │       ├── seeders/               8 files — demo data, run manually, never in normal dev
-│       ├── models/                29 Sequelize models + index.js auto-loader — see §6
-│       ├── modules/               29 module folders, one per domain — see §5
+│       ├── models/                31 Sequelize models + index.js auto-loader — see §6
+│       ├── modules/               28 module folders, one per domain — see §5
 │       ├── routes/index.js       single central router — mounts every module's routes.js
 │       └── utils/                 shared helpers — see §4
 └── frontend/
@@ -132,12 +132,16 @@ needing different behavior overrides the specific method instead of changing the
 
 ### Nested sub-resources (`utils/nestedResourceRouter.js` + `scopeToParent.js`)
 
-The 11 Application sub-resources (tech stack, features, AI prompts, docs, releases, bugs, known
-issues, roadmap, timeline) are mounted as `/applications/:applicationId/X` and share one router
-builder that wires `authenticate` → `requireApplicationAccess` (ownership: must own the app or
-share its department) → `authorize` → `validate` → controller, with `scopeToParent` injecting
-`applicationId` into `req.query`/`req.body` so `crudFactory`'s filtering and writes pick up the
-FK automatically. None of the 11 modules hand-write this plumbing themselves.
+The 12 Application sub-resources (tech stack, features, AI prompts, docs, releases, bugs, known
+issues, roadmap, timeline, change requests) are mounted as `/applications/:applicationId/X` and
+share one router builder that wires `authenticate` → (ownership check) → `authorize` → `validate`
+→ controller, with `scopeToParent` injecting `applicationId` into `req.query`/`req.body` so
+`crudFactory`'s filtering and writes pick up the FK automatically. None of the 12 modules
+hand-write this plumbing themselves — each just configures the builder differently: 11 of them
+pass `requireApplicationAccess` (must own the app or share its department); `changeRequests`
+deliberately passes `requireOwnership: false` instead — any logged-in role can create/read/update
+a change request regardless of department, only its own delete is ownership-gated (to whoever
+raised it, or a super-admin).
 
 ---
 
@@ -163,7 +167,7 @@ FK automatically. None of the 11 modules hand-write this plumbing themselves.
 
 ## 5. Backend modules (`backend/src/modules/`)
 
-29 folders. Each follows `X.routes.js` / `X.controller.js` / `X.service.js` / `X.validator.js`
+28 folders. Each follows `X.routes.js` / `X.controller.js` / `X.service.js` / `X.validator.js`
 (Ideas and Suggestions additionally have `X.constants.js`).
 
 | Module | Covers |
@@ -175,13 +179,12 @@ FK automatically. None of the 11 modules hand-write this plumbing themselves.
 | `auditLogs` | Read-only viewer over the audit trail every mutation writes to. |
 | `dashboard` | Aggregate summary stats for the dashboard page. |
 | `search` | Global cross-entity search. |
-| `reports` | Excel/PDF export generation (`exceljs`/`pdfkit`). |
 | `comments` | Polymorphic comments + replies, shared by ideas/idea_note/suggestions/applications. |
 | `votes` | Polymorphic upvote/downvote toggle + summary. |
 | `tags` | Free-form polymorphic tagging. |
 | `attachments` | Polymorphic file attachments; `storage.js` is the on-disk driver behind a `{save, remove}` interface (swappable for S3). |
 | `applications` | The core catalog entity — everything else in "Application Tracking & Documentation" hangs off it. |
-| `techStack`, `features`, `aiPrompts`, `architectureDocs`, `apiDocs`, `dbDocs`, `releases`, `bugs`, `knownIssues`, `roadmap`, `timeline` | The 11 nested Application sub-resources — one CRUD module each, built on `nestedResourceRouter`. |
+| `techStack`, `features`, `aiPrompts`, `architectureDocs`, `apiDocs`, `dbDocs`, `releases`, `bugs`, `knownIssues`, `roadmap`, `timeline`, `changeRequests` | The 12 nested Application sub-resources — one CRUD module each, built on `nestedResourceRouter`. `changeRequests` is the newest: lightweight ad-hoc change tickets against an application (title/description/priority, `pending → in_review → approved/rejected/implemented`), open to every role to create/read/update regardless of department, delete restricted to whoever raised it (or a super-admin). |
 | `ideas` | New Ideas + Modify Current Application (feature requests) — one table, one review-panel engine. Full detail in §11. |
 | `suggestions` | Per-application improvement suggestions — its own review panel + execution lifecycle. Full detail in §12. |
 
@@ -189,19 +192,23 @@ FK automatically. None of the 11 modules hand-write this plumbing themselves.
 
 ## 6. Database models (`backend/src/models/`)
 
-29 model files, auto-loaded and associated by `models/index.js` (reads every `*.model.js`, calls
+31 model files, auto-loaded and associated by `models/index.js` (reads every `*.model.js`, calls
 `.associate(db)`). All UUID primary keys except `Idea.ideaNumber` (an auto-increment *display*
 number, not the PK). Grouped by area:
 
 **Org / auth** — `user`, `role`, `rolePermission`, `department`, `userSession`.
 
-**Applications & its 11 sub-resource tables** — `application`, `applicationTechStack`,
+**Applications & its 12 sub-resource tables** — `application`, `applicationTechStack`,
 `applicationFeature` (+ `featureDependency`), `aiPrompt`, `architectureDoc`, `apiEndpoint`,
-`dbTableDoc`, `releaseNote`, `bugHistory`, `knownIssue`, `roadmapItem`, `timelineMilestone`.
+`dbTableDoc`, `releaseNote`, `bugHistory`, `knownIssue`, `roadmapItem`, `timelineMilestone`,
+`changeRequest`.
 
 **Ideas** — `idea`, `ideaReview` (the panel row: `ideaId, userId, kind ('reviewer'|'approver'|
-'tiebreaker'), decision, note, addedBy, addedAt` — plus legacy `reviewerId`/`roleName` columns
-kept nullable for rows backfilled from the old fixed chain).
+'tiebreaker'), decision, note, addedBy, addedAt` — `decision` is a 3-value enum,
+`approve`/`request_changes`/`reject`, but only a `reviewer` row may actually hold
+`request_changes`; an `approver`/`tiebreaker` row is restricted to `approve`/`reject` in the
+service layer — plus legacy `reviewerId`/`roleName` columns kept nullable for rows backfilled
+from the old fixed chain).
 
 **Suggestions** — `applicationSuggestion`, `suggestionReview`.
 
@@ -213,7 +220,7 @@ from→to status log every workflow writes to, keyed by `entityType`/`entityId`)
 
 ## 7. Migrations & dev workflow — no seeding after initial setup
 
-34 files in `backend/src/migrations/`, timestamp-prefixed kebab-case
+40 files in `backend/src/migrations/`, timestamp-prefixed kebab-case
 (`YYYYMMDDHHMMSS-description.js`). 8 files in `backend/src/seeders/` (roles, role-permissions,
 departments, users, demo applications/ideas/suggestions).
 
@@ -268,16 +275,18 @@ backing store).
   two, plus a handful of extra named methods for anything not-plain-CRUD (e.g. `ideasApi.
   submitReview`, `ideasApi.panelCandidates`).
 - **`domains.js`** — every API client the frontend uses: `authApi`, `profileApi`, `applicationsApi`,
-  `ideasApi`, `suggestionsApi`, the 11 nested sub-resource APIs (`techStackApi`, `featuresApi`, …),
-  `usersApi`, `rolesApi`, `departmentsApi`, `auditLogsApi`, `commentsApi`, `votesApi`, `tagsApi`,
-  `attachmentsApi`, `dashboardApi`, `searchApi`, `reportsApi`, `notificationsApi`.
+  `ideasApi`, `suggestionsApi`, the 12 nested sub-resource APIs (`techStackApi`, `featuresApi`,
+  `changeRequestsApi`, …), `usersApi`, `rolesApi`, `departmentsApi`, `auditLogsApi`, `commentsApi`,
+  `votesApi`, `tagsApi`, `attachmentsApi`, `dashboardApi`, `searchApi`, `notificationsApi`. (The
+  Excel/PDF export feature and its `reportsApi`/`reports` backend module were removed from the
+  project entirely.)
 
 ## Frontend pages (`frontend/src/pages/`)
 
 - **`Admin/`** — Users, Roles, Departments, AuditLogs.
 - **`Applications/`** — list + detail + form dialog, plus `tabs/` with one component per
   sub-resource (Overview, TechStack, Features, AiPrompts, ArchitectureDocs, ApiDocs, DbDocs,
-  Releases, Bugs, KnownIssues, Roadmap, Timeline, Suggestions — 13 tabs).
+  Releases, Bugs, KnownIssues, Roadmap, Timeline, ChangeRequests, Suggestions — 14 tabs).
 - **`Ideas/`** — `IdeasListPage`, `FeatureRequestsListPage` (both filter the same list by
   `category`), `IdeaDetailPage` (shared by both lanes), `IdeaFormDialog`, `IdeaPanelCard`,
   `PanelPickerDialog`.
@@ -292,7 +301,7 @@ Entity-agnostic building blocks used across Ideas, Suggestions, and Applications
 Ideas uses it fully, Suggestions and Applications get the plain/simple rendering by default),
 `NotesThread.jsx` (lighter-weight notes thread), `ReviewPanel.jsx` (Suggestions' own panel —
 **not** the same component as `IdeaPanelCard.jsx`, which is Ideas-specific and lives under
-`pages/Ideas/`), `ConfirmDialog.jsx`, `DataTable.jsx`, `FilterBar.jsx`, `ExportMenu.jsx`,
+`pages/Ideas/`), `ConfirmDialog.jsx`, `DataTable.jsx`, `FilterBar.jsx`,
 `StatusBadge.jsx`, `WorkflowStepper.jsx`, `AttachmentGallery.jsx` + `AttachmentsPanel.jsx`,
 `VoteButtons.jsx`, `TagInput.jsx`, `AsyncState.jsx` (Loading/Error blocks), `BackButton.jsx`,
 `GenericFormDialog.jsx` / `SubResourceTab.jsx` (the scaffold most sub-resource tabs are built on),
@@ -321,8 +330,11 @@ CEO/Admin) via `POST /ideas/:id/panel`. Eligibility is identical for both kinds 
 user** — the only other eligibility rule in the system is who may be picked as an Application
 *owner* on approval (`applications:update`/`manage`), which is unrelated to panel membership.
 
-**Reviewers are advisory.** Their `approve`/`reject` vote (displayed as **Supports**/**Has
-concerns**) is recorded and visible but never changes the idea's status.
+**Reviewers are advisory.** Their vote has three tiers — `approve`/`request_changes`/`reject`,
+displayed as **Fully supported**/**Partially supported**/**Not supported** — recorded and visible
+but never changing the idea's status. Approvers and the CEO tie-break stay strictly binary
+(`approve`/`reject` only, enforced server-side): their vote can actually end the idea, so there's
+no meaningful middle option for it the way there is for an advisory reviewer.
 
 **Approvers decide by majority, fully in parallel with reviewers.** Every approver votes
 whenever they want — no waiting on reviewers, no waiting on each other except to know when the

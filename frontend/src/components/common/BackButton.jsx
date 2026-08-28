@@ -7,7 +7,7 @@ import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 // root" — returns to whichever list/filter/page the user actually came from. Styled as a Button
 // rather than a bare IconButton to match the rest of the app's labeled affordances (Edit, Submit
 // Idea, ...) instead of an unlabeled floating icon.
-export default function BackButton() {
+export default function BackButton({ children = 'Back' }) {
   const navigate = useNavigate();
   return (
     <Button
@@ -25,7 +25,7 @@ export default function BackButton() {
         },
       }}
     >
-      Back
+      {children}
     </Button>
   );
 }

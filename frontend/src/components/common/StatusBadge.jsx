@@ -27,8 +27,13 @@ const COLOR_MAP = {
   low: 'default', medium: 'info', high: 'warning', critical: 'error',
 };
 
-export default function StatusBadge({ value, size = 'small', label }) {
-  const colorKey = COLOR_MAP[value] || 'default';
+// `color` overrides the COLOR_MAP lookup entirely — for a caller whose `value` isn't a real status
+// on some entity (e.g. a derived label like "Not started" that isn't any one field's actual
+// value), so it isn't forced to borrow an unrelated map entry just to get the right tint.
+export default function StatusBadge({
+  value, size = 'small', label, color,
+}) {
+  const colorKey = color || COLOR_MAP[value] || 'default';
 
   return (
     <Chip
