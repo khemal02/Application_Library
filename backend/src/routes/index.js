@@ -34,6 +34,9 @@ router.use('/applications/:applicationId/change-requests', require('../modules/c
 
 // Module 2: New Application Ideas
 router.use('/ideas', require('../modules/ideas/ideas.routes'));
+// Module 2b: Modify Current Application (feature requests) — split out from Ideas into its own
+// table/module/RBAC resource; see 20260130000035-split-feature-requests-from-ideas.js.
+router.use('/feature-requests', require('../modules/featureRequests/featureRequests.routes'));
 
 // Module 3: Existing Application Review & Improvement
 router.use('/suggestions', require('../modules/suggestions/suggestions.routes'));

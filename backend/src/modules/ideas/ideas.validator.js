@@ -1,26 +1,19 @@
 const Joi = require('joi');
 const { INDUSTRIES, FUNCTIONAL_AREAS } = require('../../utils/validators');
 
+// No `category`/`applicationId` — as of the Ideas/Feature-Requests split, this module only ever
+// creates a 'new_idea' row ("Modify Current Application" is featureRequests.validator.js now,
+// with its own unconditionally-required applicationId).
 const create = Joi.object({
   title: Joi.string().max(200).required(),
   description: Joi.string().required(),
-  category: Joi.string().valid('new_idea', 'existing_app_feature').default('new_idea'),
-  applicationId: Joi.string().uuid().when('category', {
-    is: 'existing_app_feature', then: Joi.required(), otherwise: Joi.optional().allow(null),
-  }),
   industry: Joi.string().valid(...INDUSTRIES).allow('', null),
-  // STILL required for a brand-new idea — left as-is by Stage 3, but the reason changed: it used
-  // to be "the ONLY thing that decides who reviews it now" (functional-area-matched routing).
-  // That's gone — the panel is now composed manually, person by person (see
+  // STILL required — it used to be "the ONLY thing that decides who reviews it" (functional-area-
+  // matched routing). That's gone — the panel is composed manually, person by person (see
   // ideas.service.js#addParticipants) — so functionalArea is display/reporting-only from here on,
-  // same as industry/department. Whether it should still be a required field given that is a
-  // product call outside Stage 3's backend-service scope, flagged rather than changed here. A
-  // feature request keeps inheriting it from the target Application (falling back to the
-  // submitter) in create() below, mirroring departmentId's existing auto-fill shape exactly — so
-  // it stays optional/nullable here for that lane.
-  functionalArea: Joi.string().valid(...FUNCTIONAL_AREAS).when('category', {
-    is: 'existing_app_feature', then: Joi.optional().allow('', null), otherwise: Joi.required(),
-  }),
+  // same as industry/department. Whether it should still be required given that is a product
+  // call outside this change's scope, flagged rather than changed here.
+  functionalArea: Joi.string().valid(...FUNCTIONAL_AREAS).required(),
   internalUse: Joi.boolean(),
   businessProblem: Joi.string().allow('', null),
   proposedSolution: Joi.string().allow('', null),

@@ -22,4 +22,21 @@ module.exports = {
     const candidates = await service.assigneeCandidates();
     return ApiResponse.success(res, candidates);
   }),
+
+  // One audit log entry PER CHANGED STAGE, not one for the whole call — `changes` names exactly
+  // which stages the service actually wrote (a key present in the body but equal to the current
+  // value isn't a change and gets no entry).
+  bulkAssignStages: asyncHandler(async (req, res) => {
+    const { applicationId, id } = req.params;
+    const { record, changes } = await service.bulkAssignStages(applicationId, id, req.body, req);
+    await Promise.all(changes.map((c) => logAction({
+      req,
+      action: 'update',
+      entityType: 'change_request',
+      entityId: id,
+      oldValue: { stage: c.stage, assigneeId: c.previousAssigneeId },
+      newValue: { stage: c.stage, assigneeId: c.newAssigneeId },
+    })));
+    return ApiResponse.success(res, record, 'Assignments updated');
+  }),
 };

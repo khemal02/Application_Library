@@ -10,7 +10,7 @@ const list = asyncHandler(async (req, res) => {
 });
 
 const create = asyncHandler(async (req, res) => {
-  const comment = await service.create(req.user.id, req.body);
+  const comment = await service.create(req.user, req.body);
   await logAction({ req, action: 'create', entityType: 'comment', entityId: comment.id, newValue: comment.toJSON() });
   return ApiResponse.created(res, comment, 'Comment added');
 });

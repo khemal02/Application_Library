@@ -13,8 +13,14 @@ const tagsService = require('../tags/tags.service');
 const { cleanupEntityRefs, mergeCounts } = require('../../utils/entityCleanup');
 const { getStorageDriver } = require('../attachments/storage');
 
+// As of the Ideas/Feature-Requests split (20260130000035), this module only ever handles
+// category: 'new_idea' — "Modify Current Application" moved to its own table/module
+// (featureRequests.service.js), including the Ideas -> Change Request bridge, which never applied
+// to a new_idea in the first place. `category` stays a real column (existing status_history rows
+// reference it, and dropping it buys nothing) but the validator no longer accepts anything but
+// 'new_idea' going forward.
 const SEARCHABLE_FIELDS = ['title', 'description', 'businessProblem', 'proposedSolution'];
-const FILTERABLE_FIELDS = ['status', 'priority', 'departmentId', 'submittedBy', 'estimatedComplexity', 'category', 'applicationId', 'industry', 'functionalArea', 'internalUse'];
+const FILTERABLE_FIELDS = ['status', 'priority', 'departmentId', 'submittedBy', 'estimatedComplexity', 'applicationId', 'industry', 'functionalArea', 'internalUse'];
 
 const include = [
   { model: User, as: 'submitter', attributes: ['id', 'name', 'avatarUrl'] },
@@ -49,48 +55,21 @@ const base = createCrudService(Idea, {
 
 async function create(payload, req) {
   const { tags, ...rest } = payload;
-  // Neither lane collects department/industry/functionalArea on its form — both auto-fill them,
-  // but from different sources. A new_idea has no natural department of its own yet, so it
-  // inherits the submitter's (industry/functionalArea have no equivalent submitter-level source,
-  // so they simply stay whatever was explicitly sent, usually null). A feature request is FOR an
-  // existing Application, which already has all three — that's the more correct categorization
-  // for all of them: department for org-chart/display purposes (an Employee in dept X requesting
-  // a feature on dept Y's app should show as dept Y's concern, not X's), and functionalArea/
-  // industry as the app's actual domain rather than whatever the requester happens to guess.
-  // functionalArea is now display/reporting-only — it no longer drives review routing (the panel
-  // is manually composed, see above) — department falls back to the submitter's own if the
-  // application itself has none; industry/functionalArea have no such fallback and simply stay
-  // null if the application doesn't have them either. An explicitly supplied value (e.g. an admin
-  // creating on someone's behalf) always wins over any of this.
-  const category = rest.category || 'new_idea';
-  let { departmentId, industry, functionalArea } = rest;
-  let targetApp = null;
-  if (category === 'existing_app_feature' && rest.applicationId) {
-    targetApp = await Application.findByPk(rest.applicationId, { attributes: ['id', 'name', 'departmentId', 'industry', 'functionalArea'] });
-    if (departmentId == null) departmentId = targetApp?.departmentId ?? req.user.departmentId;
-    if (!industry) industry = targetApp?.industry ?? null;
-    if (!functionalArea) functionalArea = targetApp?.functionalArea ?? null;
-  } else if (departmentId == null) {
-    departmentId = req.user.departmentId;
-  }
-  const idea = await Idea.create({ ...rest, departmentId, industry, functionalArea, submittedBy: req.user.id });
+  // A new idea has no natural department of its own yet, so it inherits the submitter's.
+  // industry/functionalArea have no equivalent submitter-level source, so they simply stay
+  // whatever was explicitly sent (usually null) — an explicit value (e.g. an admin creating on
+  // someone's behalf) always wins.
+  const departmentId = rest.departmentId ?? req.user.departmentId;
+  const idea = await Idea.create({ ...rest, departmentId, submittedBy: req.user.id });
   if (tags?.length) await tagsService.setForEntity('idea', idea.id, tags);
 
   // Ideas are created directly at discussion now (submitted is retired) — nobody sees a brand-new
-  // idea unless they go looking. Submission and "open for discussion" are the same event (there's
-  // no separate discussion-entry trigger), so one broadcast covers both: every active user
-  // org-wide gets notified, not just the functional-area-matched Team Lead — discussion is meant
-  // to be company-wide, not gated to whoever happens to own the idea's functional area. Applies to BOTH
-  // categories. The submitter doesn't notify themselves. Failure here must never break idea
-  // creation — logged and swallowed, never surfaced. The panel starts EMPTY — the submitter (or a
-  // CEO/Admin) adds reviewers/approvers afterward, from the idea's own detail page.
-  //
-  // Copy varies by category: "a new idea" about a request to change an application someone already
-  // owns is misleading — the title and message need to say which kind of thing this is, and for a
-  // feature request specifically, WHICH application, since that's what tells a reader whether it's
-  // relevant to them.
+  // idea unless they go looking. Submission and "open for discussion" are the same event, so one
+  // broadcast covers both: every active user org-wide gets notified, not just the
+  // functional-area-matched Team Lead — discussion is meant to be company-wide. The submitter
+  // doesn't notify themselves. Failure here must never break idea creation — logged and swallowed.
+  // The panel starts EMPTY — the submitter (or a CEO/Admin) adds reviewers/approvers afterward.
   try {
-    const isFeatureRequest = idea.category === 'existing_app_feature';
     const allUsers = await User.findAll({
       where: { status: 'active', id: { [Op.ne]: req.user.id } },
       attributes: ['id'],
@@ -98,10 +77,8 @@ async function create(payload, req) {
     const recipients = allUsers.map((u) => ({
       userId: u.id,
       type: 'idea_submitted',
-      title: isFeatureRequest ? 'A feature request is open for discussion' : 'A new idea is open for discussion',
-      message: isFeatureRequest
-        ? `"${idea.title}" — a feature request for "${targetApp?.name || 'an application'}" — is open for discussion.`
-        : `"${idea.title}" was submitted and is open for discussion.`,
+      title: 'A new idea is open for discussion',
+      message: `"${idea.title}" was submitted and is open for discussion.`,
       link: `/ideas/${idea.id}`,
     }));
     if (recipients.length > 0) await notificationsService.createMany(recipients);
@@ -540,7 +517,10 @@ async function submitTieBreak(idea, { decision, note, ownerId }, req) {
  */
 async function finalizeIdea(idea, { actingRow, actingRowIsNew, actingDecision, note, ownerId, outcome, reasonRows }, req) {
   const toStatus = outcome === 'approve' ? 'approved' : 'rejected';
-  const registersApplication = toStatus === 'approved' && idea.category === 'new_idea' && !idea.applicationId;
+  // Always true for a not-yet-registered idea now — a new_idea is the only category this module
+  // handles post-split, and the "raise a change request instead" path (for a feature request
+  // against an existing application) lives entirely in featureRequests.service.js now.
+  const registersApplication = toStatus === 'approved' && !idea.applicationId;
   if (registersApplication && !ownerId) {
     throw ApiError.badRequest('An Application owner (ownerId) is required to approve this idea.');
   }
@@ -599,7 +579,6 @@ async function finalizeIdea(idea, { actingRow, actingRowIsNew, actingDecision, n
         functionalArea: idea.functionalArea,
         ownerId,
         status: 'planning',
-        priority: idea.priority || 'medium',
         createdBy: req.user.id,
       }, { transaction: t });
       applicationId = app.id;

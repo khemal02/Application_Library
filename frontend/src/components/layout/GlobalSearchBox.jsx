@@ -15,6 +15,7 @@ import { searchApi } from '../../services/domains';
 const ENTITY_ROUTE = {
   application: (id) => `/applications/${id}`,
   idea: (id) => `/ideas/${id}`,
+  feature_request: (id) => `/feature-requests/${id}`,
   suggestion: (id) => `/suggestions/${id}`,
   ai_prompt: () => `/applications`,
 };
@@ -48,9 +49,10 @@ export default function GlobalSearchBox() {
   const groups = results ? [
     ['Applications', results.applications],
     ['Ideas', results.ideas],
+    ['Feature Requests', results.featureRequests],
     ['Suggestions', results.suggestions],
     ['AI Prompts', results.aiPrompts],
-  ].filter(([, items]) => items.length) : [];
+  ].filter(([, items]) => items?.length) : [];
 
   return (
     <ClickAwayListener onClickAway={() => setResults(null)}>

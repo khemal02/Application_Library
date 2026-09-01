@@ -1,4 +1,6 @@
-const { Comment, User, Role, Idea } = require('../../models');
+const {
+  Comment, User, Role, Idea, FeatureRequest, ChangeRequestStage, ChangeRequest, Application,
+} = require('../../models');
 const ApiError = require('../../utils/ApiError');
 const logger = require('../../config/logger');
 const { isPrivileged } = require('../../middlewares/ownership.middleware');
@@ -9,6 +11,10 @@ const notificationsService = require('../notifications/notifications.service');
 // entityTypes an idea's detail page posts comments under: 'idea' (the general Comments thread)
 // and 'idea_note' (the "Discussion" notes section).
 const IDEA_ENTITY_TYPES = ['idea', 'idea_note'];
+
+// Same freeze-once-decided rule as Ideas, forked to its own module/table since the split — see
+// featureRequests.service.js. No '_note' variant exists for feature requests.
+const FEATURE_REQUEST_ENTITY_TYPES = ['feature_request'];
 
 const authorInclude = {
   model: User,
@@ -36,8 +42,10 @@ async function listByEntity(entityType, entityId) {
   return roots;
 }
 
-async function create(userId, payload) {
+async function create(requester, payload) {
+  const userId = requester.id;
   let idea = null;
+  let featureRequest = null;
   if (IDEA_ENTITY_TYPES.includes(payload.entityType)) {
     idea = await Idea.findByPk(payload.entityId, { attributes: ['id', 'title', 'submittedBy', 'status'] });
     // Frozen once decided — a decision (approved/rejected) is final, and re-opening the thread
@@ -45,6 +53,44 @@ async function create(userId, payload) {
     // hidden in the UI, so the rule holds regardless of client.
     if (idea && (idea.status === 'approved' || idea.status === 'rejected')) {
       throw ApiError.badRequest('This idea has been decided — the discussion thread is now read-only.');
+    }
+  } else if (FEATURE_REQUEST_ENTITY_TYPES.includes(payload.entityType)) {
+    featureRequest = await FeatureRequest.findByPk(payload.entityId, {
+      attributes: ['id', 'title', 'submittedBy', 'status'],
+    });
+    if (featureRequest && (featureRequest.status === 'approved' || featureRequest.status === 'rejected')) {
+      throw ApiError.badRequest('This feature request has been decided — the discussion thread is now read-only.');
+    }
+  } else if (payload.entityType === 'change_request_stage') {
+    // Not frozen once decided, unlike ideas/feature requests — a note is a work-log entry, not a
+    // discussion that stops mattering once terminal. Gated instead on WHO may write here (only the
+    // people actually running this delivery) and WHETHER there's any work yet to log:
+    //   - not_started: refused — nothing to note before the stage has even begun.
+    //   - the change request itself rejected: refused — the pipeline never ran.
+    //   - complete stage / implemented request: ALLOWED — a correction after the fact is
+    //     legitimate, and the timestamp on the note makes it honest about when it was added.
+    const stage = await ChangeRequestStage.findByPk(payload.entityId, {
+      attributes: ['id', 'status', 'assigneeId'],
+      include: [{
+        model: ChangeRequest,
+        as: 'changeRequest',
+        attributes: ['id', 'status', 'applicationId'],
+        include: [{ model: Application, as: 'application', attributes: ['id', 'ownerId'] }],
+      }],
+    });
+    if (stage) {
+      const changeRequest = stage.changeRequest;
+      const isOwner = changeRequest?.application?.ownerId === userId;
+      const isAssignee = !!stage.assigneeId && stage.assigneeId === userId;
+      if (!isOwner && !isAssignee && !isPrivileged(requester)) {
+        throw ApiError.forbidden('Only the application\'s owner, this stage\'s assignee, or a super-admin may add notes here.');
+      }
+      if (stage.status === 'not_started') {
+        throw ApiError.conflict('This stage has not started yet — there is nothing to add a note about.');
+      }
+      if (changeRequest?.status === 'rejected') {
+        throw ApiError.conflict('This change request was rejected — its stages are no longer open for notes.');
+      }
     }
   }
 
@@ -71,6 +117,23 @@ async function create(userId, payload) {
         error: { message: err.message, stack: err.stack }, entityType: payload.entityType, entityId: payload.entityId,
       });
     }
+  } else if (featureRequest) {
+    try {
+      if (featureRequest.submittedBy !== userId) {
+        const authorName = full.author?.name || 'Someone';
+        await notificationsService.create({
+          userId: featureRequest.submittedBy,
+          type: 'feature_request_comment_added',
+          title: `${authorName} commented on your feature request`,
+          message: `"${featureRequest.title}"`,
+          link: `/feature-requests/${featureRequest.id}`,
+        });
+      }
+    } catch (err) {
+      logger.error('Failed to create feature-request-comment notification', {
+        error: { message: err.message, stack: err.stack }, entityType: payload.entityType, entityId: payload.entityId,
+      });
+    }
   }
 
   return full;
@@ -90,6 +153,11 @@ async function remove(id, requester) {
     const idea = await Idea.findByPk(comment.entityId, { attributes: ['id', 'status'] });
     if (idea && (idea.status === 'approved' || idea.status === 'rejected')) {
       throw ApiError.badRequest('This idea has been decided — the discussion thread is now read-only.');
+    }
+  } else if (FEATURE_REQUEST_ENTITY_TYPES.includes(comment.entityType) && !privileged) {
+    const featureRequest = await FeatureRequest.findByPk(comment.entityId, { attributes: ['id', 'status'] });
+    if (featureRequest && (featureRequest.status === 'approved' || featureRequest.status === 'rejected')) {
+      throw ApiError.badRequest('This feature request has been decided — the discussion thread is now read-only.');
     }
   }
 

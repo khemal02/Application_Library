@@ -1,4 +1,4 @@
-import { Link as RouterLink } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Grid from '@mui/material/Grid';
@@ -8,7 +8,6 @@ import Chip from '@mui/material/Chip';
 import Link from '@mui/material/Link';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import dayjs from 'dayjs';
-import StatusBadge from '../../components/common/StatusBadge';
 import humanize from '../../utils/humanize';
 
 const STATUS_FLOW = ['development', 'testing', 'deployment'];
@@ -32,17 +31,26 @@ function InfoField({ label, value, fullWidth }) {
 const formatDate = (value) => (value ? dayjs(value).format('MMM D, YYYY') : '—');
 
 export default function ProjectInfoBox({ application }) {
+  const navigate = useNavigate();
+  const openStages = () => navigate(`/applications/${application.id}/stages`);
+
   return (
-    <Paper variant="outlined" sx={{ p: 2, mt: 2 }}>
+    <Paper
+      variant="outlined"
+      onClick={openStages}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openStages(); }
+      }}
+      sx={{
+        p: 2, mt: 2, cursor: 'pointer',
+        '&:hover': { bgcolor: 'action.hover' },
+        '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: '-2px' },
+      }}
+    >
       <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" useFlexGap rowGap={1} sx={{ mb: 3 }}>
-        <Typography
-          component={RouterLink}
-          to={`/applications/${application.id}/stages`}
-          variant="h6"
-          fontWeight={700}
-          color="text.primary"
-          sx={{ textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
-        >
+        <Typography variant="h6" fontWeight={700} color="text.primary">
           {application.name}
         </Typography>
         <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
@@ -83,15 +91,14 @@ export default function ProjectInfoBox({ application }) {
         <InfoField label="Owner" value={application.owner?.name || '—'} />
         <InfoField label="Industry" value={application.industry ? humanize(application.industry) : '—'} />
         <InfoField label="Functional Area" value={application.functionalArea ? humanize(application.functionalArea) : '—'} />
-        <InfoField label="Priority" value={<StatusBadge value={application.priority} />} />
         <InfoField label="Current Version" value={application.currentVersion || '—'} />
         <InfoField label="Start Date" value={formatDate(application.startDate)} />
         <InfoField label="Release Date" value={formatDate(application.releaseDate)} />
         {application.repositoryUrl && (
-          <InfoField label="Repository" value={<Link href={application.repositoryUrl} target="_blank" rel="noopener noreferrer" variant="body2">{application.repositoryUrl}</Link>} />
+          <InfoField label="Repository" value={<Link href={application.repositoryUrl} target="_blank" rel="noopener noreferrer" variant="body2" onClick={(e) => e.stopPropagation()}>{application.repositoryUrl}</Link>} />
         )}
         {application.deploymentUrl && (
-          <InfoField label="Deployment" value={<Link href={application.deploymentUrl} target="_blank" rel="noopener noreferrer" variant="body2">{application.deploymentUrl}</Link>} />
+          <InfoField label="Deployment" value={<Link href={application.deploymentUrl} target="_blank" rel="noopener noreferrer" variant="body2" onClick={(e) => e.stopPropagation()}>{application.deploymentUrl}</Link>} />
         )}
       </Grid>
     </Paper>

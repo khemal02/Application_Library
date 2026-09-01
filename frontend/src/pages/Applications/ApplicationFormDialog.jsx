@@ -10,10 +10,10 @@ import MenuItem from '@mui/material/MenuItem';
 import Grid from '@mui/material/Grid';
 import Alert from '@mui/material/Alert';
 import { applicationsApi, departmentsApi } from '../../services/domains';
-import { APPLICATION_STATUS_OPTIONS, PRIORITY_OPTIONS, INDUSTRY_OPTIONS, FUNCTIONAL_AREA_OPTIONS } from '../../constants/options';
+import { APPLICATION_STATUS_OPTIONS, INDUSTRY_OPTIONS, FUNCTIONAL_AREA_OPTIONS } from '../../constants/options';
 
 const EMPTY_VALUES = {
-  name: '', description: '', status: 'development', priority: 'medium',
+  name: '', description: '', status: 'development',
   departmentId: '', industry: '', functionalArea: '', startDate: '', releaseDate: '',
   repositoryUrl: '', deploymentUrl: '',
 };
@@ -44,7 +44,7 @@ export default function ApplicationFormDialog({ open, onClose, onSaved, applicat
     setSubmitError(null);
     reset(application ? {
       name: application.name || '', description: application.description || '',
-      status: application.status || 'development', priority: application.priority || 'medium',
+      status: application.status || 'development',
       departmentId: application.department?.id || application.departmentId || '',
       industry: application.industry || '', functionalArea: application.functionalArea || '',
       startDate: application.startDate || '', releaseDate: application.releaseDate || '',
@@ -88,13 +88,6 @@ export default function ApplicationFormDialog({ open, onClose, onSaved, applicat
             <Controller name="status" control={control} render={({ field }) => (
               <TextField select fullWidth label="Status" {...field}>
                 {APPLICATION_STATUS_OPTIONS.map((s) => <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>)}
-              </TextField>
-            )} />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <Controller name="priority" control={control} render={({ field }) => (
-              <TextField select fullWidth label="Priority" {...field}>
-                {PRIORITY_OPTIONS.map((s) => <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>)}
               </TextField>
             )} />
           </Grid>

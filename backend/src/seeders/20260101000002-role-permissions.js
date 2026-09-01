@@ -34,7 +34,7 @@ module.exports = {
       ['manage'],
     ));
     rows = rows.concat(expand(ROLE_IDS.ceo, ['dashboard', 'search', 'notifications', 'audit_logs'], ['read']));
-    rows = rows.concat(expand(ROLE_IDS.ceo, ['change_requests'], ['manage']));
+    rows = rows.concat(expand(ROLE_IDS.ceo, ['change_requests', 'feature_requests'], ['manage']));
 
     // Manager: near-full — full control over applications/docs, reviews & approves
     // ideas/suggestions org-wide. The Administration area (Users, Roles & Permissions,
@@ -45,12 +45,13 @@ module.exports = {
       ['manage'],
     ));
     rows = rows.concat(expand(ROLE_IDS.manager, ['dashboard', 'search', 'notifications', 'audit_logs'], ['read']));
-    rows = rows.concat(expand(ROLE_IDS.manager, ['change_requests'], ['manage']));
+    rows = rows.concat(expand(ROLE_IDS.manager, ['change_requests', 'feature_requests'], ['manage']));
 
     // Team Lead: full ownership over applications + docs, reviews ideas/suggestions for their team.
     rows = rows.concat(expand(ROLE_IDS.team_lead, ['applications'], ['create', 'read', 'update']));
     rows = rows.concat(expand(ROLE_IDS.team_lead, DOC_SUBRESOURCES, ['create', 'read', 'update', 'delete']));
     rows = rows.concat(expand(ROLE_IDS.team_lead, ['ideas'], ['create', 'read', 'review', 'update']));
+    rows = rows.concat(expand(ROLE_IDS.team_lead, ['feature_requests'], ['create', 'read', 'review', 'update']));
     rows = rows.concat(expand(ROLE_IDS.team_lead, ['suggestions'], ['create', 'read', 'review', 'update', 'assign']));
     rows = rows.concat(expand(ROLE_IDS.team_lead, ['comments', 'votes', 'attachments'], ['create', 'read']));
     rows = rows.concat(expand(ROLE_IDS.team_lead, ['dashboard', 'search', 'notifications', 'audit_logs'], ['read']));
@@ -62,7 +63,7 @@ module.exports = {
     // Review -> Approved -> Development Ready, etc.) is Team Lead+ only.
     rows = rows.concat(expand(ROLE_IDS.employee, ['applications'], ['read']));
     rows = rows.concat(expand(ROLE_IDS.employee, DOC_SUBRESOURCES, ['read']));
-    rows = rows.concat(expand(ROLE_IDS.employee, ['ideas', 'suggestions'], ['create', 'read', 'update']));
+    rows = rows.concat(expand(ROLE_IDS.employee, ['ideas', 'suggestions', 'feature_requests'], ['create', 'read', 'update']));
     rows = rows.concat(expand(ROLE_IDS.employee, ['comments', 'votes', 'attachments'], ['create', 'read']));
     rows = rows.concat(expand(ROLE_IDS.employee, ['dashboard', 'search', 'notifications'], ['read']));
     // Everyone gets full CRUD on Change Requests, same shape as Team Lead — unlike every other

@@ -47,7 +47,6 @@ components:
         description: { type: string }
         category: { type: string }
         status: { type: string, enum: [development, testing, deployment] }
-        priority: { type: string, enum: [low, medium, high, critical] }
         currentVersion: { type: string }
         repositoryUrl: { type: string }
         deploymentUrl: { type: string }

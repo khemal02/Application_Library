@@ -5,7 +5,7 @@ const validate = require('../../middlewares/validate.middleware');
 const { ChangeRequest } = require('../../models');
 const controller = require('./changeRequests.controller');
 const {
-  create, update, updateStageParams, updateStageBody,
+  create, update, updateStageParams, updateStageBody, bulkAssignParams, bulkAssignBody,
 } = require('./changeRequests.validator');
 
 // Create/read/update are open to every role regardless of application ownership/department — see
@@ -40,6 +40,17 @@ router.get(
   '/:id/assignee-candidates',
   authorize('change_requests', 'read'),
   controller.assigneeCandidates,
+);
+
+// Bulk assign/reassign/clear any of the three stages in one call — route-level gate is the same
+// coarse 'change_requests:update' every other write here uses; the REAL gate (owner or super-admin
+// only, narrower than updateStage()'s own owner-or-assignee-or-super-admin) lives in
+// changeRequests.service.js#bulkAssignStages.
+router.patch(
+  '/:id/assignments',
+  authorize('change_requests', 'update'),
+  validate({ params: bulkAssignParams, body: bulkAssignBody }),
+  controller.bulkAssignStages,
 );
 
 module.exports = router;

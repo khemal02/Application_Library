@@ -9,28 +9,26 @@ import Switch from '@mui/material/Switch';
 import AddIcon from '@mui/icons-material/Add';
 import useServerList from '../../hooks/useServerList';
 import useToast from '../../hooks/useToast';
-import { ideasApi, departmentsApi } from '../../services/domains';
+import { featureRequestsApi, departmentsApi } from '../../services/domains';
 import DataTable from '../../components/common/DataTable';
 import FilterBar from '../../components/common/FilterBar';
 import StatusBadge from '../../components/common/StatusBadge';
 import { IDEA_STATUS_OPTIONS, INDUSTRY_OPTIONS, FUNCTIONAL_AREA_OPTIONS, ideaStatusLabel } from '../../constants/options';
 import humanize from '../../utils/humanize';
-import IdeaFormDialog from './IdeaFormDialog';
+import FeatureRequestFormDialog from './FeatureRequestFormDialog';
 
 /**
- * Same shape as IdeasListPage, scoped to category='existing_app_feature' — the two lists share
- * one backend table (Idea) and one submit form (IdeaFormDialog), just filtered/configured
- * differently, since a "feature request for an existing app" is otherwise identical data.
- * Stage ownership, department routing, and the review panel now apply identically to both lanes —
- * a feature request's department is inherited from its target Application (falling back to the
- * submitter's if the application has none), so it routes review exactly like a new idea does.
+ * Forked from IdeasListPage.jsx — see the Ideas/Feature-Requests split. "Modify Current
+ * Application" now has its own table/module/RBAC resource ('feature_requests') entirely — this
+ * no longer shares a backend table or submit form with New Ideas, just the display shape (status
+ * labels/options are reused from constants/options.js since Ideas' and FeatureRequests' live
+ * status sets are identical: under_review/approved/rejected).
  */
 export default function FeatureRequestsListPage() {
   const navigate = useNavigate();
   const { showSuccess } = useToast();
-  const list = useServerList(ideasApi.list, {
-    initialSort: { field: 'ideaNumber', direction: 'desc' },
-    initialFilters: { category: 'existing_app_feature' },
+  const list = useServerList(featureRequestsApi.list, {
+    initialSort: { field: 'requestNumber', direction: 'desc' },
   });
   const [formOpen, setFormOpen] = useState(false);
   const [departments, setDepartments] = useState([]);
@@ -78,8 +76,8 @@ export default function FeatureRequestsListPage() {
         right={(
           <Stack direction="row" spacing={1} alignItems="center">
             {/* Any active user can be a panel reviewer or approver now (see
-                ideas.service.js#addParticipants) — not gated to a specific permission the way the
-                old team_lead/manager/ceo chain was. */}
+                featureRequests.service.js#addParticipants) — not gated to a specific permission
+                the way the old team_lead/manager/ceo chain was. */}
             <FormControlLabel
               control={(
                 <Switch
@@ -107,11 +105,10 @@ export default function FeatureRequestsListPage() {
         emptyMessage="No feature requests submitted yet — be the first!"
       />
 
-      <IdeaFormDialog
-        category="existing_app_feature"
+      <FeatureRequestFormDialog
         open={formOpen}
         onClose={() => setFormOpen(false)}
-        onCreated={(idea) => { setFormOpen(false); showSuccess('Feature request submitted'); navigate(`/feature-requests/${idea.id}`); }}
+        onCreated={(featureRequest) => { setFormOpen(false); showSuccess('Feature request submitted'); navigate(`/feature-requests/${featureRequest.id}`); }}
       />
     </Box>
   );

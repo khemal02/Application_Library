@@ -10,7 +10,6 @@ const create = Joi.object({
   ownerId: Joi.string().uuid().allow(null),
   departmentId: Joi.string().uuid().allow(null),
   status: Joi.string().valid('development', 'testing', 'deployment'),
-  priority: Joi.string().valid('low', 'medium', 'high', 'critical'),
   startDate: Joi.date().allow(null),
   releaseDate: Joi.date().allow(null),
   currentVersion: Joi.string().max(30).allow('', null),

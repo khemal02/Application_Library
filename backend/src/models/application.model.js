@@ -13,7 +13,6 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       defaultValue: 'development',
     },
-    priority: { type: DataTypes.ENUM('low', 'medium', 'high', 'critical'), allowNull: false, defaultValue: 'medium' },
     startDate: { type: DataTypes.DATEONLY },
     releaseDate: { type: DataTypes.DATEONLY },
     currentVersion: { type: DataTypes.STRING(30) },

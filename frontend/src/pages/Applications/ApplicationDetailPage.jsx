@@ -4,7 +4,6 @@ import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
-import Paper from '@mui/material/Paper';
 import Accordion from '@mui/material/Accordion';
 import AccordionSummary from '@mui/material/AccordionSummary';
 import AccordionDetails from '@mui/material/AccordionDetails';
@@ -46,9 +45,11 @@ export default function ApplicationDetailPage() {
 
       <ProjectInfoBox application={application} />
 
-      <Paper variant="outlined" sx={{ p: 2, mt: 2 }}>
+      {/* Plain Box, not Paper — this section shouldn't read as its own bordered/shadowed card;
+          the row-list inside (ChangeRequestsCard.jsx) already has its own bordered box. */}
+      <Box sx={{ p: 2, mt: 2 }}>
         <ChangeRequestsTab applicationId={id} />
-      </Paper>
+      </Box>
 
       <Accordion variant="outlined" sx={{ mt: 2 }}>
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>

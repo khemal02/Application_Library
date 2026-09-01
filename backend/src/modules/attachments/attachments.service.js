@@ -1,6 +1,8 @@
 const fs = require('fs');
 const sharp = require('sharp');
-const { Attachment, Comment, Idea } = require('../../models');
+const {
+  Attachment, Comment, Idea, FeatureRequest,
+} = require('../../models');
 const { getStorageDriver } = require('./storage');
 const ApiError = require('../../utils/ApiError');
 const logger = require('../../config/logger');
@@ -8,11 +10,13 @@ const { isPrivileged } = require('../../middlewares/ownership.middleware');
 
 const MAX_IMAGE_DIMENSION = 1920;
 
-// Mirrors comments.service.js's IDEA_ENTITY_TYPES — duplicated locally rather than imported
-// across sibling modules for two literal strings. An attachment always keys off the specific
-// Comment row it's attached to (entityType='comment'), so freezing it requires walking through
-// that comment to find its own entityType/entityId — the actual idea, if there is one.
+// Mirrors comments.service.js's IDEA_ENTITY_TYPES/FEATURE_REQUEST_ENTITY_TYPES — duplicated
+// locally rather than imported across sibling modules for two literal strings. An attachment
+// always keys off the specific Comment row it's attached to (entityType='comment'), so freezing
+// it requires walking through that comment to find its own entityType/entityId — the actual idea
+// or feature request, if there is one.
 const IDEA_ENTITY_TYPES = ['idea', 'idea_note'];
+const FEATURE_REQUEST_ENTITY_TYPES = ['feature_request'];
 
 // GIF is intentionally excluded — sharp would flatten an animated GIF to its first frame.
 const IMAGE_COMPRESSION = {
@@ -66,14 +70,20 @@ async function remove(id, requester) {
   const privileged = isPrivileged(requester);
   if (!isOwner && !privileged) throw ApiError.forbidden('You can only delete your own attachments');
 
-  // Frozen once its idea is decided, same as the comment it hangs off of — an attachment is part
-  // of the discussion record too, and evidence that can still be deleted isn't actually frozen.
+  // Frozen once its idea/feature request is decided, same as the comment it hangs off of — an
+  // attachment is part of the discussion record too, and evidence that can still be deleted isn't
+  // actually frozen.
   if (!privileged && attachment.entityType === 'comment') {
     const comment = await Comment.findByPk(attachment.entityId, { attributes: ['id', 'entityType', 'entityId'] });
     if (comment && IDEA_ENTITY_TYPES.includes(comment.entityType)) {
       const idea = await Idea.findByPk(comment.entityId, { attributes: ['id', 'status'] });
       if (idea && (idea.status === 'approved' || idea.status === 'rejected')) {
         throw ApiError.badRequest('This idea has been decided — the discussion thread is now read-only.');
+      }
+    } else if (comment && FEATURE_REQUEST_ENTITY_TYPES.includes(comment.entityType)) {
+      const featureRequest = await FeatureRequest.findByPk(comment.entityId, { attributes: ['id', 'status'] });
+      if (featureRequest && (featureRequest.status === 'approved' || featureRequest.status === 'rejected')) {
+        throw ApiError.badRequest('This feature request has been decided — the discussion thread is now read-only.');
       }
     }
   }

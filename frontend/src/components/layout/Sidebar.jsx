@@ -46,13 +46,15 @@ function ActiveRail() {
   );
 }
 
-function NavEntry({ item, sidebarOpen, onExpandSidebar }) {
+function NavEntry({ item, sidebarOpen, onExpandSidebar, hasAccess }) {
   const [open, setOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const Icon = item.icon;
 
   if (item.children) {
+    const visibleChildren = item.children.filter(hasAccess);
+    if (visibleChildren.length === 0) return null;
     const button = (
       <ListItemButton
         onClick={() => {
@@ -73,7 +75,7 @@ function NavEntry({ item, sidebarOpen, onExpandSidebar }) {
         {sidebarOpen && (
           <Collapse in={open} timeout="auto" unmountOnExit>
             <List component="div" disablePadding>
-              {item.children.map((child) => {
+              {visibleChildren.map((child) => {
                 const isChildActive = location.pathname === child.path;
                 return (
                   <ListItemButton
@@ -165,7 +167,7 @@ export default function Sidebar({ open }) {
       <Divider sx={{ borderColor: 'rgba(255,255,255,0.18)' }} />
       <List sx={{ pt: 1.5, flexGrow: 1 }}>
         {navConfig.filter(hasAccess).map((item) => (
-          <NavEntry key={item.label} item={item} sidebarOpen={open} onExpandSidebar={() => dispatch(toggleSidebar())} />
+          <NavEntry key={item.label} item={item} sidebarOpen={open} onExpandSidebar={() => dispatch(toggleSidebar())} hasAccess={hasAccess} />
         ))}
       </List>
       <Divider sx={{ borderColor: 'rgba(255,255,255,0.18)' }} />

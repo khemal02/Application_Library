@@ -31,7 +31,7 @@ const detailInclude = [
 
 const base = createCrudService(Application, {
   searchableFields: ['name', 'description', 'category'],
-  filterableFields: ['status', 'priority', 'category', 'ownerId', 'departmentId', 'industry', 'functionalArea'],
+  filterableFields: ['status', 'category', 'ownerId', 'departmentId', 'industry', 'functionalArea'],
   include: listInclude,
   notFoundMessage: 'Application not found',
 });

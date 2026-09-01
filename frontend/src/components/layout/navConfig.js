@@ -11,9 +11,12 @@ const navConfig = [
   { label: 'Applications', path: '/applications', icon: AppsIcon },
   {
     label: 'Ideas', icon: LightbulbIcon,
+    // No resource/action on the group itself — New Ideas and Modify Current Application are
+    // separate RBAC resources ('ideas'/'feature_requests') now, gated per-child below, since the
+    // split into fully independent modules.
     children: [
-      { label: 'New Ideas', path: '/ideas' },
-      { label: 'Modify Current Application', path: '/feature-requests' },
+      { label: 'New Ideas', path: '/ideas', resource: 'ideas', action: 'read' },
+      { label: 'Modify Current Application', path: '/feature-requests', resource: 'feature_requests', action: 'read' },
     ],
   },
   { label: 'Suggestions', path: '/suggestions', icon: RateReviewIcon },

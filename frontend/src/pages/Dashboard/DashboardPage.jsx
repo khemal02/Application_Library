@@ -38,6 +38,8 @@ export default function DashboardPage() {
     { label: 'Pending Reviews', value: stats.pendingReviews, icon: RateReviewIcon, color: 'warning' },
     { label: 'Pending Ideas', value: stats.pendingIdeas, icon: LightbulbIcon, color: 'secondary' },
     { label: 'Approved Ideas', value: stats.approvedIdeas, icon: ThumbUpIcon, color: 'success' },
+    { label: 'Pending Feature Requests', value: stats.pendingFeatureRequests, icon: LightbulbIcon, color: 'secondary' },
+    { label: 'Approved Feature Requests', value: stats.approvedFeatureRequests, icon: ThumbUpIcon, color: 'success' },
     { label: 'Open Improvements', value: stats.openImprovements, icon: BuildIcon, color: 'error' },
   ];
 

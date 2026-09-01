@@ -11,7 +11,6 @@ import IconButton from '@mui/material/IconButton';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
-import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { ideasApi } from '../../services/domains';
 import useResource from '../../hooks/useResource';
 import useBreadcrumbLabel from '../../hooks/useBreadcrumbLabel';
@@ -49,14 +48,14 @@ export default function IdeaDetailPage() {
   const { data: history } = useResource(() => ideasApi.statusHistory(id), [id]);
   useBreadcrumbLabel(idea?.title);
 
-  // Only an approver (or a CEO breaking a tie — they aren't a panel member at all) on a new_idea
-  // with no Application yet ever needs this — a feature request already has its target
-  // Application, and a losing vote never registers one. Fetched eagerly for any approver (not
-  // just the one whose vote would actually decide it) so there's no loading flicker the moment
-  // it IS needed — IdeaPanelCard decides whether to actually show the picker. Gated so a plain
-  // reviewer or non-participant never fires this fetch at all.
+  // Only an approver (or a CEO breaking a tie — they aren't a panel member at all) with no
+  // Application yet ever needs this. Fetched eagerly for any approver (not just the one whose
+  // vote would actually decide it) so there's no loading flicker the moment it IS needed —
+  // IdeaPanelCard decides whether to actually show the picker. Gated so a plain reviewer or
+  // non-participant never fires this fetch at all. "Modify Current Application" (feature
+  // requests) has its own module now and never needs this — see FeatureRequestDetailPage.jsx.
   const needsOwnerPicker = (idea?.panel?.myRow?.kind === 'approver' || idea?.panel?.canTieBreak)
-    && idea?.category === 'new_idea' && !idea?.applicationId;
+    && !idea?.applicationId;
 
   useEffect(() => {
     if (!needsOwnerPicker) return;
@@ -186,17 +185,6 @@ export default function IdeaDetailPage() {
       <Stack direction="row" justifyContent="space-between" alignItems="center">
         <Stack direction="row" alignItems="center" spacing={1}>
           <BackButton />
-          {idea.category === 'existing_app_feature' && idea.application?.name && (
-            <Stack direction="row" spacing={0.25} alignItems="center">
-              <Typography variant="h0" fontWeight={700}>{idea.application.name}</Typography>
-              <IconButton
-                size="small" aria-label={`Open ${idea.application.name}`}
-                onClick={() => navigate(`/applications/${idea.applicationId}`)}
-              >
-                <OpenInNewIcon fontSize="inherit" />
-              </IconButton>
-            </Stack>
-          )}
         </Stack>
         <Typography variant="body2" color="text.secondary">
           Submitted by, <Typography component="span" variant="body2" fontWeight={700} color="text.primary">{idea.submitter?.name || '—'}</Typography>
@@ -205,11 +193,18 @@ export default function IdeaDetailPage() {
       <Box sx={{ mb: 2 }}>
         <Typography variant="h5" fontWeight={700}>{idea.title}</Typography>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
-          {idea.category === 'new_idea' && idea.applicationId && idea.application?.name && (
+          {idea.applicationId && idea.application?.name && (
             <Chip
               size="small" color="success" variant="outlined" clickable
               label={`Registered as: ${idea.application.name}`}
               onClick={() => navigate(`/applications/${idea.applicationId}`)}
+            />
+          )}
+          {idea.changeRequest && (
+            <Chip
+              size="small" color="success" variant="outlined" clickable
+              label="Change request created"
+              onClick={() => navigate(`/applications/${idea.changeRequest.applicationId}/change-requests/${idea.changeRequest.id}`)}
             />
           )}
           {idea.department?.name && (
@@ -257,10 +252,7 @@ export default function IdeaDetailPage() {
             )
           )}
 
-          {/* Only ever collected for a new_idea (see IdeaFormDialog) — a feature request never
-              had this field on its create form, so it isn't offered an "add one" affordance
-              here either; it can still show/edit an existing value if one somehow got set. */}
-          {(idea.technologiesAndEfficiency || (canEditIdeaFields && idea.category === 'new_idea')) && (
+          {(idea.technologiesAndEfficiency || canEditIdeaFields) && (
             <Box sx={{ mb: 3 }}>
               <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>Technologies and Efficiency</Typography>
               {editingTech ? (

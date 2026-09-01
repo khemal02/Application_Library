@@ -10,7 +10,6 @@ const create = Joi.object({
   applicationId: Joi.string().uuid().required(),
   title: Joi.string().max(200).required(),
   description: Joi.string().allow('', null),
-  priority: Joi.string().valid('low', 'medium', 'high', 'critical'),
   status: Joi.forbidden(),
 });
 
@@ -25,7 +24,6 @@ const create = Joi.object({
 const update = Joi.object({
   title: Joi.string().max(200),
   description: Joi.string().allow('', null),
-  priority: Joi.string().valid('low', 'medium', 'high', 'critical'),
   status: Joi.string().valid('pending', 'in_review', 'approved', 'rejected', 'implemented'),
 });
 
@@ -41,14 +39,28 @@ const updateStageParams = Joi.object({
 const updateStageBody = Joi.object({
   status: Joi.string().valid('not_started', 'in_progress', 'complete'),
   assigneeId: Joi.string().uuid().allow(null),
-  // .allow(null) here too, same as assigneeId/notes — the UI sends null for an unset/cleared
-  // date (an empty <input type="date"> reads back as '', which the page turns into null), not an
-  // omitted key.
+  // .allow(null) here too, same as assigneeId — the UI sends null for an unset/cleared date (an
+  // empty <input type="date"> reads back as '', which the page turns into null), not an omitted
+  // key. Notes no longer live here — see comments.service.js's 'change_request_stage' branch.
   startDate: Joi.date().iso().allow(null),
   endDate: Joi.date().iso().allow(null),
-  notes: Joi.string().max(4000).allow('', null),
+});
+
+// PATCH /applications/:applicationId/change-requests/:id/assignments — see
+// changeRequests.service.js#bulkAssignStages. Each key is optional independently (an absent key
+// leaves that stage alone); `.allow(null)` lets an explicit null clear an assignee, distinct from
+// the key being absent at all.
+const bulkAssignParams = Joi.object({
+  applicationId: Joi.string().uuid().required(),
+  id: Joi.string().uuid().required(),
+});
+
+const bulkAssignBody = Joi.object({
+  development: Joi.string().uuid().allow(null),
+  testing: Joi.string().uuid().allow(null),
+  deployment: Joi.string().uuid().allow(null),
 });
 
 module.exports = {
-  create, update, updateStageParams, updateStageBody,
+  create, update, updateStageParams, updateStageBody, bulkAssignParams, bulkAssignBody,
 };

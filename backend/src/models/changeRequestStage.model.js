@@ -10,7 +10,6 @@ module.exports = (sequelize, DataTypes) => {
     assigneeId: { type: DataTypes.UUID, allowNull: true },
     startDate: { type: DataTypes.DATEONLY, allowNull: true },
     endDate: { type: DataTypes.DATEONLY, allowNull: true },
-    notes: { type: DataTypes.TEXT, allowNull: true },
   }, {
     tableName: 'change_request_stages',
     indexes: [{ unique: true, fields: ['change_request_id', 'stage'] }],

@@ -10,6 +10,7 @@ import ChangeRequestDetailPage from '../pages/Applications/ChangeRequestDetailPa
 import IdeasListPage from '../pages/Ideas/IdeasListPage';
 import IdeaDetailPage from '../pages/Ideas/IdeaDetailPage';
 import FeatureRequestsListPage from '../pages/Ideas/FeatureRequestsListPage';
+import FeatureRequestDetailPage from '../pages/Ideas/FeatureRequestDetailPage';
 import SuggestionsListPage from '../pages/Suggestions/SuggestionsListPage';
 import SuggestionDetailPage from '../pages/Suggestions/SuggestionDetailPage';
 import UsersPage from '../pages/Admin/UsersPage';
@@ -41,11 +42,11 @@ export default function AppRoutes() {
       <Route path="/applications/:id/stages" element={<Protected><ApplicationStagesPage /></Protected>} />
       <Route path="/applications/:applicationId/change-requests/:changeRequestId" element={<Protected><ChangeRequestDetailPage /></Protected>} />
 
-      <Route path="/ideas" element={<Protected><IdeasListPage /></Protected>} />
-      <Route path="/ideas/:id" element={<Protected><IdeaDetailPage /></Protected>} />
+      <Route path="/ideas" element={<Protected resource="ideas" action="read"><IdeasListPage /></Protected>} />
+      <Route path="/ideas/:id" element={<Protected resource="ideas" action="read"><IdeaDetailPage /></Protected>} />
 
-      <Route path="/feature-requests" element={<Protected><FeatureRequestsListPage /></Protected>} />
-      <Route path="/feature-requests/:id" element={<Protected><IdeaDetailPage /></Protected>} />
+      <Route path="/feature-requests" element={<Protected resource="feature_requests" action="read"><FeatureRequestsListPage /></Protected>} />
+      <Route path="/feature-requests/:id" element={<Protected resource="feature_requests" action="read"><FeatureRequestDetailPage /></Protected>} />
 
       <Route path="/suggestions" element={<Protected><SuggestionsListPage /></Protected>} />
       <Route path="/suggestions/:id" element={<Protected><SuggestionDetailPage /></Protected>} />

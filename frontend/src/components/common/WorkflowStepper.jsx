@@ -10,16 +10,19 @@ import humanize from '../../utils/humanize';
  * alert instead (e.g. rejected). `renderStepExtra(step)`: optional per-step extra content shown
  * under a step's label (MUI StepLabel's `optional` slot) — e.g. an assignee picker/name under an
  * "assigned" step. `labelFor(step)`: optional override for the printed step text, defaulting to
- * `humanize`. Ideas moved off this component in favor of an open review panel (see
- * pages/Ideas/IdeaPanelCard.jsx) — Suggestions is this component's only remaining caller now,
- * and keeps plain humanize() (not passing it).
+ * `humanize`. `activeStep`: optional explicit index, for a caller whose progress isn't one single
+ * status string to look up in `steps` (e.g. change requests, where each stage tracks its own
+ * status independently) — when given, it wins over `currentStatus`/`indexOf`, and `currentStatus`
+ * only still matters for the `terminalNegative` check.
  */
-export default function WorkflowStepper({ steps, currentStatus, terminalNegative = ['rejected'], orientation = 'horizontal', renderStepExtra, labelFor = humanize }) {
-  if (terminalNegative.includes(currentStatus)) {
+export default function WorkflowStepper({
+  steps, currentStatus, activeStep, terminalNegative = ['rejected'], orientation = 'horizontal', renderStepExtra, labelFor = humanize,
+}) {
+  if (currentStatus && terminalNegative.includes(currentStatus)) {
     return <Alert severity="error">This item was <strong>{labelFor(currentStatus)}</strong></Alert>;
   }
 
-  const activeIndex = steps.indexOf(currentStatus);
+  const activeIndex = activeStep !== undefined ? activeStep : steps.indexOf(currentStatus);
   const vertical = orientation === 'vertical';
 
   return (

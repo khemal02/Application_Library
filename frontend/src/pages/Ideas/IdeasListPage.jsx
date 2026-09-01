@@ -22,7 +22,6 @@ export default function IdeasListPage() {
   const { showSuccess } = useToast();
   const list = useServerList(ideasApi.list, {
     initialSort: { field: 'ideaNumber', direction: 'desc' },
-    initialFilters: { category: 'new_idea' },
   });
   const [formOpen, setFormOpen] = useState(false);
   const [departments, setDepartments] = useState([]);
@@ -102,7 +101,6 @@ export default function IdeasListPage() {
       />
 
       <IdeaFormDialog
-        category="new_idea"
         open={formOpen}
         onClose={() => setFormOpen(false)}
         onCreated={(idea) => { setFormOpen(false); showSuccess('Idea submitted'); navigate(`/ideas/${idea.id}`); }}

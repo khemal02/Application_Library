@@ -8,7 +8,6 @@ import Divider from '@mui/material/Divider';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import TextField from '@mui/material/TextField';
-import MenuItem from '@mui/material/MenuItem';
 import Alert from '@mui/material/Alert';
 import Avatar from '@mui/material/Avatar';
 import Tooltip from '@mui/material/Tooltip';
@@ -18,21 +17,21 @@ import FormControlLabel from '@mui/material/FormControlLabel';
 import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
 import dayjs from 'dayjs';
-import { ideasApi } from '../../services/domains';
+import { featureRequestsApi } from '../../services/domains';
 import { useAppSelector } from '../../app/hooks';
 import useToast from '../../hooks/useToast';
 import avatarColor from '../../utils/avatarColor';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
-import PanelPickerDialog from './PanelPickerDialog';
+import FeatureRequestPanelPickerDialog from './FeatureRequestPanelPickerDialog';
 
 // A reviewer's advisory verdict has three tiers; an approver's (or the CEO tie-break's) binding
-// vote stays strictly binary — see ideas.validator.js#submitReview for why.
+// vote stays strictly binary — see featureRequests.validator.js#submitReview for why.
 const REVIEWER_LABELS = { approve: 'Fully supported', request_changes: 'Partially supported', reject: 'Not supported' };
 const APPROVER_LABELS = { approve: 'Approved', reject: 'Rejected' };
 
 /**
- * Change 10's exact vocabulary — no lock/gated state anymore: reviewers and approvers act fully
- * in parallel, so a null approver decision only ever means "hasn't voted yet," never "blocked."
+ * No lock/gated state: reviewers and approvers act fully in parallel, so a null approver decision
+ * only ever means "hasn't voted yet," never "blocked."
  */
 function VerdictChip({ kind, decision }) {
   const labels = kind === 'reviewer' ? REVIEWER_LABELS : APPROVER_LABELS;
@@ -81,25 +80,20 @@ function PanelRow({ entry, isMe, onRemove }) {
 }
 
 /**
- * The open review panel — any number of REVIEWERS (advisory, R2: never move the idea) and any
- * number of APPROVERS, acting fully in PARALLEL with reviewers — an approver never waits on
- * reviewers to respond (that gate existed briefly and was removed at your request). R1 is
- * majority-rule, not unanimous-plus-veto: every approver votes, and once they all have, whichever
- * side has more wins. A TIE doesn't resolve on its own: any active CEO can cast a deciding vote
- * (`panel.canTieBreak`) that becomes the outcome directly, without needing to be on the panel
- * first.
+ * Forked from IdeaPanelCard.jsx — see the Ideas/Feature-Requests split. A feature request always
+ * already has an Application (unlike a brand-new idea, which can register one on approval), so
+ * this drops the owner-picker/"registers a tracked Application" branch entirely — approving here
+ * only ever attaches to the existing application.
  *
- * UI pass (RICC prompt): fixes the form defaulting to a decision nobody picked, replaces the
- * dropdown with two labelled radio-card options, states who the viewer is and what their click
- * actually does. See this conversation's report for the places the prompt's own description of
- * R1 was stale (it predates the majority/tie-break rule) and how the approver consequence/confirm
- * copy was adapted to stay accurate rather than reproduce the "any reject ends it" framing that's
- * no longer true.
+ * The open review panel — any number of REVIEWERS (advisory, never move the request) and any
+ * number of APPROVERS, acting fully in PARALLEL with reviewers. Majority-rule, not unanimous-
+ * plus-veto: every approver votes, and once they all have, whichever side has more wins. A TIE
+ * doesn't resolve on its own: any active CEO can cast a deciding vote (`panel.canTieBreak`) that
+ * becomes the outcome directly, without needing to be on the panel first.
  */
-export default function IdeaPanelCard({
-  idea, panel,
+export default function FeatureRequestPanelCard({
+  featureRequest, panel,
   voteDecision, onVoteDecisionChange, voteNote, onVoteNoteChange,
-  ownerId, onOwnerIdChange, ownerCandidates,
   submitting, onSubmitReview,
   onPanelChanged,
 }) {
@@ -113,14 +107,14 @@ export default function IdeaPanelCard({
 
   if (!panel) return null;
 
-  const isDecided = idea.status === 'approved' || idea.status === 'rejected';
+  const isDecided = featureRequest.status === 'approved' || featureRequest.status === 'rejected';
   const myRow = panel.myRow;
   const isApproverRow = myRow?.kind === 'approver';
   const isTieBreak = panel.canTieBreak; // a CEO breaking a tie — not a normal panel row at all
 
   // My own roster entry carries the timestamp myRow itself doesn't (myRow is the lightweight
-  // "can I act" shape) — reused for the recorded-response view (Change 8) instead of adding a
-  // field to the API response for it.
+  // "can I act" shape) — reused for the recorded-response view instead of adding a field to the
+  // API response for it.
   const myRosterEntry = [...panel.reviewers, ...panel.approvers].find((e) => e.userId === user?.id);
   const hasRecordedResponse = myRow && myRow.decision !== null && !isTieBreak;
 
@@ -133,18 +127,12 @@ export default function IdeaPanelCard({
   const rejectTally = otherApprovers.filter((a) => a.decision === 'reject').length + (voteDecision === 'reject' ? 1 : 0);
   const wouldTie = isApproverRow && isCompletingVote && approveTally === rejectTally;
   const completingOutcome = isCompletingVote ? (wouldTie ? 'tie' : (approveTally > rejectTally ? 'approve' : 'reject')) : null;
-  const wouldDecideApprove = isTieBreak ? voteDecision === 'approve' : (completingOutcome === 'approve');
 
-  // Every idea here is a new_idea post-split (see FeatureRequestPanelCard.jsx for the
-  // already-has-an-application lane) — unregistered iff it has no applicationId yet.
-  const isNewIdeaUnregistered = !idea.applicationId;
-  const requiresOwner = wouldDecideApprove && isNewIdeaUnregistered;
-  const applicationName = idea.application?.name || 'the existing application';
+  const applicationName = featureRequest.application?.name || 'the existing application';
 
-  // Only the vote that will ACTUALLY finalize the idea as Rejected gets the "cannot be undone"
+  // Only the vote that will ACTUALLY finalize the request as Rejected gets the "cannot be undone"
   // confirmation — under majority rule a non-completing reject is just one recorded opinion among
-  // several still-open votes, not remotely final, so treating every reject click as catastrophic
-  // would be its own false-consequence bug of the exact kind this pass exists to fix.
+  // several still-open votes, not remotely final.
   const isTerminalRejectSubmit = voteDecision === 'reject' && ((isApproverRow && completingOutcome === 'reject') || isTieBreak);
 
   const showVoteForm = (myRow?.canAct && (!hasRecordedResponse || editingMyResponse)) || isTieBreak;
@@ -152,7 +140,7 @@ export default function IdeaPanelCard({
   const kicker = isTieBreak ? 'YOU ARE THE CEO — TIE-BREAK' : (isApproverRow ? 'YOU ARE AN APPROVER' : 'YOU ARE A REVIEWER');
 
   // An approver's or the CEO tie-break's vote is binding, so it stays a strict two-way choice. A
-  // reviewer's is advisory (R2: never ends anything) and gets a third, middle tier instead.
+  // reviewer's is advisory (never ends anything) and gets a third, middle tier instead.
   const isBinaryVote = isApproverRow || isTieBreak;
   const voteOptions = isBinaryVote
     ? [
@@ -184,7 +172,7 @@ export default function IdeaPanelCard({
   const handleRemove = async () => {
     setRemoving(true);
     try {
-      await ideasApi.removeParticipant(idea.id, removeTarget.userId);
+      await featureRequestsApi.removeParticipant(featureRequest.id, removeTarget.userId);
       showSuccess(`${removeTarget.name} removed from the panel`);
       setRemoveTarget(null);
       await onPanelChanged();
@@ -195,26 +183,23 @@ export default function IdeaPanelCard({
     }
   };
 
-  // Change 5 — one accurate sentence for whatever is actually about to happen. Kept as a function
-  // (not JSX inline) because the approver branch genuinely has four distinct cases and inlining it
-  // was unreadable.
+  // One accurate sentence for whatever is actually about to happen. Kept as a function (not JSX
+  // inline) because the approver branch genuinely has four distinct cases and inlining it was
+  // unreadable.
   function consequence() {
     if (!isApproverRow && !isTieBreak) {
       return null; // reviewers get no consequence line — their verdict never has one to state
     }
     if (isTieBreak) {
       if (!voteDecision) return null;
-      if (voteDecision === 'reject') return { severity: 'warning', text: 'Rejecting ends this idea immediately.' };
-      return {
-        severity: 'info',
-        text: `Approving ends the tie in favor of the idea${isNewIdeaUnregistered ? ' and registers a tracked Application' : ` and attaches it to ${applicationName}`}.`,
-      };
+      if (voteDecision === 'reject') return { severity: 'warning', text: 'Rejecting ends this feature request immediately.' };
+      return { severity: 'info', text: `Approving ends the tie in favor of the request and attaches it to ${applicationName}.` };
     }
     if (!isCompletingVote) {
       const stillToVote = otherApprovers.filter((a) => a.decision === null).length;
       return {
         severity: 'info',
-        text: `You are 1 of ${panel.approversTotal} approvers. ${stillToVote} more still need to vote — the idea is decided by majority once everyone has.`,
+        text: `You are 1 of ${panel.approversTotal} approvers. ${stillToVote} more still need to vote — the request is decided by majority once everyone has.`,
       };
     }
     if (!voteDecision) {
@@ -226,10 +211,10 @@ export default function IdeaPanelCard({
     if (completingOutcome === 'approve') {
       return {
         severity: 'info',
-        text: `You are the last of ${panel.approversTotal} approvers. Approving registers a tracked Application and freezes this idea — no further comments or edits.`,
+        text: `You are the last of ${panel.approversTotal} approvers. Approving attaches this to ${applicationName} and freezes this request — no further comments or edits.`,
       };
     }
-    return { severity: 'warning', text: `You are the last of ${panel.approversTotal} approvers. Rejecting ends this idea immediately — no further comments or edits.` };
+    return { severity: 'warning', text: `You are the last of ${panel.approversTotal} approvers. Rejecting ends this request immediately — no further comments or edits.` };
   }
   const consequenceInfo = showVoteForm ? consequence() : null;
 
@@ -238,7 +223,7 @@ export default function IdeaPanelCard({
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
         <Typography variant="subtitle2" fontWeight={700}>Review panel</Typography>
         {isDecided ? (
-          <Chip size="small" color={idea.status === 'approved' ? 'success' : 'error'} label={idea.status === 'approved' ? 'Approved' : 'Rejected'} />
+          <Chip size="small" color={featureRequest.status === 'approved' ? 'success' : 'error'} label={featureRequest.status === 'approved' ? 'Approved' : 'Rejected'} />
         ) : (
           <Stack direction="row" spacing={1} alignItems="center">
             <Typography variant="caption" color="text.secondary">
@@ -258,7 +243,7 @@ export default function IdeaPanelCard({
       {/* Your own action sits above the roster, not buried below it. */}
       {panel.isTied && !isTieBreak && (
         <Alert severity="warning" sx={{ mb: 2 }}>
-          Tied {panel.approversApproved}–{panel.approversRejected} — the CEO needs to break the tie before this idea can be decided.
+          Tied {panel.approversApproved}–{panel.approversRejected} — the CEO needs to break the tie before this request can be decided.
         </Alert>
       )}
 
@@ -278,8 +263,7 @@ export default function IdeaPanelCard({
           </Alert>
           {/* Not shown once tied (myRow.canAct is false there, same as a gated approver) —
               resolution at that point is the CEO's tie-break, not a quiet re-vote, even though
-              the backend would technically still accept an amendment. Out of scope for this UI
-              pass to change; see the report. */}
+              the backend would technically still accept an amendment. */}
           {myRow.canAct && (
             <Button size="small" onClick={() => setEditingMyResponse(true)}>
               {isApproverRow ? 'Update decision' : 'Update review'}
@@ -326,25 +310,9 @@ export default function IdeaPanelCard({
               helperText={noteRequired ? 'Explain what changes are needed before this can be submitted.' : ''}
             />
 
-            {requiresOwner && (
-              <Box>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                  Submitted by <strong>{idea.submitter?.name || '—'}</strong>
-                </Typography>
-                <TextField
-                  select fullWidth size="small" label="Application Owner"
-                  value={ownerId} onChange={(e) => onOwnerIdChange(e.target.value)}
-                  helperText="Required — approving this will register a tracked Application."
-                >
-                  <MenuItem value="">Select…</MenuItem>
-                  {ownerCandidates.map((u) => <MenuItem key={u.id} value={u.id}>{u.name}</MenuItem>)}
-                </TextField>
-              </Box>
-            )}
-
             <Stack direction="row" spacing={1}>
               <Button
-                variant="contained" disabled={submitting || !voteDecision || noteMissing || (requiresOwner && !ownerId)}
+                variant="contained" disabled={submitting || !voteDecision || noteMissing}
                 onClick={handleSubmitClick}
               >
                 {isTieBreak ? 'Break the Tie' : (isApproverRow ? (myRosterEntry?.decision ? 'Update decision' : 'Submit decision') : (myRosterEntry?.decision ? 'Update review' : 'Submit review'))}
@@ -427,8 +395,8 @@ export default function IdeaPanelCard({
         )}
       </Box>
 
-      <PanelPickerDialog
-        open={!!pickerKind} kind={pickerKind} ideaId={idea.id}
+      <FeatureRequestPanelPickerDialog
+        open={!!pickerKind} kind={pickerKind} featureRequestId={featureRequest.id}
         onClose={() => setPickerKind(null)}
         onAdded={async () => { setPickerKind(null); await onPanelChanged(); }}
       />
@@ -444,9 +412,9 @@ export default function IdeaPanelCard({
 
       <ConfirmDialog
         open={confirmReject}
-        title="Reject this idea?"
-        description="This finalizes the idea as Rejected and cannot be undone."
-        confirmLabel="Reject idea"
+        title="Reject this feature request?"
+        description="This finalizes the feature request as Rejected and cannot be undone."
+        confirmLabel="Reject request"
         onConfirm={doSubmit}
         onClose={() => setConfirmReject(false)}
       />

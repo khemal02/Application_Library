@@ -28,8 +28,8 @@ function ChangeRequestRow({ cr, canDelete, onDelete, onClick }) {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); }
       }}
       sx={{
-        py: 1.5, px: 1.5, cursor: 'pointer', borderBottom: 1, borderColor: 'divider',
-        '&:last-of-type': { borderBottom: 0 },
+        py: 1.5, px: 1.5, cursor: 'pointer',
+        border: 1, borderColor: 'divider', borderRadius: 1,
         '&:hover': { bgcolor: 'action.hover' },
         '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: '-2px' },
       }}
@@ -49,24 +49,23 @@ function ChangeRequestRow({ cr, canDelete, onDelete, onClick }) {
               {cr.description}
             </Typography>
           )}
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
-            <StatusBadge value={cr.priority} />
-            <Typography variant="caption" color="text.secondary">
-              {cr.requester?.name || 'Unknown user'} · {dayjs(cr.createdAt).format('MMM D, YYYY')}
-            </Typography>
-          </Stack>
         </Box>
-        <Stack direction="row" spacing={0.5} alignItems="center" sx={{ flexShrink: 0 }}>
-          <StatusBadge color={chip.color} label={chip.label} />
-          {canDelete && (
-            <IconButton
-              size="small"
-              aria-label={`Delete ${cr.title}`}
-              onClick={(e) => { e.stopPropagation(); onDelete(cr); }}
-            >
-              <DeleteOutlineIcon fontSize="small" />
-            </IconButton>
-          )}
+        <Stack alignItems="flex-end" spacing={0.5} sx={{ flexShrink: 0 }}>
+          <Stack direction="row" spacing={0.5} alignItems="center">
+            <StatusBadge color={chip.color} label={chip.label} />
+            {canDelete && (
+              <IconButton
+                size="small"
+                aria-label={`Delete ${cr.title}`}
+                onClick={(e) => { e.stopPropagation(); onDelete(cr); }}
+              >
+                <DeleteOutlineIcon fontSize="small" />
+              </IconButton>
+            )}
+          </Stack>
+          <Typography variant="caption" color="text.secondary">
+            {cr.requester?.name || 'Unknown user'} · {dayjs(cr.createdAt).format('MMM D, YYYY')}
+          </Typography>
         </Stack>
       </Stack>
     </Box>
@@ -153,7 +152,7 @@ export default function ChangeRequestsCard({ applicationId }) {
         </Box>
       ) : (
         <>
-          <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1 }}>
+          <Stack spacing={1.5}>
             {visible.map((cr) => (
               <ChangeRequestRow
                 key={cr.id}
@@ -163,7 +162,7 @@ export default function ChangeRequestsCard({ applicationId }) {
                 onClick={() => navigate(`/applications/${applicationId}/change-requests/${cr.id}`)}
               />
             ))}
-          </Box>
+          </Stack>
           {rows.length > MAX_VISIBLE && (
             // Expands in place — every row is already fetched (up to 100), so no second request.
             <Typography

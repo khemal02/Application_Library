@@ -31,6 +31,18 @@ export const ideasApi = {
   addParticipants: (id, payload) => api.post(`/ideas/${id}/panel`, payload).then((r) => r.data),
   removeParticipant: (id, userId) => api.delete(`/ideas/${id}/panel/${userId}`).then((r) => r.data),
 };
+// "Modify Current Application" — split out of ideasApi into its own module/table/resource, see
+// 20260130000035-split-feature-requests-from-ideas.js. No eligibleOwners — a feature request
+// never registers a new Application, so that concept doesn't apply here.
+export const featureRequestsApi = {
+  ...createResourceApi('/feature-requests'),
+  statusHistory: (id) => api.get(`/feature-requests/${id}/status-history`).then((r) => r.data),
+  analytics: () => api.get('/feature-requests/analytics').then((r) => r.data),
+  submitReview: (id, payload) => api.post(`/feature-requests/${id}/reviews`, payload).then((r) => r.data),
+  panelCandidates: (id, kind) => api.get(`/feature-requests/${id}/panel-candidates`, { params: { kind } }).then((r) => r.data),
+  addParticipants: (id, payload) => api.post(`/feature-requests/${id}/panel`, payload).then((r) => r.data),
+  removeParticipant: (id, userId) => api.delete(`/feature-requests/${id}/panel/${userId}`).then((r) => r.data),
+};
 export const suggestionsApi = {
   ...createResourceApi('/suggestions'),
   transition: (id, payload) => api.patch(`/suggestions/${id}/status`, payload).then((r) => r.data),
@@ -56,6 +68,8 @@ export const changeRequestsApi = {
     .patch(`/applications/${appId}/change-requests/${id}/stages/${stage}`, payload).then((r) => r.data),
   assigneeCandidates: (appId, id) => api
     .get(`/applications/${appId}/change-requests/${id}/assignee-candidates`).then((r) => r.data),
+  bulkAssignStages: (appId, id, payload) => api
+    .patch(`/applications/${appId}/change-requests/${id}/assignments`, payload).then((r) => r.data),
 };
 
 export const architectureDocsApi = {
