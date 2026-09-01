@@ -8,12 +8,8 @@ import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
 import Divider from '@mui/material/Divider';
 import AppsIcon from '@mui/icons-material/AppsOutlined';
-import AutorenewIcon from '@mui/icons-material/Autorenew';
-import CheckCircleIcon from '@mui/icons-material/CheckCircleOutline';
 import RateReviewIcon from '@mui/icons-material/RateReviewOutlined';
-import LightbulbIcon from '@mui/icons-material/LightbulbOutlined';
 import ThumbUpIcon from '@mui/icons-material/ThumbUpOutlined';
-import BuildIcon from '@mui/icons-material/BuildOutlined';
 import dayjs from 'dayjs';
 import { dashboardApi } from '../../services/domains';
 import useResource from '../../hooks/useResource';
@@ -31,16 +27,17 @@ export default function DashboardPage() {
 
   const stats = data?.stats || {};
 
+  // An org-wide count, plus four personal worklist tiles — each links straight to its own
+  // existing list (Ideas or Feature Requests), pre-filtered to that exact slice, rather than to a
+  // separate combined page. See dashboard.service.js#getSummary for where these four counts come
+  // from (Ideas + Feature Requests are the only two modules with a clean per-person
+  // reviewer/approver split to filter on).
   const cards = [
-    { label: 'Total Applications', value: stats.totalApplications, icon: AppsIcon, color: 'primary' },
-    { label: 'Applications In Progress', value: stats.applicationsInProgress, icon: AutorenewIcon, color: 'info' },
-    { label: 'Completed Applications', value: stats.completedApplications, icon: CheckCircleIcon, color: 'success' },
-    { label: 'Pending Reviews', value: stats.pendingReviews, icon: RateReviewIcon, color: 'warning' },
-    { label: 'Pending Ideas', value: stats.pendingIdeas, icon: LightbulbIcon, color: 'secondary' },
-    { label: 'Approved Ideas', value: stats.approvedIdeas, icon: ThumbUpIcon, color: 'success' },
-    { label: 'Pending Feature Requests', value: stats.pendingFeatureRequests, icon: LightbulbIcon, color: 'secondary' },
-    { label: 'Approved Feature Requests', value: stats.approvedFeatureRequests, icon: ThumbUpIcon, color: 'success' },
-    { label: 'Open Improvements', value: stats.openImprovements, icon: BuildIcon, color: 'error' },
+    { label: 'Total Applications', value: stats.totalApplications, icon: AppsIcon, color: 'primary', path: '/applications' },
+    { label: 'My Review for New Idea', value: stats.myReviewIdeas, icon: RateReviewIcon, color: 'warning', path: '/ideas?awaitingMyReview=true&kind=reviewer' },
+    { label: 'My Review for Feature Request', value: stats.myReviewFeatureRequests, icon: RateReviewIcon, color: 'warning', path: '/feature-requests?awaitingMyReview=true&kind=reviewer' },
+    { label: 'My Approve for New Idea', value: stats.myApproveIdeas, icon: ThumbUpIcon, color: 'success', path: '/ideas?awaitingMyReview=true&kind=approver' },
+    { label: 'My Approve for Feature Request', value: stats.myApproveFeatureRequests, icon: ThumbUpIcon, color: 'success', path: '/feature-requests?awaitingMyReview=true&kind=approver' },
   ];
 
   return (
@@ -48,9 +45,9 @@ export default function DashboardPage() {
       <Typography variant="h5" fontWeight={700} sx={{ mb: 3 }}>Dashboard</Typography>
 
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        {cards.map((c) => (
-          <Grid item xs={12} sm={6} md={4} lg={3} key={c.label}>
-            <StatCard {...c} />
+        {cards.map(({ path, ...c }) => (
+          <Grid item xs={12} sm={6} md={4} key={c.label}>
+            <StatCard {...c} onClick={() => navigate(path)} />
           </Grid>
         ))}
       </Grid>

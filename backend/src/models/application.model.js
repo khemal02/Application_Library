@@ -52,7 +52,8 @@ module.exports = (sequelize, DataTypes) => {
     Application.hasMany(db.DbTableDoc, { foreignKey: 'applicationId', as: 'dbTableDocs' });
     Application.hasMany(db.ReleaseNote, { foreignKey: 'applicationId', as: 'releaseNotes' });
     Application.hasMany(db.BugHistory, { foreignKey: 'applicationId', as: 'bugs' });
-    Application.hasMany(db.KnownIssue, { foreignKey: 'applicationId', as: 'knownIssues' });
+    // Deliberately no Issue association here — same as ChangeRequest, its card fetches via its
+    // own dedicated endpoint (GET /applications/:id/issues), never embedded in this include list.
     Application.hasMany(db.RoadmapItem, { foreignKey: 'applicationId', as: 'roadmapItems' });
     Application.hasMany(db.TimelineMilestone, { foreignKey: 'applicationId', as: 'timelineMilestones' });
     Application.hasMany(db.ApplicationSuggestion, { foreignKey: 'applicationId', as: 'suggestions' });

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -27,8 +27,17 @@ import FeatureRequestFormDialog from './FeatureRequestFormDialog';
 export default function FeatureRequestsListPage() {
   const navigate = useNavigate();
   const { showSuccess } = useToast();
+  // A Dashboard stat tile links here with ?status=... (e.g. "Pending Feature Requests") or
+  // ?awaitingMyReview=true&kind=reviewer|approver ("My Review for Feature Request" / "My Approve
+  // for Feature Request") — read once at mount.
+  const [searchParams] = useSearchParams();
+  const initialFilters = {};
+  if (searchParams.get('status')) initialFilters.status = searchParams.get('status');
+  if (searchParams.get('awaitingMyReview')) initialFilters.awaitingMyReview = searchParams.get('awaitingMyReview');
+  if (searchParams.get('kind')) initialFilters.kind = searchParams.get('kind');
   const list = useServerList(featureRequestsApi.list, {
     initialSort: { field: 'requestNumber', direction: 'desc' },
+    initialFilters: Object.keys(initialFilters).length ? initialFilters : undefined,
   });
   const [formOpen, setFormOpen] = useState(false);
   const [departments, setDepartments] = useState([]);

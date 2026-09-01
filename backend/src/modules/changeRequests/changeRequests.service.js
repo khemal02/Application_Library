@@ -1,7 +1,7 @@
 const { Op } = require('sequelize');
 const { createCrudService } = require('../../utils/crudFactory');
 const {
-  ChangeRequest, ChangeRequestStage, User, Role, Application, StatusHistory, Comment, sequelize,
+  ChangeRequest, ChangeRequestStage, User, Role, Application, FeatureRequest, Issue, StatusHistory, Comment, sequelize,
 } = require('../../models');
 const ApiError = require('../../utils/ApiError');
 const logger = require('../../config/logger');
@@ -10,6 +10,7 @@ const { cleanupEntityRefs, mergeCounts } = require('../../utils/entityCleanup');
 const { getStorageDriver } = require('../attachments/storage');
 const { ROLE_LABELS } = require('../../utils/reviewPanel');
 const notificationsService = require('../notifications/notifications.service');
+const issuesService = require('../issues/issues.service');
 
 const STAGE_ORDER = ['development', 'testing', 'deployment'];
 const STAGE_LABELS = { development: 'Development', testing: 'Testing', deployment: 'Deployment' };
@@ -41,7 +42,62 @@ const detailInclude = [
     as: 'stages',
     include: [{ model: User, as: 'assignee', attributes: ['id', 'name'] }],
   },
+  // Both source associations, eager-loaded here so list()/getById() resolve every row's title in
+  // ONE query — see resolveSource() below. At most one of the two is ever set (the CHECK
+  // constraint doesn't enforce that directly, but featureRequestId/issueId are only ever written
+  // by their own one-shot creation paths, never both).
+  { model: FeatureRequest, as: 'featureRequest', attributes: ['id', 'title', 'description'] },
+  { model: Issue, as: 'sourceIssue', attributes: ['id', 'title', 'description'] },
 ];
+
+// Lightweight include for the action functions below (updateStage/bulkAssignStages) — they only
+// ever need a human-readable title for a notification message, not the full description, and
+// don't want the extra JOIN weight of detailInclude on every stage PATCH.
+const sourceTitleInclude = [
+  { model: FeatureRequest, as: 'featureRequest', attributes: ['id', 'title'] },
+  { model: Issue, as: 'sourceIssue', attributes: ['id', 'title'] },
+];
+
+/**
+ * The one place `title` falls back to a source's title — used by every notification-message
+ * builder below that isn't already going through resolveSource() (which only runs on the read
+ * paths). Never mutates; `record` must have been fetched with `sourceTitleInclude` or
+ * `detailInclude` for `record.featureRequest`/`record.sourceIssue` to be present.
+ */
+function effectiveTitle(record) {
+  return record.title || record.featureRequest?.title || record.sourceIssue?.title || 'Change request';
+}
+
+/**
+ * Single place `title`/`description` are resolved for a change request that may carry its own
+ * text (title NOT NULL, no source) or link to one instead (title NULL, featureRequestId or
+ * issueId set) — used by list() and getById(), so the card and the detail screen can never drift
+ * apart, same reasoning changeRequestStatus.js already applies on the frontend for the status
+ * chip. Mutates via setDataValue (same technique attachStageNotes uses) so .toJSON() picks it up;
+ * `source` is a new computed field on the response, never a real column.
+ */
+function resolveSource(record) {
+  if (!record) return record;
+  const fr = record.featureRequest;
+  const issue = record.sourceIssue;
+  const source = fr
+    ? { type: 'feature_request', id: fr.id, title: fr.title, url: `/feature-requests/${fr.id}` }
+    : issue
+      ? {
+        type: 'issue', id: issue.id, title: issue.title, url: `/applications/${record.applicationId}?issues=open#issue-${issue.id}`,
+      }
+      : { type: null, id: null, title: null, url: null };
+
+  record.setDataValue('title', record.title ?? fr?.title ?? issue?.title ?? null);
+  record.setDataValue('description', record.description ?? fr?.description ?? issue?.description ?? null);
+  record.setDataValue('source', source);
+  return record;
+}
+
+function resolveSourceMany(records) {
+  records.forEach(resolveSource);
+  return records;
+}
 
 // Bulk insert / eager-load order isn't a reliable read order — always sort explicitly to
 // development/testing/deployment rather than trust the DB's natural row order. Goes through
@@ -140,18 +196,32 @@ async function create(payload, req) {
  * caller identity here — `requestedBy` is the feature request's original submitter, not whoever
  * cast the deciding vote.
  *
- * Starts at `pending`, deliberately not `approved`: the feature request's panel answered "is this
- * worth doing", but only the application's OWNER decides what enters their delivery pipeline (the
- * same rule change() enforces on every other change request) — a review panel has no guarantee of
- * including them.
+ * Starts at `approved`, no second gate: the review panel already decided WHETHER this should
+ * happen; the application owner's role from here on is the assignment model (who works each
+ * stage, when), not a second yes/no — an owner who could reject what the panel approved would
+ * make the panel advisory, and one who couldn't would make a `pending` stop a no-op either way.
+ * `title`/`description` are left NULL — read through the `featureRequest` association instead
+ * (see resolveSource()), so editing the feature request's text is instantly visible here with
+ * nothing to keep in sync.
+ *
+ * Idempotent: a feature request can only ever produce ONE change request. Checked here via a
+ * plain findOne (returns null, doesn't error, so the approval itself always still succeeds) —
+ * `change_requests_feature_request_id_unique` (20260130000042) is the actual backstop against a
+ * race between two concurrent calls; this check is just why the common case never needs to hit it.
  */
 async function createFromFeatureRequest(featureRequest, { transaction }) {
+  const existing = await ChangeRequest.findOne({
+    where: { featureRequestId: featureRequest.id }, attributes: ['id'], transaction,
+  });
+  if (existing) return null;
+
   const record = await ChangeRequest.create({
     applicationId: featureRequest.applicationId,
-    title: featureRequest.title,
-    description: featureRequest.description,
+    title: null,
+    description: null,
     requestedBy: featureRequest.submittedBy,
     featureRequestId: featureRequest.id,
+    status: 'approved',
   }, { transaction });
   await ChangeRequestStage.bulkCreate(
     STAGE_ORDER.map((stage) => ({ changeRequestId: record.id, stage })),
@@ -163,13 +233,16 @@ async function createFromFeatureRequest(featureRequest, { transaction }) {
 async function list(query) {
   const result = await base.list(query);
   result.items.forEach(sortStages);
+  resolveSourceMany(result.items);
   return result;
 }
 
 async function getById(id) {
   const record = await base.getById(id);
   sortStages(record);
-  return attachStageNotes(record);
+  await attachStageNotes(record);
+  resolveSource(record);
+  return record;
 }
 
 /**
@@ -180,6 +253,15 @@ async function getById(id) {
  * written, and approving/rejecting is now restricted to the application's owner (or a
  * super-admin) — not just anyone holding change_requests:update, which per migrations 029-031 is
  * every role. Every other field on the record still goes through untouched.
+ *
+ * This is also, incidentally, the whole "approved -> implemented only, never rejected" half of
+ * every sourced request's lock (issue- AND feature-request-sourced alike — confirmed, not rebuilt,
+ * per the feature-request bridge repair's own discovery): REQUEST_STATUS_TRANSITIONS.approved is
+ * already `[]` for every change request regardless of source, so nothing reachable through this
+ * function can ever move an approved request to 'rejected' (or anywhere else) — 'implemented' only
+ * ever happens through updateStage() completing Deployment, never through here. The other half —
+ * never deletable — is NOT free; see remove()'s own comment for why that one needed an explicit
+ * (now generalised) check.
  */
 async function update(id, payload, req) {
   const record = await ChangeRequest.findByPk(id);
@@ -237,7 +319,7 @@ async function update(id, payload, req) {
 async function updateStage(applicationId, id, stage, payload, req) {
   const record = await ChangeRequest.findOne({
     where: { id, applicationId },
-    include: [{ model: ChangeRequestStage, as: 'stages' }],
+    include: [{ model: ChangeRequestStage, as: 'stages' }, ...sourceTitleInclude],
   });
   if (!record) throw ApiError.notFound('Change request not found');
 
@@ -311,6 +393,10 @@ async function updateStage(applicationId, id, stage, payload, req) {
     updates.endDate = today;
   }
 
+  // Set inside the transaction below (only when this change request is issue-sourced AND
+  // deployment just completed) — carried out to the notification block after commit.
+  let resolvedIssue = null;
+
   await sequelize.transaction(async (t) => {
     const fromStageStatus = stageRow.status;
     await stageRow.update(updates, { transaction: t });
@@ -337,12 +423,24 @@ async function updateStage(applicationId, id, stage, payload, req) {
         changedBy: req.user.id,
         note: 'Deployment stage completed',
       }, { transaction: t });
+
+      // Stage 3 of the Issues RICC prompt: an issue-sourced change request reaching `implemented`
+      // resolves its issue automatically, in the SAME transaction — see
+      // issues.service.js#resolveViaChangeRequest. record.title can be NULL for a linked row (this
+      // never actually fires for a feature-request-sourced one, since only issue-sourced rows set
+      // issueId — using effectiveTitle() anyway rather than the raw column, on principle).
+      if (record.issueId) {
+        resolvedIssue = await issuesService.resolveViaChangeRequest(record.issueId, effectiveTitle(record), { transaction: t });
+      }
     }
   });
 
   // Rule 7 — fired after the transaction commits, same as every other notification in this
   // codebase (a failed notification must never roll back the actual state change). Never notifies
-  // someone about their own action.
+  // someone about their own action. Captured once — record.title itself never changes here, and a
+  // feature-request-sourced row's real title (record.title === null) would otherwise render as
+  // "undefined"/blank in every message below.
+  const title = effectiveTitle(record);
   const link = `/applications/${applicationId}/change-requests/${id}`;
   const recipients = [];
   if (payload.assigneeId && payload.assigneeId !== previousAssigneeId && payload.assigneeId !== req.user.id) {
@@ -350,7 +448,7 @@ async function updateStage(applicationId, id, stage, payload, req) {
       userId: payload.assigneeId,
       type: 'change_request_stage_assigned',
       title: 'You were assigned to a change request stage',
-      message: `You're now assigned to the ${STAGE_LABELS[stage]} stage of "${record.title}".`,
+      message: `You're now assigned to the ${STAGE_LABELS[stage]} stage of "${title}".`,
       link,
     });
   }
@@ -362,7 +460,7 @@ async function updateStage(applicationId, id, stage, payload, req) {
         userId: nextStageRow.assigneeId,
         type: 'change_request_stage_ready',
         title: 'A change request stage is ready for you',
-        message: `${STAGE_LABELS[stage]} is complete — ${STAGE_LABELS[nextStage]} is ready to start on "${record.title}".`,
+        message: `${STAGE_LABELS[stage]} is complete — ${STAGE_LABELS[nextStage]} is ready to start on "${title}".`,
         link,
       });
     }
@@ -379,7 +477,7 @@ async function updateStage(applicationId, id, stage, payload, req) {
         userId: uid,
         type: 'change_request_implemented',
         title: 'A change request was implemented',
-        message: `"${record.title}" has been fully delivered.`,
+        message: `"${title}" has been fully delivered.`,
         link,
       });
     });
@@ -392,6 +490,14 @@ async function updateStage(applicationId, id, stage, payload, req) {
         changeRequestId: id, stage, error: { message: err.message, stack: err.stack },
       });
     }
+  }
+
+  // "The resolution notification fires as normal" — literally issues.service.js's own
+  // notifyResolved(), not a re-implementation. Fired after this transaction commits, same
+  // fire-after-commit rule as every notification above; whoever completed Deployment doesn't
+  // notify themselves.
+  if (resolvedIssue) {
+    await issuesService.notifyResolved(resolvedIssue, applicationId, { excludeUserId: req.user.id });
   }
 
   return getById(id);
@@ -414,7 +520,7 @@ async function updateStage(applicationId, id, stage, payload, req) {
 async function bulkAssignStages(applicationId, id, payload, req) {
   const record = await ChangeRequest.findOne({
     where: { id, applicationId },
-    include: [{ model: ChangeRequestStage, as: 'stages' }],
+    include: [{ model: ChangeRequestStage, as: 'stages' }, ...sourceTitleInclude],
   });
   if (!record) throw ApiError.notFound('Change request not found');
 
@@ -456,7 +562,7 @@ async function bulkAssignStages(applicationId, id, payload, req) {
       userId: c.newAssigneeId,
       type: 'change_request_stage_assigned',
       title: 'You were assigned to a change request stage',
-      message: `You're now assigned to the ${STAGE_LABELS[c.stage]} stage of "${record.title}".`,
+      message: `You're now assigned to the ${STAGE_LABELS[c.stage]} stage of "${effectiveTitle(record)}".`,
       link,
     }));
   if (recipients.length > 0) {
@@ -478,6 +584,15 @@ async function bulkAssignStages(applicationId, id, payload, req) {
  * the ownership gate on the delete route (who may attempt it) is separate from this status gate
  * (whether the record's current state permits deletion at all), and this one applies to everyone.
  *
+ * A SOURCED request (issueId or featureRequestId set) is locked further still: never deletable,
+ * in ANY status, not just implemented/rejected. Originally issue-only (Stage 3 of the Issues RICC
+ * prompt) — generalised here to "has any source" per the feature-request bridge repair, exactly as
+ * that stage's own docstring predicted it would need to be ("extending it to them is a one-line
+ * addition, swap the field checked below"). Both sourced paths share the same reason: a request
+ * born straight at `approved` was never protected by the implemented/rejected check alone, so its
+ * own requester could otherwise delete it moments after it was created, leaving its source (an
+ * issue stuck at `being_fixed`, or a feature request with nothing to point to) dangling.
+ *
  * The generic crudFactory.remove(id) can't take a transaction, so this is fetch-and-destroy
  * inline, the same shape ideas.service.js#remove uses: cleanupEntityRefs runs in the SAME
  * transaction as the destroy (status_history rows this module writes on every update()/
@@ -493,6 +608,10 @@ async function remove(id) {
       transaction,
     });
     if (!cr) throw ApiError.notFound('Change request not found');
+    if (cr.issueId || cr.featureRequestId) {
+      const sourceLabel = cr.issueId ? 'an issue' : 'a feature request';
+      throw ApiError.badRequest(`A change request created from ${sourceLabel} cannot be deleted.`);
+    }
     if (cr.status === 'implemented' || cr.status === 'rejected') {
       throw ApiError.badRequest(`A change request that has been ${cr.status} cannot be deleted.`);
     }

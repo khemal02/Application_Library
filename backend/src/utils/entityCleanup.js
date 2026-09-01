@@ -22,6 +22,10 @@ const NOTIFICATION_LINK_PATTERN = {
   suggestion: (id) => `/suggestions/${id}%`,
   application: (id) => `/applications/${id}%`,
   change_request: (id) => `%/change-requests/${id}%`,
+  // An issue has no detail route of its own — its link is a deep link back into the Application
+  // page's query string + hash (`/applications/{appId}?issues={tab}#issue-{id}`), so the id sits
+  // only in the hash fragment, at the very end of the string. `#issue-{id}` as a suffix match.
+  issue: (id) => `%#issue-${id}`,
 };
 
 /**

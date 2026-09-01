@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -20,8 +20,17 @@ import IdeaFormDialog from './IdeaFormDialog';
 export default function IdeasListPage() {
   const navigate = useNavigate();
   const { showSuccess } = useToast();
+  // A Dashboard stat tile links here with ?status=... (e.g. "Pending Ideas") or
+  // ?awaitingMyReview=true&kind=reviewer|approver ("My Review for New Idea" / "My Approve for New
+  // Idea") — read once at mount.
+  const [searchParams] = useSearchParams();
+  const initialFilters = {};
+  if (searchParams.get('status')) initialFilters.status = searchParams.get('status');
+  if (searchParams.get('awaitingMyReview')) initialFilters.awaitingMyReview = searchParams.get('awaitingMyReview');
+  if (searchParams.get('kind')) initialFilters.kind = searchParams.get('kind');
   const list = useServerList(ideasApi.list, {
     initialSort: { field: 'ideaNumber', direction: 'desc' },
+    initialFilters: Object.keys(initialFilters).length ? initialFilters : undefined,
   });
   const [formOpen, setFormOpen] = useState(false);
   const [departments, setDepartments] = useState([]);

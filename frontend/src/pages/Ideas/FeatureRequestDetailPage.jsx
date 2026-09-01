@@ -119,7 +119,12 @@ export default function FeatureRequestDetailPage() {
   // that record false. Enforced again in featureRequests.service.js#update — this check is a
   // convenience, not the actual rule.
   const isDecided = featureRequest.status === 'approved' || featureRequest.status === 'rejected';
-  const canEditFields = canUpdateFeatureRequests && featureRequest.submittedBy === user?.id && !isDecided;
+  // Same rule as IdeaDetailPage.jsx: the submitter only gets edit access once someone on the
+  // panel has actually flagged a problem ("Partially supported" / "Don't Supported") — not just
+  // because the request is still open.
+  const hasRequestedChangesOrReject = [...(featureRequest.panel?.reviewers || []), ...(featureRequest.panel?.approvers || [])]
+    .some((entry) => entry.decision === 'request_changes' || entry.decision === 'reject');
+  const canEditFields = canUpdateFeatureRequests && featureRequest.submittedBy === user?.id && !isDecided && hasRequestedChangesOrReject;
   // "Decided <date>" in the frozen-thread banner must be the actual terminal-transition
   // timestamp, not featureRequest.updatedAt — the latter is bumped by any later update (e.g. a
   // still-open description edit) and would silently misreport the decision date. Looked up by

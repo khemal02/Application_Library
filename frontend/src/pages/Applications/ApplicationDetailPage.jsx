@@ -2,12 +2,7 @@ import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
-import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
-import Accordion from '@mui/material/Accordion';
-import AccordionSummary from '@mui/material/AccordionSummary';
-import AccordionDetails from '@mui/material/AccordionDetails';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import { applicationsApi } from '../../services/domains';
 import useResource from '../../hooks/useResource';
@@ -18,7 +13,7 @@ import usePermission from '../../routes/usePermission';
 import ApplicationFormDialog from './ApplicationFormDialog';
 import ProjectInfoBox from './ProjectInfoBox';
 import ChangeRequestsTab from './tabs/ChangeRequestsTab';
-import KnownIssuesTab from './tabs/KnownIssuesTab';
+import IssuesCard from './IssuesCard';
 import BackButton from '../../components/common/BackButton';
 
 export default function ApplicationDetailPage() {
@@ -51,14 +46,11 @@ export default function ApplicationDetailPage() {
         <ChangeRequestsTab applicationId={id} />
       </Box>
 
-      <Accordion variant="outlined" sx={{ mt: 2 }}>
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography fontWeight={600}>Issues</Typography>
-        </AccordionSummary>
-        <AccordionDetails>
-          <KnownIssuesTab applicationId={id} />
-        </AccordionDetails>
-      </Accordion>
+      {/* Plain Box, same reasoning as the Change Requests wrapper above — IssuesCard.jsx already
+          has its own bordered rows and shouldn't be wrapped in a second bordered/shadowed shell. */}
+      <Box sx={{ p: 2, mt: 2 }}>
+        <IssuesCard applicationId={id} applicationOwnerId={application.ownerId} />
+      </Box>
 
       <ApplicationFormDialog
         open={editOpen}

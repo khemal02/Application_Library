@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -22,7 +22,13 @@ export default function ApplicationsListPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [departments, setDepartments] = useState([]);
   const { showSuccess } = useToast();
-  const list = useServerList(applicationsApi.list);
+  // A Dashboard stat tile (e.g. "Applications In Progress") links here with ?status=... —
+  // read once at mount, same convention every list page linked from a dashboard tile follows.
+  const [searchParams] = useSearchParams();
+  const initialStatus = searchParams.get('status');
+  const list = useServerList(applicationsApi.list, {
+    initialFilters: initialStatus ? { status: initialStatus } : undefined,
+  });
 
   useEffect(() => {
     departmentsApi.list({ limit: 100 }).then((res) => setDepartments(res.data)).catch(() => setDepartments([]));

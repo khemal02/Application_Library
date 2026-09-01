@@ -59,7 +59,20 @@ export const apiDocsApi = createNestedResourceApi((appId) => `/applications/${ap
 export const dbDocsApi = createNestedResourceApi((appId) => `/applications/${appId}/db-docs`);
 export const releasesApi = createNestedResourceApi((appId) => `/applications/${appId}/releases`);
 export const bugsApi = createNestedResourceApi((appId) => `/applications/${appId}/bugs`);
-export const knownIssuesApi = createNestedResourceApi((appId) => `/applications/${appId}/known-issues`);
+// Not built on createNestedResourceApi — issues has no generic PUT/DELETE surface (see
+// backend/src/modules/issues/issues.routes.js), just report + named triage/assign/resolve/
+// reopen/convert actions.
+export const issuesApi = {
+  list: (appId, params) => api.get(`/applications/${appId}/issues`, { params }).then((r) => r.data),
+  getById: (appId, id) => api.get(`/applications/${appId}/issues/${id}`).then((r) => r.data),
+  create: (appId, payload) => api.post(`/applications/${appId}/issues`, payload).then((r) => r.data),
+  triage: (appId, id, payload) => api.patch(`/applications/${appId}/issues/${id}/triage`, payload).then((r) => r.data),
+  assign: (appId, id, payload) => api.patch(`/applications/${appId}/issues/${id}/assign`, payload).then((r) => r.data),
+  resolve: (appId, id, payload) => api.patch(`/applications/${appId}/issues/${id}/resolve`, payload).then((r) => r.data),
+  reopen: (appId, id, payload) => api.patch(`/applications/${appId}/issues/${id}/reopen`, payload).then((r) => r.data),
+  convert: (appId, id) => api.post(`/applications/${appId}/issues/${id}/convert`).then((r) => r.data),
+  assigneeCandidates: (appId) => api.get(`/applications/${appId}/issues/assignee-candidates`).then((r) => r.data),
+};
 export const roadmapApi = createNestedResourceApi((appId) => `/applications/${appId}/roadmap`);
 export const timelineApi = createNestedResourceApi((appId) => `/applications/${appId}/timeline`);
 export const changeRequestsApi = {

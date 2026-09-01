@@ -99,12 +99,27 @@ async function update(id, payload) {
  * Overrides base.remove — same reasoning as ideas.service.js#remove: a decided record can't be
  * deleted (no super-admin bypass), and the delete + polymorphic cleanup must commit together.
  * feature_request_reviews cascades on its own (real FK, ON DELETE CASCADE).
+ *
+ * The linked-change-request check below is a MORE SPECIFIC message layered on top of the existing
+ * decided-record check, not new blocking behaviour — a linked change request is only ever created
+ * in the same transaction as this record becoming `approved` (see finalizeFeatureRequest), so the
+ * generic "has been decided" check already caught this case before the bridge repair; this just
+ * names the change request instead of leaving the deleter to guess why.
  */
 async function remove(id) {
   let filePaths = [];
   const record = await sequelize.transaction(async (transaction) => {
     const fr = await FeatureRequest.findByPk(id, { transaction });
     if (!fr) throw ApiError.notFound('Feature request not found');
+    const linkedChangeRequest = await ChangeRequest.findOne({
+      where: { featureRequestId: id }, attributes: ['id'], transaction,
+    });
+    if (linkedChangeRequest) {
+      // Named via the feature request's OWN title, not the change request's — a properly linked
+      // change request's own `title` column is NULL by design (see changeRequests.service.js's
+      // resolveSource()), so quoting it here would print "null".
+      throw ApiError.badRequest(`This feature request has already become the change request "${fr.title}" — it can no longer be deleted.`);
+    }
     if (fr.status === 'approved' || fr.status === 'rejected') {
       throw ApiError.badRequest('This feature request has been decided — it can no longer be deleted.');
     }
@@ -455,21 +470,37 @@ async function finalizeFeatureRequest(featureRequest, { actingRow, actingRowIsNe
     });
   });
 
-  // Notification #1 (change request delivery track) — the bridge just raised a new, still-pending
-  // change request; the application's owner is the one who decides whether it enters their
-  // delivery pipeline (changeRequests.service.js#update), so they're the one who needs to know it's
-  // waiting, not anyone on the feature request's own review panel.
+  // Notifications #1/#2 (change request delivery track) — the bridge now creates the change
+  // request already `approved`; there is no second review left for the owner to do (the panel
+  // already decided WHETHER, the owner's role from here is only who/when), so this is a heads-up
+  // to two people, not a request for action. Built into a map keyed by userId, not two independent
+  // pushes, so the rare case of the owner ALSO being the feature request's own author still yields
+  // exactly one notification (Stage 1e's "Deduplicate") — the author-framed text wins on
+  // collision, since it's the more specific/relevant of the two for that person.
   if (createdChangeRequest) {
-    const application = await Application.findByPk(featureRequest.applicationId, { attributes: ['id', 'ownerId'] });
+    const application = await Application.findByPk(featureRequest.applicationId, { attributes: ['id', 'ownerId', 'name'] });
+    const appName = application?.name || 'the application';
+    const link = `/applications/${featureRequest.applicationId}/change-requests/${createdChangeRequest.id}`;
+    const bridgeRecipients = new Map();
     if (application?.ownerId && application.ownerId !== req.user.id) {
-      recipients.push({
+      bridgeRecipients.set(application.ownerId, {
         userId: application.ownerId,
         type: 'change_request_created',
-        title: 'A change request needs your review',
-        message: `"${createdChangeRequest.title}" was raised against your application.`,
-        link: `/applications/${featureRequest.applicationId}/change-requests/${createdChangeRequest.id}`,
+        title: 'Ready to start',
+        message: `'${featureRequest.title}' was approved and is ready to start on ${appName}.`,
+        link,
       });
     }
+    if (featureRequest.submittedBy !== req.user.id) {
+      bridgeRecipients.set(featureRequest.submittedBy, {
+        userId: featureRequest.submittedBy,
+        type: 'change_request_created',
+        title: 'Your request is now a change request',
+        message: `Your request '${featureRequest.title}' is now a change request on ${appName}.`,
+        link,
+      });
+    }
+    recipients.push(...bridgeRecipients.values());
   }
 
   try {
@@ -493,9 +524,13 @@ async function getById(id, req) {
   return { ...plain, panel };
 }
 
-async function listAwaitingMyReview({ where, order, limit, offset, page }, req) {
+// `kind` ('reviewer' | 'approver'), when given, narrows to just that panel slot — same
+// Dashboard-tile use as ideas.service.js's identical parameter.
+async function listAwaitingMyReview({ where, order, limit, offset, page }, req, kind) {
+  const reviewWhere = { userId: req.user.id, decision: null };
+  if (kind) reviewWhere.kind = kind;
   const myOpenIds = (await FeatureRequestReview.findAll({
-    where: { userId: req.user.id, decision: null }, attributes: ['featureRequestId'], raw: true,
+    where: reviewWhere, attributes: ['featureRequestId'], raw: true,
   })).map((r) => r.featureRequestId);
   if (myOpenIds.length === 0) {
     return { items: [], pagination: buildPaginationMeta({ page, limit, count: 0 }) };
@@ -515,13 +550,34 @@ async function list(query, req) {
   });
 
   if (query.awaitingMyReview === 'true' && req?.user) {
-    return listAwaitingMyReview({ where, order, limit, offset, page }, req);
+    return listAwaitingMyReview({ where, order, limit, offset, page }, req, query.kind);
   }
 
   const { rows, count } = await FeatureRequest.findAndCountAll({
     where, order, limit, offset, include, distinct: true,
   });
   return { items: rows, pagination: buildPaginationMeta({ page, limit, count }) };
+}
+
+/**
+ * The caller's own OPEN panel rows on feature requests still `under_review`, split by kind —
+ * feeds the Dashboard's "My Review" / "My Approve" tile counts, same reasoning as
+ * ideas.service.js#myPendingCounts (a stale unvoted reviewer row on an already-decided request
+ * must not inflate this — the `under_review` join excludes it).
+ */
+async function myPendingCounts(userId) {
+  const rows = await FeatureRequestReview.findAll({
+    where: { userId, decision: null },
+    include: [{
+      model: FeatureRequest, as: 'featureRequest', attributes: [], where: { status: 'under_review' }, required: true,
+    }],
+    attributes: ['kind'],
+    raw: true,
+  });
+  return {
+    reviewer: rows.filter((r) => r.kind === 'reviewer').length,
+    approver: rows.filter((r) => r.kind === 'approver').length,
+  };
 }
 
 async function statusHistory(id) {
@@ -564,5 +620,5 @@ async function analytics() {
 
 module.exports = {
   ...base, create, update, remove, statusHistory, analytics, getById, list,
-  submitReview, addParticipants, removeParticipant, panelCandidates,
+  submitReview, addParticipants, removeParticipant, panelCandidates, myPendingCounts,
 };

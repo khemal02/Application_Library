@@ -292,9 +292,19 @@ paths:
   /applications/{applicationId}/bugs:
     get: { tags: [Application Documentation], summary: List bug history, parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Paginated list } } }
     post: { tags: [Application Documentation], summary: Log a bug, parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '201': { description: Created } } }
-  /applications/{applicationId}/known-issues:
-    get: { tags: [Application Documentation], summary: List known issues, parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Paginated list } } }
-    post: { tags: [Application Documentation], summary: Add a known issue (with workaround), parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '201': { description: Created } } }
+  /applications/{applicationId}/issues:
+    get: { tags: [Application Documentation], summary: "List issues (filterable by tab group: open, known_limitation, resolved)", parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: List } } }
+    post: { tags: [Application Documentation], summary: Report an issue (title, severity, description, affectedVersion), parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '201': { description: Created } } }
+  /applications/{applicationId}/issues/{id}:
+    get: { tags: [Application Documentation], summary: Get one issue, parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }, { in: path, name: id, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Issue detail } } }
+  /applications/{applicationId}/issues/{id}/triage:
+    patch: { tags: [Application Documentation], summary: "Triage an issue (accept / known_limitation / duplicate / not_an_issue) — owner or super-admin", parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }, { in: path, name: id, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Updated } } }
+  /applications/{applicationId}/issues/{id}/assign:
+    patch: { tags: [Application Documentation], summary: "Set or clear an issue's assignee — owner or super-admin", parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }, { in: path, name: id, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Updated } } }
+  /applications/{applicationId}/issues/{id}/resolve:
+    patch: { tags: [Application Documentation], summary: "Resolve an issue (note required) — owner, assignee, or super-admin", parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }, { in: path, name: id, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Updated } } }
+  /applications/{applicationId}/issues/{id}/reopen:
+    patch: { tags: [Application Documentation], summary: "Reopen a closed issue (note required) — owner or super-admin", parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }, { in: path, name: id, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Updated } } }
   /applications/{applicationId}/roadmap:
     get: { tags: [Application Documentation], summary: List future roadmap items, parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Paginated list } } }
     post: { tags: [Application Documentation], summary: Add a roadmap item, parameters: [{ in: path, name: applicationId, required: true, schema: { type: string, format: uuid } }], responses: { '201': { description: Created } } }

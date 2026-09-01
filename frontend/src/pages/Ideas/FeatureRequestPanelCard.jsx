@@ -26,7 +26,7 @@ import FeatureRequestPanelPickerDialog from './FeatureRequestPanelPickerDialog';
 
 // A reviewer's advisory verdict has three tiers; an approver's (or the CEO tie-break's) binding
 // vote stays strictly binary — see featureRequests.validator.js#submitReview for why.
-const REVIEWER_LABELS = { approve: 'Fully supported', request_changes: 'Partially supported', reject: 'Not supported' };
+const REVIEWER_LABELS = { approve: 'Fully supported', request_changes: 'Partially supported', reject: "Don't Supported" };
 const APPROVER_LABELS = { approve: 'Approved', reject: 'Rejected' };
 
 /**
@@ -148,9 +148,9 @@ export default function FeatureRequestPanelCard({
       { value: 'reject', title: 'Reject' },
     ]
     : [
-      { value: 'approve', title: 'Fully supported' },
-      { value: 'request_changes', title: 'Partially supported' },
-      { value: 'reject', title: 'Not supported' },
+      { value: 'approve', title: REVIEWER_LABELS.approve },
+      { value: 'request_changes', title: REVIEWER_LABELS.request_changes },
+      { value: 'reject', title: REVIEWER_LABELS.reject },
     ];
 
   // 'request_changes' only ever appears in the reviewer's three-tier options above, so this can't

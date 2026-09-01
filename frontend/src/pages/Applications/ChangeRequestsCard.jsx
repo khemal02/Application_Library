@@ -106,10 +106,12 @@ export default function ChangeRequestsCard({ applicationId }) {
 
   useEffect(() => { load(); }, [applicationId]);
 
-  // A bin that returns 400 (terminal status) or 403 (not the requester/a super-admin) is worse
-  // than no bin at all — only ever shown when the click would actually succeed.
+  // A bin that returns 400 (terminal status, or issue-sourced — see the Issues RICC prompt's
+  // Stage 3 lock, changeRequests.service.js#remove) or 403 (not the requester/a super-admin) is
+  // worse than no bin at all — only ever shown when the click would actually succeed.
   const canDeleteRecord = (cr) => {
     if (!hasDeleteRole) return false;
+    if (cr.issueId) return false;
     if (cr.status === 'implemented' || cr.status === 'rejected') return false;
     return isSuperAdmin || cr.requestedBy === user?.id;
   };

@@ -646,9 +646,14 @@ async function getById(id, req) {
  * since the two act fully in parallel now and neither ever waits on the other. Panel membership
  * IS eligibility, so this is a single bulk query, not one per candidate idea.
  */
-async function listAwaitingMyReview({ where, order, limit, offset, page }, req) {
+// `kind` ('reviewer' | 'approver'), when given, narrows to just that panel slot — feeds the
+// Dashboard's separate "My Review" / "My Approve" tiles, which link here with ?kind=... so each
+// only ever shows the half of the panel it actually names.
+async function listAwaitingMyReview({ where, order, limit, offset, page }, req, kind) {
+  const reviewWhere = { userId: req.user.id, decision: null };
+  if (kind) reviewWhere.kind = kind;
   const myOpenIdeaIds = (await IdeaReview.findAll({
-    where: { userId: req.user.id, decision: null }, attributes: ['ideaId'], raw: true,
+    where: reviewWhere, attributes: ['ideaId'], raw: true,
   })).map((r) => r.ideaId);
   if (myOpenIdeaIds.length === 0) {
     return { items: [], pagination: buildPaginationMeta({ page, limit, count: 0 }) };
@@ -668,13 +673,35 @@ async function list(query, req) {
   });
 
   if (query.awaitingMyReview === 'true' && req?.user) {
-    return listAwaitingMyReview({ where, order, limit, offset, page }, req);
+    return listAwaitingMyReview({ where, order, limit, offset, page }, req, query.kind);
   }
 
   const { rows, count } = await Idea.findAndCountAll({
     where, order, limit, offset, include, distinct: true,
   });
   return { items: rows, pagination: buildPaginationMeta({ page, limit, count }) };
+}
+
+/**
+ * The caller's own OPEN panel rows on ideas still `under_review`, split by kind — feeds the
+ * Dashboard's "My Review" (reviewer) / "My Approve" (approver) tile counts. A closed-out idea's
+ * stale unvoted reviewer row (advisory votes never block finalization, so one can sit at
+ * `decision: null` forever after the idea is already decided) must not inflate this count — the
+ * `under_review` join is what excludes it.
+ */
+async function myPendingCounts(userId) {
+  const rows = await IdeaReview.findAll({
+    where: { userId, decision: null },
+    include: [{
+      model: Idea, as: 'idea', attributes: [], where: { status: 'under_review' }, required: true,
+    }],
+    attributes: ['kind'],
+    raw: true,
+  });
+  return {
+    reviewer: rows.filter((r) => r.kind === 'reviewer').length,
+    approver: rows.filter((r) => r.kind === 'approver').length,
+  };
 }
 
 /**
@@ -737,5 +764,5 @@ async function analytics() {
 
 module.exports = {
   ...base, create, update, remove, statusHistory, analytics, getById, list, eligibleOwners,
-  submitReview, addParticipants, removeParticipant, panelCandidates,
+  submitReview, addParticipants, removeParticipant, panelCandidates, myPendingCounts,
 };

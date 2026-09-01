@@ -1,5 +1,5 @@
 const {
-  Comment, User, Role, Idea, FeatureRequest, ChangeRequestStage, ChangeRequest, Application,
+  Comment, User, Role, Idea, FeatureRequest, ChangeRequestStage, ChangeRequest, Application, Issue,
 } = require('../../models');
 const ApiError = require('../../utils/ApiError');
 const logger = require('../../config/logger');
@@ -91,6 +91,15 @@ async function create(requester, payload) {
       if (changeRequest?.status === 'rejected') {
         throw ApiError.conflict('This change request was rejected — its stages are no longer open for notes.');
       }
+    }
+  } else if (payload.entityType === 'issue') {
+    // Any authenticated user may add a note while the issue is open — no ownership/assignment
+    // gate, unlike change_request_stage's notes. Blocked once closed (any of the four closed
+    // statuses); reopening the issue first is what makes it postable again. No notification fires
+    // from this branch — see the project report, Stage 1d.
+    const issue = await Issue.findByPk(payload.entityId, { attributes: ['id', 'status'] });
+    if (issue && ['resolved', 'known_limitation', 'duplicate', 'not_an_issue'].includes(issue.status)) {
+      throw ApiError.conflict('This issue is closed — reopen it before adding a note.');
     }
   }
 

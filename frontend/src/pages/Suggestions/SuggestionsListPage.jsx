@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -17,7 +17,13 @@ import SuggestionFormDialog from './SuggestionFormDialog';
 export default function SuggestionsListPage() {
   const navigate = useNavigate();
   const { showSuccess } = useToast();
-  const list = useServerList(suggestionsApi.list);
+  // A Dashboard stat tile (e.g. "Pending Reviews") links here with ?status=... — read once at
+  // mount.
+  const [searchParams] = useSearchParams();
+  const initialStatus = searchParams.get('status');
+  const list = useServerList(suggestionsApi.list, {
+    initialFilters: initialStatus ? { status: initialStatus } : undefined,
+  });
   const [formOpen, setFormOpen] = useState(false);
   const [departments, setDepartments] = useState([]);
 

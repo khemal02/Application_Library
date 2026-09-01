@@ -2,14 +2,17 @@ const { Op } = require('sequelize');
 const {
   Application, Idea, FeatureRequest, ApplicationSuggestion, AuditLog, User,
 } = require('../../models');
+const ideasService = require('../ideas/ideas.service');
+const featureRequestsService = require('../featureRequests/featureRequests.service');
 
-async function getSummary() {
+async function getSummary(userId) {
   const [
     totalApplications, inProgressApplications, completedApplications,
     pendingIdeas, approvedIdeas,
     pendingFeatureRequests, approvedFeatureRequests,
     openSuggestions, technicalReviewSuggestions,
     recentApplications, recentActivity,
+    myIdeaCounts, myFeatureRequestCounts,
   ] = await Promise.all([
     Application.count(),
     Application.count({ where: { status: { [Op.in]: ['development', 'testing'] } } }),
@@ -28,6 +31,11 @@ async function getSummary() {
       order: [['createdAt', 'DESC']], limit: 10,
       include: [{ model: User, as: 'user', attributes: ['id', 'name'] }],
     }),
+    // "My Review" / "My Approve" — the caller's own open panel rows across Ideas and Feature
+    // Requests, split by kind (see ideas.service.js#myPendingCounts). Personalized, so this is the
+    // one part of the summary that depends on who's asking.
+    ideasService.myPendingCounts(userId),
+    featureRequestsService.myPendingCounts(userId),
   ]);
 
   return {
@@ -44,6 +52,13 @@ async function getSummary() {
       pendingFeatureRequests,
       approvedFeatureRequests,
       openImprovements: openSuggestions,
+      // Kept separate per module (not summed) — the Dashboard links each to its own list
+      // (Ideas vs Feature Requests), not a combined view, so the count shown on each tile must
+      // match exactly what that tile's own click-through will show.
+      myReviewIdeas: myIdeaCounts.reviewer,
+      myReviewFeatureRequests: myFeatureRequestCounts.reviewer,
+      myApproveIdeas: myIdeaCounts.approver,
+      myApproveFeatureRequests: myFeatureRequestCounts.approver,
     },
     recentApplications,
     recentActivity,

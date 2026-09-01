@@ -158,7 +158,13 @@ export default function IdeaDetailPage() {
   // make that record false. Enforced again in ideas.service.js#update — this check is a
   // convenience, not the actual rule. Shared by both fields since the rule is identical.
   const isDecided = idea.status === 'approved' || idea.status === 'rejected';
-  const canEditIdeaFields = canUpdateIdeas && idea.submittedBy === user?.id && !isDecided;
+  // The submitter can't just tinker with a cleanly-progressing idea — edit only opens up once
+  // someone on the panel (reviewer or approver) has actually flagged a problem with it
+  // ("Partially supported" / "Don't Supported"). No such vote yet (or everyone's "Fully
+  // supported" so far) means nothing to fix, so no edit access.
+  const hasRequestedChangesOrReject = [...(idea.panel?.reviewers || []), ...(idea.panel?.approvers || [])]
+    .some((entry) => entry.decision === 'request_changes' || entry.decision === 'reject');
+  const canEditIdeaFields = canUpdateIdeas && idea.submittedBy === user?.id && !isDecided && hasRequestedChangesOrReject;
   // "Decided <date>" in the frozen-thread banner must be the actual terminal-transition
   // timestamp, not idea.updatedAt — the latter is bumped by any later update (e.g. a still-open
   // description edit) and would silently misreport the decision date. Looked up by current status

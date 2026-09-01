@@ -27,7 +27,7 @@ router.use('/applications/:applicationId/api-docs', require('../modules/apiDocs/
 router.use('/applications/:applicationId/db-docs', require('../modules/dbDocs/dbDocs.routes'));
 router.use('/applications/:applicationId/releases', require('../modules/releases/releases.routes'));
 router.use('/applications/:applicationId/bugs', require('../modules/bugs/bugs.routes'));
-router.use('/applications/:applicationId/known-issues', require('../modules/knownIssues/knownIssues.routes'));
+router.use('/applications/:applicationId/issues', require('../modules/issues/issues.routes'));
 router.use('/applications/:applicationId/roadmap', require('../modules/roadmap/roadmap.routes'));
 router.use('/applications/:applicationId/timeline', require('../modules/timeline/timeline.routes'));
 router.use('/applications/:applicationId/change-requests', require('../modules/changeRequests/changeRequests.routes'));

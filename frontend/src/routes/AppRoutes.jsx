@@ -33,8 +33,8 @@ export default function AppRoutes() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
 
-      {/* Applications is the post-login landing page; Dashboard moved to its own path. */}
-      <Route path="/" element={<Navigate to="/applications" replace />} />
+      {/* Dashboard is the post-login landing page. */}
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="/dashboard" element={<Protected><DashboardPage /></Protected>} />
 
       <Route path="/applications" element={<Protected><ApplicationsListPage /></Protected>} />
