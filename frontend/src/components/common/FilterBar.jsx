@@ -47,7 +47,10 @@ export default function FilterBar({ search, onSearchChange, filters, onFiltersCh
           value={filters[def.key] ?? ''}
           onChange={(e) => handleFilterChange(def.key, e.target.value)}
           sx={{
-            width: 140,
+            // A single fixed width clipped longer labels like "Functional Area" against the
+            // dropdown arrow. Sized off each filter's own label instead, with 140 as the floor so
+            // short labels (Status, Industry) keep their existing compact width.
+            minWidth: Math.max(140, def.label.length * 9 + 56),
             flexShrink: 0,
             '& .MuiSelect-select': { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
           }}

@@ -10,6 +10,9 @@ import Divider from '@mui/material/Divider';
 import AppsIcon from '@mui/icons-material/AppsOutlined';
 import RateReviewIcon from '@mui/icons-material/RateReviewOutlined';
 import ThumbUpIcon from '@mui/icons-material/ThumbUpOutlined';
+import CodeIcon from '@mui/icons-material/CodeOutlined';
+import FactCheckIcon from '@mui/icons-material/FactCheckOutlined';
+import RocketLaunchIcon from '@mui/icons-material/RocketLaunchOutlined';
 import dayjs from 'dayjs';
 import { dashboardApi } from '../../services/domains';
 import useResource from '../../hooks/useResource';
@@ -27,17 +30,21 @@ export default function DashboardPage() {
 
   const stats = data?.stats || {};
 
-  // An org-wide count, plus four personal worklist tiles — each links straight to its own
-  // existing list (Ideas or Feature Requests), pre-filtered to that exact slice, rather than to a
-  // separate combined page. See dashboard.service.js#getSummary for where these four counts come
-  // from (Ideas + Feature Requests are the only two modules with a clean per-person
-  // reviewer/approver split to filter on).
+  // An org-wide count, four review/approve worklist tiles, and three delivery-stage tiles — each
+  // links straight to where the work actually is. Ideas/Feature Requests each have their own list
+  // page to filter into; change requests don't (they only ever live inside one application's
+  // page), which is why their three tiles land on a dedicated page instead — see
+  // MyAssignedStagesPage.jsx and dashboard.service.js#getSummary for where all seven personal
+  // counts come from.
   const cards = [
     { label: 'Total Applications', value: stats.totalApplications, icon: AppsIcon, color: 'primary', path: '/applications' },
     { label: 'My Review for New Idea', value: stats.myReviewIdeas, icon: RateReviewIcon, color: 'warning', path: '/ideas?awaitingMyReview=true&kind=reviewer' },
     { label: 'My Review for Feature Request', value: stats.myReviewFeatureRequests, icon: RateReviewIcon, color: 'warning', path: '/feature-requests?awaitingMyReview=true&kind=reviewer' },
     { label: 'My Approve for New Idea', value: stats.myApproveIdeas, icon: ThumbUpIcon, color: 'success', path: '/ideas?awaitingMyReview=true&kind=approver' },
     { label: 'My Approve for Feature Request', value: stats.myApproveFeatureRequests, icon: ThumbUpIcon, color: 'success', path: '/feature-requests?awaitingMyReview=true&kind=approver' },
+    { label: 'My Development', value: stats.myDevelopmentStages, icon: CodeIcon, color: 'info', path: '/my-stages?stage=development' },
+    { label: 'My Testing', value: stats.myTestingStages, icon: FactCheckIcon, color: 'secondary', path: '/my-stages?stage=testing' },
+    { label: 'My Deployment', value: stats.myDeploymentStages, icon: RocketLaunchIcon, color: 'success', path: '/my-stages?stage=deployment' },
   ];
 
   return (

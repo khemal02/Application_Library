@@ -9,6 +9,7 @@ const LABELS = {
   admin: 'Administration', users: 'Users', roles: 'Roles & Permissions',
   departments: 'Departments', 'audit-logs': 'Audit Logs', profile: 'Profile',
   new: 'New', settings: 'Settings', stages: 'Stages', 'change-requests': 'Change Requests',
+  'my-stages': 'My Stages',
 };
 
 export default function Breadcrumb() {

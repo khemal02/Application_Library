@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link as RouterLink } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
+import Link from '@mui/material/Link';
 import Button from '@mui/material/Button';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
@@ -86,11 +87,11 @@ function MarkCompleteDialog({
 
 /**
  * One stage — read-only fields, its own NotesThread, and (only for a viewer who may act here) an
- * actions row. Collapsed, it's just the clickable header line; per-viewer expansion rules live in
- * the parent, which passes the resolved `expanded` boolean down.
+ * actions row. Always fully shown, for every viewer, regardless of status — no collapse/expand
+ * anymore. Whether a stage has started or not, everyone sees the same full box.
  */
 function StageCard({
-  stage, stageData, expanded, onToggleExpand,
+  stage, stageData,
   isViewerStage, canAct, isRequestReady, isBlockedByPredecessor, predecessorLabel, predecessorAssigneeName,
   onStart, onOpenComplete, submitting,
 }) {
@@ -113,51 +114,42 @@ function StageCard({
 
   return (
     <Paper variant="outlined" sx={{ p: 2 }}>
-      <Stack
-        direction="row" justifyContent="space-between" alignItems="center"
-        role="button" tabIndex={0} onClick={onToggleExpand}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggleExpand(); } }}
-        sx={{ cursor: 'pointer', '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: '2px' } }}
-      >
+      <Stack direction="row" justifyContent="space-between" alignItems="center">
         <Typography variant="subtitle1" fontWeight={700}>
           {STAGE_LABELS[stage]}{isViewerStage ? ' — you' : ''}
         </Typography>
         <StatusBadge color={chip.color} label={chip.label} />
       </Stack>
 
-      {expanded && (
-        <>
-          <Stack direction="row" spacing={2} sx={{ mt: 2, mb: 2 }}>
-            <Box sx={{ flex: 1 }}><ReadField label="Assigned to" value={stageData.assignee?.name} /></Box>
-            <Box sx={{ flex: 1 }}><ReadField label="Started" value={formatDate(stageData.startDate)} /></Box>
-            <Box sx={{ flex: 1 }}><ReadField label="Finished" value={formatDate(stageData.endDate)} /></Box>
-          </Stack>
+      <Stack direction="row" spacing={2} sx={{ mt: 2, mb: 2 }}>
+        <Box sx={{ flex: 1 }}><ReadField label="Assigned to" value={stageData.assignee?.name} /></Box>
+        <Box sx={{ flex: 1 }}><ReadField label="Started" value={formatDate(stageData.startDate)} /></Box>
+        <Box sx={{ flex: 1 }}><ReadField label="Finished" value={formatDate(stageData.endDate)} /></Box>
+      </Stack>
 
-          <NotesThread
-            entityType="change_request_stage"
-            entityId={stageData.id}
-            title="Notes"
-            emptyLabel="No notes yet."
-            disabled={!!notesDisabled}
-            disabledReason={notesDisabled || undefined}
-          />
+      <NotesThread
+        entityType="change_request_stage"
+        entityId={stageData.id}
+        title="Notes"
+        emptyLabel="No notes yet."
+        disabled={!!notesDisabled}
+        disabledReason={notesDisabled || undefined}
+      />
 
-          {canAct && isRequestReady && (
-            <Box sx={{ mt: 2 }}>
-              {stageData.status === 'not_started' && isBlockedByPredecessor && (
-                <Typography variant="caption" color="text.secondary">
-                  Starts when {predecessorLabel} is complete.
-                </Typography>
-              )}
-              {stageData.status === 'not_started' && !isBlockedByPredecessor && (
-                <Button variant="outlined" disabled={submitting} onClick={onStart}>Start {STAGE_LABELS[stage]}</Button>
-              )}
-              {stageData.status === 'in_progress' && (
-                <Button variant="contained" disabled={submitting} onClick={onOpenComplete}>Mark {STAGE_LABELS[stage]} complete</Button>
-              )}
-            </Box>
+      {canAct && isRequestReady && (
+        <Box sx={{ mt: 2 }}>
+          {stageData.status === 'not_started' && isBlockedByPredecessor && (
+            <Typography variant="caption" color="text.secondary">
+              Starts when {predecessorLabel} is complete.
+            </Typography>
           )}
-        </>
+          {stageData.status === 'not_started' && !isBlockedByPredecessor && (
+            <Button variant="outlined" disabled={submitting} onClick={onStart}>Start {STAGE_LABELS[stage]}</Button>
+          )}
+          {stageData.status === 'in_progress' && (
+            <Button variant="contained" disabled={submitting} onClick={onOpenComplete}>Mark {STAGE_LABELS[stage]} complete</Button>
+          )}
+        </Box>
       )}
     </Paper>
   );
@@ -233,63 +225,6 @@ function AssignCard({
   );
 }
 
-/**
- * Hand-rolled, not MUI's Stepper — StepContent only ever renders its extra content for the single
- * ACTIVE step, and this needs four independent visual states on every dot at once (done, current,
- * "yours and waiting", everything else), which Stepper's own active/completed model can't express.
- */
-function ProgressCard({ stages, user }) {
-  return (
-    <Paper variant="outlined" sx={{ p: 2 }}>
-      <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 2 }}>Progress</Typography>
-      <Box sx={{ position: 'relative', pl: 3 }}>
-        {STAGE_ORDER.map((stage, i) => {
-          const stageData = stages.find((s) => s.stage === stage);
-          const isLast = i === STAGE_ORDER.length - 1;
-          const isViewerStage = !!stageData.assigneeId && stageData.assigneeId === user?.id;
-          const isBlocked = i > 0 && stages.find((s) => s.stage === STAGE_ORDER[i - 1])?.status !== 'complete';
-
-          let dotColor = 'grey.400';
-          if (stageData.status === 'complete') dotColor = 'success.main';
-          else if (stageData.status === 'in_progress') dotColor = 'primary.main';
-          else if (isViewerStage && isBlocked) dotColor = 'warning.main';
-
-          return (
-            <Box key={stage} sx={{ position: 'relative', pb: isLast ? 0 : 3 }}>
-              {!isLast && (
-                <Box sx={{
-                  position: 'absolute', left: -19, top: 20, bottom: 0, width: '2px', bgcolor: 'divider',
-                }}
-                />
-              )}
-              <Box sx={{
-                position: 'absolute', left: -24, top: 2, width: 20, height: 20, borderRadius: '50%', bgcolor: dotColor,
-              }}
-              />
-              <Typography variant="body2" fontWeight={700}>{STAGE_LABELS[stage]}</Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                {stageData.assignee?.name || 'Unassigned'}
-              </Typography>
-              {stageData.status === 'not_started' ? (
-                <StatusBadge
-                  size="small"
-                  color={isViewerStage ? (isBlocked ? 'warning' : 'info') : 'default'}
-                  label={isViewerStage ? (isBlocked ? 'Waiting' : 'Your turn') : 'Not started'}
-                />
-              ) : (
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                  {stageData.status === 'complete'
-                    ? `Started ${formatDate(stageData.startDate)} · Finished ${formatDate(stageData.endDate)}`
-                    : `Started ${formatDate(stageData.startDate)}`}
-                </Typography>
-              )}
-            </Box>
-          );
-        })}
-      </Box>
-    </Paper>
-  );
-}
 
 export default function ChangeRequestDetailPage() {
   const { applicationId, changeRequestId } = useParams();
@@ -304,7 +239,6 @@ export default function ChangeRequestDetailPage() {
   const [submitting, setSubmitting] = useState(false);
   const [completingStage, setCompletingStage] = useState(null);
   const [descExpanded, setDescExpanded] = useState(false);
-  const [forcedExpand, setForcedExpand] = useState({});
 
   useBreadcrumbLabel(data?.application?.name, `/applications/${applicationId}`);
   useBreadcrumbLabel(data?.title);
@@ -412,19 +346,6 @@ export default function ChangeRequestDetailPage() {
     };
   }
 
-  const isExpanded = (index) => {
-    if (forcedExpand[index] !== undefined) return forcedExpand[index];
-    // A finished stage is a historical fact (who did it, when) — visible to everyone, not just
-    // whoever happens to be involved. The viewer-relative rules below only matter for a stage
-    // that's still open.
-    if (data.stages[index].status === 'complete') return true;
-    if (data.stages[index].status === 'in_progress') return true;
-    if (index === viewerStageIndex) return true;
-    if (index === viewerStageIndex - 1) return true;
-    return false;
-  };
-  const toggleExpand = (index) => setForcedExpand((prev) => ({ ...prev, [index]: !isExpanded(index) }));
-
   const description = data.description || '';
   const showDescToggle = description.length > 220;
 
@@ -440,6 +361,17 @@ export default function ChangeRequestDetailPage() {
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
           {data.requester?.name || 'Unknown user'} · requested {formatDate(data.createdAt)}
         </Typography>
+        {/* A handle distinct from the title above it, not a repeat of it — see the project report:
+            the resolved title above IS the source's title, so "From request · {title}" just
+            echoed it. Feature requests have their own request number; issues carry no equivalent
+            sequence column, hence the generic fallback. */}
+        {data.source?.type && (
+          <Typography variant="caption" sx={{ display: 'block', mt: 0.25 }}>
+            <Link component={RouterLink} to={data.source.url} color="text.secondary" sx={{ '&:hover': { textDecoration: 'underline' } }}>
+              {data.source.type === 'feature_request' ? `From feature request #${data.source.number}` : 'From a reported issue'}
+            </Link>
+          </Typography>
+        )}
         {description && (
           <Box sx={{ mt: 1.5 }}>
             <Typography
@@ -464,7 +396,10 @@ export default function ChangeRequestDetailPage() {
         )}
       </Paper>
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 296px' }, gap: 2, alignItems: 'start' }}>
+      {/* Single column once there's no Assign card to put in a rail — Progress used to fill that
+          rail unconditionally; now that it's gone, an empty sticky column would just be dead
+          space for anyone who isn't the owner/super-admin. */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: canManageAssignments ? { xs: '1fr', md: '1fr 296px' } : '1fr', gap: 2, alignItems: 'start' }}>
         <Box sx={{ order: { xs: 2, md: 1 } }}>
           <Stack spacing={1.5}>
             {banner && <Alert severity={banner.severity}>{banner.text}</Alert>}
@@ -477,8 +412,6 @@ export default function ChangeRequestDetailPage() {
                   key={stageData.id}
                   stage={stage}
                   stageData={stageData}
-                  expanded={isExpanded(index)}
-                  onToggleExpand={() => toggleExpand(index)}
                   isViewerStage={index === viewerStageIndex}
                   isOwnerOrSuper={isOwner || isSuperAdmin}
                   canAct={canActOnStage(stageData)}
@@ -495,14 +428,11 @@ export default function ChangeRequestDetailPage() {
           </Stack>
         </Box>
 
-        <Box sx={{ order: { xs: 1, md: 2 }, position: 'sticky', top: 16 }}>
-          <Stack spacing={1.5}>
-            {canManageAssignments && (
-              <AssignCard stages={data.stages} candidates={candidates} onSave={handleBulkAssign} submitting={submitting} />
-            )}
-            <ProgressCard stages={data.stages} user={user} />
-          </Stack>
-        </Box>
+        {canManageAssignments && (
+          <Box sx={{ order: { xs: 1, md: 2 }, position: 'sticky', top: 16 }}>
+            <AssignCard stages={data.stages} candidates={candidates} onSave={handleBulkAssign} submitting={submitting} />
+          </Box>
+        )}
       </Box>
 
       <MarkCompleteDialog

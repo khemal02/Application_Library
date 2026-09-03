@@ -8,6 +8,7 @@ import { applicationsApi } from '../../services/domains';
 import useResource from '../../hooks/useResource';
 import useBreadcrumbLabel from '../../hooks/useBreadcrumbLabel';
 import useToast from '../../hooks/useToast';
+import { useAppSelector } from '../../app/hooks';
 import { LoadingBlock, ErrorBlock } from '../../components/common/AsyncState';
 import usePermission from '../../routes/usePermission';
 import ApplicationFormDialog from './ApplicationFormDialog';
@@ -19,7 +20,13 @@ import BackButton from '../../components/common/BackButton';
 export default function ApplicationDetailPage() {
   const { id } = useParams();
   const [editOpen, setEditOpen] = useState(false);
-  const canUpdate = usePermission('applications', 'update');
+  // Narrower than the raw `applications:update` grant (which also covers Team Lead/Manager/CEO
+  // generally) — editing an application's own catalog record is the owner's call, or a true
+  // super-admin's, and nobody else's, per explicit instruction. Matches
+  // applications.routes.js#ownApplicationOnly on the backend; this is only the UI half — a
+  // disabled control that would 403 anyway is worse than none.
+  const user = useAppSelector((s) => s.auth.user);
+  const isSuperAdmin = usePermission('*', 'manage');
   const { showSuccess } = useToast();
 
   const { data: application, loading, error, reload } = useResource(() => applicationsApi.getById(id), [id]);
@@ -29,10 +36,12 @@ export default function ApplicationDetailPage() {
   if (error) return <ErrorBlock message={error} onRetry={reload} />;
   if (!application) return null;
 
+  const canEditApplication = isSuperAdmin || application.ownerId === user?.id;
+
   return (
     <Box>
       <BackButton />
-      {canUpdate && (
+      {canEditApplication && (
         <Stack direction="row" justifyContent="flex-end" sx={{ mb: 2 }}>
           <Button startIcon={<EditIcon />} variant="outlined" onClick={() => setEditOpen(true)}>Edit</Button>
         </Stack>
@@ -40,11 +49,7 @@ export default function ApplicationDetailPage() {
 
       <ProjectInfoBox application={application} />
 
-      {/* Plain Box, not Paper — this section shouldn't read as its own bordered/shadowed card;
-          the row-list inside (ChangeRequestsCard.jsx) already has its own bordered box. */}
-      <Box sx={{ p: 2, mt: 2 }}>
-        <ChangeRequestsTab applicationId={id} />
-      </Box>
+      <ChangeRequestsTab applicationId={id} />
 
       {/* Plain Box, same reasoning as the Change Requests wrapper above — IssuesCard.jsx already
           has its own bordered rows and shouldn't be wrapped in a second bordered/shadowed shell. */}

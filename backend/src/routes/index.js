@@ -31,6 +31,10 @@ router.use('/applications/:applicationId/issues', require('../modules/issues/iss
 router.use('/applications/:applicationId/roadmap', require('../modules/roadmap/roadmap.routes'));
 router.use('/applications/:applicationId/timeline', require('../modules/timeline/timeline.routes'));
 router.use('/applications/:applicationId/change-requests', require('../modules/changeRequests/changeRequests.routes'));
+// Top-level, cross-application — backs the Dashboard's "My Development"/"My Testing"/
+// "My Deployment" tiles. Not nested under /applications/:applicationId/ like the line above;
+// see changeRequests/myStages.routes.js for why it can't be.
+router.use('/change-requests/my-stages', require('../modules/changeRequests/myStages.routes'));
 
 // Module 2: New Application Ideas
 router.use('/ideas', require('../modules/ideas/ideas.routes'));

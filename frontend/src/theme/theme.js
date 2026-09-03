@@ -25,9 +25,12 @@ export function getTheme(mode) {
       error: { main: '#dc2626' },
       info: { main: '#2563eb' },
       divider: isDark ? alpha('#e2e8f0', 0.09) : neutral[200],
+      // Page background and card/Paper background were both pure white in light mode, so cards
+      // had no visible separation from the page behind them. Paper stays white; the page itself
+      // gets a light neutral gray so bordered/shadowed boxes actually read as boxes.
       background: isDark
         ? { default: '#0b0d13', paper: '#12151d' }
-        : { default: '#ffffff', paper: '#ffffff' },
+        : { default: neutral[100], paper: '#ffffff' },
       text: isDark
         ? { primary: '#e5e7eb', secondary: alpha('#e5e7eb', 0.62) }
         : { primary: neutral[900], secondary: neutral[600] },

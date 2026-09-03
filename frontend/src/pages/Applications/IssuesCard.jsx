@@ -7,6 +7,9 @@ import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
+import Accordion from '@mui/material/Accordion';
+import AccordionSummary from '@mui/material/AccordionSummary';
+import AccordionDetails from '@mui/material/AccordionDetails';
 import Collapse from '@mui/material/Collapse';
 import Divider from '@mui/material/Divider';
 import Grid from '@mui/material/Grid';
@@ -145,36 +148,11 @@ function ReportDialog({ open, onClose, onSubmit }) {
             autoFocus fullWidth label="Title" value={title} inputProps={{ maxLength: 200 }}
             onChange={(e) => setTitle(e.target.value)}
           />
-          <Box>
-            <Typography variant="caption" color="text.disabled" sx={{ textTransform: 'uppercase', letterSpacing: '.07em', display: 'block', mb: 1 }}>
-              Severity
-            </Typography>
-            <Grid container spacing={1}>
-              {SEVERITY_REPORT_OPTIONS.map((opt) => {
-                const selected = severity === opt.value;
-                const accent = SEVERITY_META[opt.value].color;
-                return (
-                  <Grid item xs={6} key={opt.value}>
-                    <Box
-                      role="button" tabIndex={0}
-                      onClick={() => setSeverity(opt.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSeverity(opt.value); } }}
-                      sx={(theme) => ({
-                        p: 1.5, borderRadius: 1, cursor: 'pointer', height: '100%',
-                        border: 1,
-                        borderColor: selected ? (accent ? `${accent}.main` : 'text.secondary') : 'divider',
-                        bgcolor: selected ? (accent ? alpha(theme.palette[accent].main, 0.08) : theme.palette.action.selected) : 'transparent',
-                        '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: '-2px' },
-                      })}
-                    >
-                      <Typography variant="body2" fontWeight={700}>{opt.label}</Typography>
-                      <Typography variant="caption" color="text.secondary">{opt.description}</Typography>
-                    </Box>
-                  </Grid>
-                );
-              })}
-            </Grid>
-          </Box>
+          <TextField select fullWidth label="Severity" value={severity} onChange={(e) => setSeverity(e.target.value)}>
+            {SEVERITY_REPORT_OPTIONS.map((opt) => (
+              <MenuItem key={opt.value} value={opt.value}>{opt.label} — {opt.description}</MenuItem>
+            ))}
+          </TextField>
           <TextField fullWidth multiline minRows={3} label="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
           <TextField fullWidth label="Affected version (optional)" value={affectedVersion} inputProps={{ maxLength: 50 }} onChange={(e) => setAffectedVersion(e.target.value)} />
         </Stack>
@@ -545,6 +523,7 @@ export default function IssuesCard({ applicationId, applicationOwnerId }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [accordionOpen, setAccordionOpen] = useState(false);
   const [tab, setTab] = useState('open');
   const [showAll, setShowAll] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
@@ -582,6 +561,7 @@ export default function IssuesCard({ applicationId, applicationOwnerId }) {
     const hashId = location.hash?.startsWith('#issue-') ? location.hash.slice('#issue-'.length) : null;
     if (!tabParam && !hashId) { deepLinkAppliedRef.current = true; return; }
     deepLinkAppliedRef.current = true;
+    setAccordionOpen(true);
     if (tabParam && TABS.some((t) => t.key === tabParam)) setTab(tabParam);
     if (hashId) {
       setExpandedId(hashId);
@@ -647,69 +627,80 @@ export default function IssuesCard({ applicationId, applicationOwnerId }) {
 
   return (
     <Box>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
-        <Stack direction="row" alignItems="baseline" spacing={1}>
-          <Typography variant="subtitle1" fontWeight={700}>Issues</Typography>
-          {rows.length > 0 && <Typography variant="caption" color="text.secondary">{headerCount}</Typography>}
-        </Stack>
-        <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={() => setReportOpen(true)}>
-          Report an issue
-        </Button>
-      </Stack>
-
-      <Tabs value={tab} onChange={(e, v) => setTab(v)} variant="standard" sx={{ mb: 1.5, minHeight: 36 }}>
-        {TABS.map((t) => (
-          <Tab key={t.key} value={t.key} label={`${t.label} (${rowsByTab[t.key].length})`} sx={{ minHeight: 36, py: 0.5 }} />
-        ))}
-      </Tabs>
-
-      {loading ? (
-        <LoadingBlock minHeight="80px" />
-      ) : error ? (
-        <ErrorBlock message={error} onRetry={reloadIssues} />
-      ) : activeRows.length === 0 ? (
-        <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 3, textAlign: 'center' }}>
-          <Typography variant="body2" fontWeight={600}>{EMPTY_META[tab].title}</Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>{EMPTY_META[tab].body}</Typography>
-        </Box>
-      ) : (
-        <>
-          <Stack spacing={1.5}>
-            {visible.map((issue) => (
-              <IssueRow
-                key={issue.id}
-                issue={issue}
-                expanded={expandedId === issue.id}
-                onToggle={() => setExpandedId((cur) => (cur === issue.id ? null : issue.id))}
-                applicationId={applicationId}
-                applicationOwnerId={applicationOwnerId}
-                user={user}
-                isSuperAdmin={isSuperAdmin}
-                onOpenTriage={(outcome) => setTriageState({ issue, outcome })}
-                onOpenAssign={() => setAssignState({ issue })}
-                onOpenResolve={() => setNoteState({ issue, mode: 'resolve' })}
-                onOpenReopen={() => setNoteState({ issue, mode: 'reopen' })}
-                onToggleVote={() => handleVoteToggle(issue)}
-                highlighted={highlightedId === issue.id}
-                rowRef={(el) => { rowRefs.current[issue.id] = el; }}
-              />
-            ))}
+      <Accordion
+        variant="outlined" disableGutters
+        expanded={accordionOpen}
+        onChange={(e, isExpanded) => setAccordionOpen(isExpanded)}
+        sx={{ '&:before': { display: 'none' } }}
+      >
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <Stack direction="row" alignItems="baseline" spacing={1}>
+            <Typography variant="subtitle1" fontWeight={700}>Issues</Typography>
+            {rows.length > 0 && <Typography variant="caption" color="text.secondary">{headerCount}</Typography>}
           </Stack>
-          {activeRows.length > MAX_VISIBLE && (
-            <Typography
-              variant="caption" color="primary" role="button" tabIndex={0}
-              onClick={() => setShowAll((s) => !s)}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowAll((s) => !s); } }}
-              sx={{
-                display: 'block', mt: 1, textAlign: 'right', cursor: 'pointer',
-                '&:hover': { textDecoration: 'underline' },
-              }}
-            >
-              {showAll ? 'Show fewer' : `Show all ${activeRows.length} →`}
-            </Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+          <Stack direction="row" justifyContent="flex-end" sx={{ mb: 1.5 }}>
+            <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={() => setReportOpen(true)}>
+              Report an issue
+            </Button>
+          </Stack>
+
+          <Tabs value={tab} onChange={(e, v) => setTab(v)} variant="standard" sx={{ mb: 1.5, minHeight: 36 }}>
+            {TABS.map((t) => (
+              <Tab key={t.key} value={t.key} label={`${t.label} (${rowsByTab[t.key].length})`} sx={{ minHeight: 36, py: 0.5 }} />
+            ))}
+          </Tabs>
+
+          {loading ? (
+            <LoadingBlock minHeight="80px" />
+          ) : error ? (
+            <ErrorBlock message={error} onRetry={reloadIssues} />
+          ) : activeRows.length === 0 ? (
+            <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 3, textAlign: 'center' }}>
+              <Typography variant="body2" fontWeight={600}>{EMPTY_META[tab].title}</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>{EMPTY_META[tab].body}</Typography>
+            </Box>
+          ) : (
+            <>
+              <Stack spacing={1.5}>
+                {visible.map((issue) => (
+                  <IssueRow
+                    key={issue.id}
+                    issue={issue}
+                    expanded={expandedId === issue.id}
+                    onToggle={() => setExpandedId((cur) => (cur === issue.id ? null : issue.id))}
+                    applicationId={applicationId}
+                    applicationOwnerId={applicationOwnerId}
+                    user={user}
+                    isSuperAdmin={isSuperAdmin}
+                    onOpenTriage={(outcome) => setTriageState({ issue, outcome })}
+                    onOpenAssign={() => setAssignState({ issue })}
+                    onOpenResolve={() => setNoteState({ issue, mode: 'resolve' })}
+                    onOpenReopen={() => setNoteState({ issue, mode: 'reopen' })}
+                    onToggleVote={() => handleVoteToggle(issue)}
+                    highlighted={highlightedId === issue.id}
+                    rowRef={(el) => { rowRefs.current[issue.id] = el; }}
+                  />
+                ))}
+              </Stack>
+              {activeRows.length > MAX_VISIBLE && (
+                <Typography
+                  variant="caption" color="primary" role="button" tabIndex={0}
+                  onClick={() => setShowAll((s) => !s)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowAll((s) => !s); } }}
+                  sx={{
+                    display: 'block', mt: 1, textAlign: 'right', cursor: 'pointer',
+                    '&:hover': { textDecoration: 'underline' },
+                  }}
+                >
+                  {showAll ? 'Show fewer' : `Show all ${activeRows.length} →`}
+                </Typography>
+              )}
+            </>
           )}
-        </>
-      )}
+        </AccordionDetails>
+      </Accordion>
 
       <ReportDialog open={reportOpen} onClose={() => setReportOpen(false)} onSubmit={handleReport} />
       <TriageDialog

@@ -39,4 +39,11 @@ module.exports = {
     })));
     return ApiResponse.success(res, record, 'Assignments updated');
   }),
+
+  // GET /change-requests/my-stages?stage=development — top-level, not under one application; see
+  // changeRequests.service.js#myAssignedStages for why.
+  myAssignedStages: asyncHandler(async (req, res) => {
+    const rows = await service.myAssignedStages(req.user.id, req.query.stage);
+    return ApiResponse.success(res, rows);
+  }),
 };

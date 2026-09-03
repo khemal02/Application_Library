@@ -61,6 +61,11 @@ const bulkAssignBody = Joi.object({
   deployment: Joi.string().uuid().allow(null),
 });
 
+// GET /change-requests/my-stages?stage=development — see changeRequests.service.js#myAssignedStages.
+const myStagesQuery = Joi.object({
+  stage: Joi.string().valid('development', 'testing', 'deployment').required(),
+});
+
 module.exports = {
-  create, update, updateStageParams, updateStageBody, bulkAssignParams, bulkAssignBody,
+  create, update, updateStageParams, updateStageBody, bulkAssignParams, bulkAssignBody, myStagesQuery,
 };

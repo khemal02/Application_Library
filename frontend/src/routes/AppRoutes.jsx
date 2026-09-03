@@ -3,6 +3,7 @@ import ProtectedRoute from './ProtectedRoute';
 import MainLayout from '../components/layout/MainLayout';
 import LoginPage from '../pages/Auth/LoginPage';
 import DashboardPage from '../pages/Dashboard/DashboardPage';
+import MyAssignedStagesPage from '../pages/Dashboard/MyAssignedStagesPage';
 import ApplicationsListPage from '../pages/Applications/ApplicationsListPage';
 import ApplicationDetailPage from '../pages/Applications/ApplicationDetailPage';
 import ApplicationStagesPage from '../pages/Applications/ApplicationStagesPage';
@@ -36,6 +37,7 @@ export default function AppRoutes() {
       {/* Dashboard is the post-login landing page. */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="/dashboard" element={<Protected><DashboardPage /></Protected>} />
+      <Route path="/my-stages" element={<Protected resource="change_requests" action="read"><MyAssignedStagesPage /></Protected>} />
 
       <Route path="/applications" element={<Protected><ApplicationsListPage /></Protected>} />
       <Route path="/applications/:id" element={<Protected><ApplicationDetailPage /></Protected>} />

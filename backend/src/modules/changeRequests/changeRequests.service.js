@@ -46,7 +46,7 @@ const detailInclude = [
   // ONE query — see resolveSource() below. At most one of the two is ever set (the CHECK
   // constraint doesn't enforce that directly, but featureRequestId/issueId are only ever written
   // by their own one-shot creation paths, never both).
-  { model: FeatureRequest, as: 'featureRequest', attributes: ['id', 'title', 'description'] },
+  { model: FeatureRequest, as: 'featureRequest', attributes: ['id', 'title', 'description', 'requestNumber'] },
   { model: Issue, as: 'sourceIssue', attributes: ['id', 'title', 'description'] },
 ];
 
@@ -75,18 +75,29 @@ function effectiveTitle(record) {
  * apart, same reasoning changeRequestStatus.js already applies on the frontend for the status
  * chip. Mutates via setDataValue (same technique attachStageNotes uses) so .toJSON() picks it up;
  * `source` is a new computed field on the response, never a real column.
+ *
+ * `source.number` is feature_requests' own `requestNumber` — the provenance line reads "From
+ * feature request #N", a handle distinct from the row's own (already-resolved, already-on-screen)
+ * title. Issues carry no equivalent sequence column (confirmed against the live schema — no
+ * `issue_number`/similar), so `source.number` stays null for an issue source and the frontend
+ * falls back to the generic "From a reported issue" instead of inventing a number that doesn't
+ * exist.
  */
 function resolveSource(record) {
   if (!record) return record;
   const fr = record.featureRequest;
   const issue = record.sourceIssue;
   const source = fr
-    ? { type: 'feature_request', id: fr.id, title: fr.title, url: `/feature-requests/${fr.id}` }
+    ? {
+      type: 'feature_request', id: fr.id, title: fr.title, number: fr.requestNumber, url: `/feature-requests/${fr.id}`,
+    }
     : issue
       ? {
-        type: 'issue', id: issue.id, title: issue.title, url: `/applications/${record.applicationId}?issues=open#issue-${issue.id}`,
+        type: 'issue', id: issue.id, title: issue.title, number: null, url: `/applications/${record.applicationId}?issues=open#issue-${issue.id}`,
       }
-      : { type: null, id: null, title: null, url: null };
+      : {
+        type: null, id: null, title: null, number: null, url: null,
+      };
 
   record.setDataValue('title', record.title ?? fr?.title ?? issue?.title ?? null);
   record.setDataValue('description', record.description ?? fr?.description ?? issue?.description ?? null);
@@ -661,6 +672,80 @@ async function assigneeCandidates() {
   }));
 }
 
+// A stage still needs the assignee's action exactly when it's not_started or in_progress — once
+// `complete`, there's nothing left for them to do on it. Shared by the two functions below so the
+// Dashboard tile's number and the list page it links to can never disagree about what counts.
+const ACTIONABLE_STAGE_STATUSES = ['not_started', 'in_progress'];
+
+/**
+ * Backs the Dashboard's "My Development" / "My Testing" / "My Deployment" tiles — one grouped
+ * query, not three separate counts, so adding a fourth stage type later doesn't mean a fourth
+ * round trip. Same ACTIONABLE_STAGE_STATUSES as myAssignedStages() below, so a tile's number is
+ * always exactly how many rows its own click-through will show.
+ */
+async function myStageCounts(userId) {
+  const rows = await ChangeRequestStage.findAll({
+    attributes: ['stage', [sequelize.fn('COUNT', sequelize.col('ChangeRequestStage.id')), 'count']],
+    where: { assigneeId: userId, status: { [Op.in]: ACTIONABLE_STAGE_STATUSES } },
+    group: ['stage'],
+    raw: true,
+  });
+  const counts = { development: 0, testing: 0, deployment: 0 };
+  rows.forEach((r) => { counts[r.stage] = Number(r.count); });
+  return counts;
+}
+
+/**
+ * GET /change-requests/my-stages?stage=development — the list page a Dashboard tile clicks
+ * into. Deliberately top-level, not nested under one application: a person can be assigned stages
+ * across many applications at once, and there is nowhere inside a single application's page for
+ * that list to live. Reuses resolveSource() so a linked (feature-request-sourced) change request's
+ * title shows correctly here too — same rule, same place, not a second copy of the fallback logic.
+ */
+async function myAssignedStages(userId, stage) {
+  const rows = await ChangeRequestStage.findAll({
+    where: { assigneeId: userId, stage, status: { [Op.in]: ACTIONABLE_STAGE_STATUSES } },
+    include: [{
+      model: ChangeRequest,
+      as: 'changeRequest',
+      include: [
+        { model: Application, as: 'application', attributes: ['id', 'name'] },
+        { model: FeatureRequest, as: 'featureRequest', attributes: ['id', 'title', 'description', 'requestNumber'] },
+        { model: Issue, as: 'sourceIssue', attributes: ['id', 'title', 'description'] },
+      ],
+    }],
+    order: [['createdAt', 'ASC']],
+  });
+
+  return rows.map((row) => {
+    const cr = resolveSource(row.changeRequest);
+    return {
+      stageId: row.id,
+      stage: row.stage,
+      status: row.status,
+      startDate: row.startDate,
+      changeRequestId: cr.id,
+      changeRequestStatus: cr.status,
+      title: cr.title,
+      source: cr.get('source'),
+      applicationId: cr.applicationId,
+      applicationName: cr.application?.name || null,
+      url: `/applications/${cr.applicationId}/change-requests/${cr.id}`,
+    };
+  });
+}
+
 module.exports = {
-  ...base, create, list, getById, update, updateStage, bulkAssignStages, remove, assigneeCandidates, createFromFeatureRequest,
+  ...base,
+  create,
+  list,
+  getById,
+  update,
+  updateStage,
+  bulkAssignStages,
+  remove,
+  assigneeCandidates,
+  createFromFeatureRequest,
+  myStageCounts,
+  myAssignedStages,
 };

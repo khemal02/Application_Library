@@ -21,7 +21,7 @@ const EMPTY_VALUES = {
 // The backend expects null (not empty string) for optional FK/date fields left blank.
 function toPayload(values) {
   const payload = { ...values };
-  ['departmentId', 'startDate', 'releaseDate'].forEach((key) => {
+  ['departmentId', 'startDate', 'releaseDate', 'ownerId'].forEach((key) => {
     if (payload[key] === '') payload[key] = null;
   });
   return payload;
@@ -33,11 +33,15 @@ export default function ApplicationFormDialog({ open, onClose, onSaved, applicat
   });
   const [submitError, setSubmitError] = useState(null);
   const [departments, setDepartments] = useState([]);
+  const [owners, setOwners] = useState([]);
 
   useEffect(() => {
     if (!open) return;
     departmentsApi.list({ limit: 200 }).then((res) => setDepartments(res.data)).catch(() => setDepartments([]));
-  }, [open]);
+    // Only reachable from the Edit form (see the Owner field below) — reassigning an application
+    // away from someone who's left the company, or handing it off deliberately.
+    if (application) applicationsApi.eligibleOwners().then((res) => setOwners(res.data)).catch(() => setOwners([]));
+  }, [open, application]);
 
   useEffect(() => {
     if (!open) return;
@@ -49,8 +53,18 @@ export default function ApplicationFormDialog({ open, onClose, onSaved, applicat
       industry: application.industry || '', functionalArea: application.functionalArea || '',
       startDate: application.startDate || '', releaseDate: application.releaseDate || '',
       repositoryUrl: application.repositoryUrl || '', deploymentUrl: application.deploymentUrl || '',
+      ownerId: application.owner?.id || application.ownerId || '',
     } : EMPTY_VALUES);
   }, [open, application, reset]);
+
+  // eligibleOwners() only lists active users who still hold applications:update — the very people
+  // this field exists to move ownership away from (someone who's resigned, or been reassigned a
+  // role that no longer qualifies) won't be in it. Add them back in as a clearly-labeled option so
+  // the field shows who currently owns it instead of rendering blank.
+  const currentOwner = application?.owner;
+  const ownerOptions = currentOwner && !owners.some((o) => o.id === currentOwner.id)
+    ? [...owners, { id: currentOwner.id, name: `${currentOwner.name} (current — no longer eligible)` }]
+    : owners;
 
   const onSubmit = async (values) => {
     setSubmitError(null);
@@ -91,6 +105,16 @@ export default function ApplicationFormDialog({ open, onClose, onSaved, applicat
               </TextField>
             )} />
           </Grid>
+          {application && (
+            <Grid item xs={12} sm={6}>
+              <Controller name="ownerId" control={control} render={({ field }) => (
+                <TextField select fullWidth label="Owner" {...field}>
+                  <MenuItem value="">— Unassigned —</MenuItem>
+                  {ownerOptions.map((o) => <MenuItem key={o.id} value={o.id}>{o.name}</MenuItem>)}
+                </TextField>
+              )} />
+            </Grid>
+          )}
           <Grid item xs={12} sm={6}>
             <Controller name="industry" control={control} render={({ field }) => (
               <TextField select fullWidth label="Industry" {...field}>

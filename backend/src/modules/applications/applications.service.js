@@ -1,14 +1,16 @@
 const { createCrudService } = require('../../utils/crudFactory');
 const {
-  Application, User, Department, ApplicationTechStack, ApplicationFeature,
+  Application, User, Role, RolePermission, Department, ApplicationTechStack, ApplicationFeature,
   AiPrompt, ArchitectureDoc, ApiEndpoint, DbTableDoc, ReleaseNote, BugHistory,
   RoadmapItem, TimelineMilestone, sequelize,
 } = require('../../models');
 const ApiError = require('../../utils/ApiError');
 const logger = require('../../config/logger');
+const { hasPermission } = require('../../utils/permissions');
 const { cleanupEntityRefs, mergeCounts } = require('../../utils/entityCleanup');
 const { getStorageDriver } = require('../attachments/storage');
 const issuesService = require('../issues/issues.service');
+const notificationsService = require('../notifications/notifications.service');
 
 const listInclude = [
   { model: User, as: 'owner', attributes: ['id', 'name', 'avatarUrl'] },
@@ -42,8 +44,54 @@ async function getById(id) {
   return record;
 }
 
+/**
+ * Owner picker for the Edit form's "Owner" field (reassigning an application away from someone
+ * who's left, or handing it off deliberately) — same eligibility rule and shape as
+ * ideas.service.js#eligibleOwners (active users who hold applications:update), duplicated rather
+ * than imported since that copy is idea-finalization-specific and this module shouldn't depend on
+ * the ideas module for a generic "who can own an application" check.
+ */
+async function eligibleOwners() {
+  const users = await User.findAll({
+    where: { status: 'active' },
+    include: [{ model: Role, as: 'role', include: [{ model: RolePermission, as: 'permissions' }] }],
+    attributes: ['id', 'name'],
+    order: [['name', 'ASC']],
+  });
+
+  return users
+    .filter((u) => hasPermission((u.role?.permissions || []).map((p) => ({ resource: p.resource, action: p.action })), 'applications', 'update'))
+    .map((u) => ({ id: u.id, name: u.name }));
+}
+
 async function create(payload, req) {
   return Application.create({ ...payload, createdBy: req?.user?.id });
+}
+
+/**
+ * Overrides base.update — same notify-the-new-assignee pattern as
+ * changeRequests.service.js#updateStage, applied to the Owner field: whoever gets newly named
+ * owner (via the Edit form's Owner picker) should hear about it, same as a stage assignee does.
+ * Skipped when ownerId isn't part of this update, is unchanged, is being cleared to null, or the
+ * actor is naming themselves (no one needs to be told they did their own action).
+ */
+async function update(id, payload, req) {
+  const record = await Application.findByPk(id);
+  if (!record) throw ApiError.notFound('Application not found');
+  const previousOwnerId = record.ownerId;
+  await record.update(payload);
+
+  if (payload.ownerId && payload.ownerId !== previousOwnerId && payload.ownerId !== req?.user?.id) {
+    await notificationsService.create({
+      userId: payload.ownerId,
+      type: 'application_owner_assigned',
+      title: 'You are now the owner of an application',
+      message: `You're now the owner of "${record.name}".`,
+      link: `/applications/${id}`,
+    });
+  }
+
+  return record;
 }
 
 /**
@@ -86,4 +134,6 @@ async function remove(id) {
   return application;
 }
 
-module.exports = { ...base, getById, create, remove };
+module.exports = {
+  ...base, getById, create, update, remove, eligibleOwners,
+};

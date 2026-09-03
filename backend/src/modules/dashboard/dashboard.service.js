@@ -4,6 +4,7 @@ const {
 } = require('../../models');
 const ideasService = require('../ideas/ideas.service');
 const featureRequestsService = require('../featureRequests/featureRequests.service');
+const changeRequestsService = require('../changeRequests/changeRequests.service');
 
 async function getSummary(userId) {
   const [
@@ -12,7 +13,7 @@ async function getSummary(userId) {
     pendingFeatureRequests, approvedFeatureRequests,
     openSuggestions, technicalReviewSuggestions,
     recentApplications, recentActivity,
-    myIdeaCounts, myFeatureRequestCounts,
+    myIdeaCounts, myFeatureRequestCounts, myStageCounts,
   ] = await Promise.all([
     Application.count(),
     Application.count({ where: { status: { [Op.in]: ['development', 'testing'] } } }),
@@ -36,6 +37,10 @@ async function getSummary(userId) {
     // one part of the summary that depends on who's asking.
     ideasService.myPendingCounts(userId),
     featureRequestsService.myPendingCounts(userId),
+    // "My Development" / "My Testing" / "My Deployment" — stages assigned to the caller across
+    // every application, still waiting on their action. See
+    // changeRequests.service.js#myStageCounts.
+    changeRequestsService.myStageCounts(userId),
   ]);
 
   return {
@@ -59,6 +64,9 @@ async function getSummary(userId) {
       myReviewFeatureRequests: myFeatureRequestCounts.reviewer,
       myApproveIdeas: myIdeaCounts.approver,
       myApproveFeatureRequests: myFeatureRequestCounts.approver,
+      myDevelopmentStages: myStageCounts.development,
+      myTestingStages: myStageCounts.testing,
+      myDeploymentStages: myStageCounts.deployment,
     },
     recentApplications,
     recentActivity,

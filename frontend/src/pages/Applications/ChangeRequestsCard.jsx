@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import Box from '@mui/material/Box';
+import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
+import Link from '@mui/material/Link';
 import IconButton from '@mui/material/IconButton';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import dayjs from 'dayjs';
@@ -29,7 +31,7 @@ function ChangeRequestRow({ cr, canDelete, onDelete, onClick }) {
       }}
       sx={{
         py: 1.5, px: 1.5, cursor: 'pointer',
-        border: 1, borderColor: 'divider', borderRadius: 1,
+        border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper',
         '&:hover': { bgcolor: 'action.hover' },
         '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: '-2px' },
       }}
@@ -66,6 +68,22 @@ function ChangeRequestRow({ cr, canDelete, onDelete, onClick }) {
           <Typography variant="caption" color="text.secondary">
             {cr.requester?.name || 'Unknown user'} · {dayjs(cr.createdAt).format('MMM D, YYYY')}
           </Typography>
+          {/* Muted, not a chip — see the project report: this must not compete with the status
+              chip above it. A handle distinct from the title already shown above, not a repeat of
+              it — "From request · {title}" was wrong, since the resolved title IS the source's
+              title (visible verbatim two lines up). Feature requests have their own request
+              number; issues carry no equivalent sequence column, hence the generic fallback.
+              stopPropagation so the link navigates to the source instead of also triggering the
+              row's own onClick (the whole row is a click target). */}
+          {cr.source?.type && (
+            <Link
+              component={RouterLink} to={cr.source.url} variant="caption" color="text.secondary"
+              onClick={(e) => e.stopPropagation()}
+              sx={{ '&:hover': { textDecoration: 'underline' } }}
+            >
+              {cr.source.type === 'feature_request' ? `From feature request #${cr.source.number}` : 'From a reported issue'}
+            </Link>
+          )}
         </Stack>
       </Stack>
     </Box>
@@ -106,12 +124,12 @@ export default function ChangeRequestsCard({ applicationId }) {
 
   useEffect(() => { load(); }, [applicationId]);
 
-  // A bin that returns 400 (terminal status, or issue-sourced — see the Issues RICC prompt's
-  // Stage 3 lock, changeRequests.service.js#remove) or 403 (not the requester/a super-admin) is
-  // worse than no bin at all — only ever shown when the click would actually succeed.
+  // A bin that returns 400 (terminal status, or sourced from an issue or feature request — see
+  // changeRequests.service.js#remove's generalised lock) or 403 (not the requester/a super-admin)
+  // is worse than no bin at all — only ever shown when the click would actually succeed.
   const canDeleteRecord = (cr) => {
     if (!hasDeleteRole) return false;
-    if (cr.issueId) return false;
+    if (cr.issueId || cr.featureRequestId) return false;
     if (cr.status === 'implemented' || cr.status === 'rejected') return false;
     return isSuperAdmin || cr.requestedBy === user?.id;
   };
@@ -131,7 +149,7 @@ export default function ChangeRequestsCard({ applicationId }) {
   const visible = showAll ? rows : rows.slice(0, MAX_VISIBLE);
 
   return (
-    <Box>
+    <Paper variant="outlined" sx={{ p: 2, mt: 2 }}>
       <Stack direction="row" alignItems="baseline" spacing={1} sx={{ mb: 1.5 }}>
         <Typography variant="subtitle1" fontWeight={700}>Change Requests</Typography>
         {rows.length > 0 && (
@@ -149,7 +167,7 @@ export default function ChangeRequestsCard({ applicationId }) {
         <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 3, textAlign: 'center' }}>
           <Typography variant="body2" fontWeight={600}>No change requests yet</Typography>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-            Requests raised against this application will appear here.
+            Approved feature requests and converted issues appear here.
           </Typography>
         </Box>
       ) : (
@@ -195,6 +213,6 @@ export default function ChangeRequestsCard({ applicationId }) {
         onConfirm={handleDelete}
         onClose={() => setDeleting(null)}
       />
-    </Box>
+    </Paper>
   );
 }
