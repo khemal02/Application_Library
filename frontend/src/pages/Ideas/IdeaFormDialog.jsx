@@ -16,7 +16,7 @@ import { ideasApi } from '../../services/domains';
 import { INDUSTRY_OPTIONS, FUNCTIONAL_AREA_OPTIONS } from '../../constants/options';
 
 const EMPTY_VALUES = {
-  title: '', description: '',
+  title: '', description: '', proposedSolution: '',
   industry: '', functionalArea: '', internalUse: false, technologiesAndEfficiency: '',
 };
 
@@ -69,9 +69,16 @@ export default function IdeaFormDialog({ open, onClose, onCreated }) {
           </Grid>
           <Grid item xs={12}>
             <TextField
-              fullWidth required multiline minRows={3} label="Description"
-              {...register('description', { required: 'Description is required' })}
+              fullWidth required multiline minRows={3} label="Problem Statement"
+              {...register('description', { required: 'Problem Statement is required' })}
               error={!!errors.description} helperText={errors.description?.message}
+              sx={{ '& .MuiInputBase-input': { textAlign: 'justify' } }}
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <TextField
+              fullWidth multiline minRows={3} label="Solution"
+              {...register('proposedSolution')}
               sx={{ '& .MuiInputBase-input': { textAlign: 'justify' } }}
             />
           </Grid>

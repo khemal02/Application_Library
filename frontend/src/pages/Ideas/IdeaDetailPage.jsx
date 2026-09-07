@@ -29,6 +29,9 @@ export default function IdeaDetailPage() {
   const [editingDescription, setEditingDescription] = useState(false);
   const [descDraft, setDescDraft] = useState('');
   const [savingDesc, setSavingDesc] = useState(false);
+  const [editingSolution, setEditingSolution] = useState(false);
+  const [solutionDraft, setSolutionDraft] = useState('');
+  const [savingSolution, setSavingSolution] = useState(false);
   const [editingTech, setEditingTech] = useState(false);
   const [techDraft, setTechDraft] = useState('');
   const [savingTech, setSavingTech] = useState(false);
@@ -120,12 +123,31 @@ export default function IdeaDetailPage() {
     try {
       await ideasApi.update(id, { description: descDraft });
       setEditingDescription(false);
-      showSuccess('Description updated');
+      showSuccess('Problem statement updated');
       await reload();
     } catch (err) {
-      showError(err.response?.data?.message || 'Failed to update description');
+      showError(err.response?.data?.message || 'Failed to update problem statement');
     } finally {
       setSavingDesc(false);
+    }
+  };
+
+  const startEditSolution = () => {
+    setSolutionDraft(idea.proposedSolution || '');
+    setEditingSolution(true);
+  };
+
+  const saveSolution = async () => {
+    setSavingSolution(true);
+    try {
+      await ideasApi.update(id, { proposedSolution: solutionDraft });
+      setEditingSolution(false);
+      showSuccess('Solution updated');
+      await reload();
+    } catch (err) {
+      showError(err.response?.data?.message || 'Failed to update solution');
+    } finally {
+      setSavingSolution(false);
     }
   };
 
@@ -227,35 +249,72 @@ export default function IdeaDetailPage() {
             exact ratio is set via sx flexBasis/maxWidth rather than an md={n} prop) — stacks to
             full width on mobile via xs={12}. */}
         <Grid item xs={12} sx={{ flexBasis: { md: '60%' }, maxWidth: { md: '60%' } }}>
-          {editingDescription ? (
+          {(idea.description || canEditIdeaFields) && (
             <Box sx={{ mb: 3 }}>
-              <TextField
-                fullWidth multiline minRows={3} autoFocus
-                value={descDraft} onChange={(e) => setDescDraft(e.target.value)}
-                sx={{ '& .MuiInputBase-input': { textAlign: 'justify' } }}
-              />
-              <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                <IconButton size="small" color="primary" aria-label="Save description" disabled={savingDesc} onClick={saveDescription}>
-                  <CheckIcon fontSize="small" />
-                </IconButton>
-                <IconButton size="small" aria-label="Cancel editing description" disabled={savingDesc} onClick={() => setEditingDescription(false)}>
-                  <CloseIcon fontSize="small" />
-                </IconButton>
-              </Stack>
+              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>Problem Statement</Typography>
+              {editingDescription ? (
+                <Box>
+                  <TextField
+                    fullWidth multiline minRows={3} autoFocus
+                    value={descDraft} onChange={(e) => setDescDraft(e.target.value)}
+                    sx={{ '& .MuiInputBase-input': { textAlign: 'justify' } }}
+                  />
+                  <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                    <IconButton size="small" color="primary" aria-label="Save problem statement" disabled={savingDesc} onClick={saveDescription}>
+                      <CheckIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton size="small" aria-label="Cancel editing problem statement" disabled={savingDesc} onClick={() => setEditingDescription(false)}>
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </Stack>
+                </Box>
+              ) : (
+                <Stack direction="row" spacing={1} alignItems="flex-start">
+                  <Typography variant="body1" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', textAlign: 'justify', flexGrow: 1 }}>
+                    {idea.description || '—'}
+                  </Typography>
+                  {canEditIdeaFields && (
+                    <IconButton size="small" aria-label="Edit problem statement" onClick={startEditDescription}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  )}
+                </Stack>
+              )}
             </Box>
-          ) : (
-            (idea.description || canEditIdeaFields) && (
-              <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ mb: 3 }}>
-                <Typography variant="body1" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', textAlign: 'justify', flexGrow: 1 }}>
-                  {idea.description || '—'}
-                </Typography>
-                {canEditIdeaFields && (
-                  <IconButton size="small" aria-label="Edit description" onClick={startEditDescription}>
-                    <EditIcon fontSize="small" />
-                  </IconButton>
-                )}
-              </Stack>
-            )
+          )}
+
+          {(idea.proposedSolution || canEditIdeaFields) && (
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>Solution</Typography>
+              {editingSolution ? (
+                <Box>
+                  <TextField
+                    fullWidth multiline minRows={3} autoFocus
+                    value={solutionDraft} onChange={(e) => setSolutionDraft(e.target.value)}
+                    sx={{ '& .MuiInputBase-input': { textAlign: 'justify' } }}
+                  />
+                  <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                    <IconButton size="small" color="primary" aria-label="Save solution" disabled={savingSolution} onClick={saveSolution}>
+                      <CheckIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton size="small" aria-label="Cancel editing solution" disabled={savingSolution} onClick={() => setEditingSolution(false)}>
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </Stack>
+                </Box>
+              ) : (
+                <Stack direction="row" spacing={1} alignItems="flex-start">
+                  <Typography variant="body1" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', textAlign: 'justify', flexGrow: 1 }}>
+                    {idea.proposedSolution || '—'}
+                  </Typography>
+                  {canEditIdeaFields && (
+                    <IconButton size="small" aria-label="Edit solution" onClick={startEditSolution}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  )}
+                </Stack>
+              )}
+            </Box>
           )}
 
           {(idea.technologiesAndEfficiency || canEditIdeaFields) && (

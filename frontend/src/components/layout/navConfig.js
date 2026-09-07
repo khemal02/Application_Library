@@ -1,6 +1,7 @@
 import DashboardIcon from '@mui/icons-material/DashboardOutlined';
 import AppsIcon from '@mui/icons-material/AppsOutlined';
 import LightbulbIcon from '@mui/icons-material/LightbulbOutlined';
+import TrackChangesIcon from '@mui/icons-material/TrackChangesOutlined';
 import RateReviewIcon from '@mui/icons-material/RateReviewOutlined';
 import PeopleIcon from '@mui/icons-material/PeopleOutline';
 import AdminIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
@@ -9,6 +10,10 @@ import HistoryIcon from '@mui/icons-material/HistoryOutlined';
 const navConfig = [
   { label: 'Dashboard', path: '/dashboard', icon: DashboardIcon },
   { label: 'Applications', path: '/applications', icon: AppsIcon },
+  {
+    label: 'Application Tracking', path: '/application-tracking', icon: TrackChangesIcon,
+    resource: 'application_tracks', action: 'read',
+  },
   {
     label: 'Ideas', icon: LightbulbIcon,
     // No resource/action on the group itself — New Ideas and Modify Current Application are

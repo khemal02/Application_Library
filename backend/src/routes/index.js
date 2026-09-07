@@ -19,22 +19,18 @@ router.use('/attachments', require('../modules/attachments/attachments.routes'))
 
 // Module 1: Application Tracking & Documentation
 router.use('/applications', require('../modules/applications/applications.routes'));
-router.use('/applications/:applicationId/tech-stack', require('../modules/techStack/techStack.routes'));
-router.use('/applications/:applicationId/features', require('../modules/features/features.routes'));
-router.use('/applications/:applicationId/ai-prompts', require('../modules/aiPrompts/aiPrompts.routes'));
-router.use('/applications/:applicationId/architecture-docs', require('../modules/architectureDocs/architectureDocs.routes'));
-router.use('/applications/:applicationId/api-docs', require('../modules/apiDocs/apiDocs.routes'));
-router.use('/applications/:applicationId/db-docs', require('../modules/dbDocs/dbDocs.routes'));
-router.use('/applications/:applicationId/releases', require('../modules/releases/releases.routes'));
-router.use('/applications/:applicationId/bugs', require('../modules/bugs/bugs.routes'));
 router.use('/applications/:applicationId/issues', require('../modules/issues/issues.routes'));
-router.use('/applications/:applicationId/roadmap', require('../modules/roadmap/roadmap.routes'));
-router.use('/applications/:applicationId/timeline', require('../modules/timeline/timeline.routes'));
 router.use('/applications/:applicationId/change-requests', require('../modules/changeRequests/changeRequests.routes'));
 // Top-level, cross-application — backs the Dashboard's "My Development"/"My Testing"/
 // "My Deployment" tiles. Not nested under /applications/:applicationId/ like the line above;
 // see changeRequests/myStages.routes.js for why it can't be.
 router.use('/change-requests/my-stages', require('../modules/changeRequests/myStages.routes'));
+
+// Application Tracking — a track is an approved idea being built (Scoping/Development/Testing/
+// Deployment), sitting between "idea approved" and "Application registered". Top-level, not
+// nested under an application — a track precedes one, same reasoning as change-requests/my-stages
+// just above.
+router.use('/application-tracking', require('../modules/applicationTracking/applicationTracking.routes'));
 
 // Module 2: New Application Ideas
 router.use('/ideas', require('../modules/ideas/ideas.routes'));

@@ -1,5 +1,6 @@
 const {
   Comment, User, Role, Idea, FeatureRequest, ChangeRequestStage, ChangeRequest, Application, Issue,
+  ApplicationTrackStage, ApplicationTrack,
 } = require('../../models');
 const ApiError = require('../../utils/ApiError');
 const logger = require('../../config/logger');
@@ -91,6 +92,20 @@ async function create(requester, payload) {
       if (changeRequest?.status === 'rejected') {
         throw ApiError.conflict('This change request was rejected — its stages are no longer open for notes.');
       }
+    }
+  } else if (payload.entityType === 'application_track_stage') {
+    // Simpler than change_request_stage's notes: any authenticated user may add one (no owner/
+    // assignee/super-admin gate — 1f), and there's no not_started gate either — a track's own
+    // stages are visible read-only to everyone, so there's no reason to block a note about work
+    // that hasn't started yet the way an unstarted change-request stage does. Only cancelled closes
+    // the door, since a cancelled track's stages are done being worked. No notification fires from
+    // this branch, same as issue notes.
+    const stage = await ApplicationTrackStage.findByPk(payload.entityId, {
+      attributes: ['id'],
+      include: [{ model: ApplicationTrack, as: 'applicationTrack', attributes: ['id', 'status'] }],
+    });
+    if (stage?.applicationTrack?.status === 'cancelled') {
+      throw ApiError.conflict('This track was cancelled — its stages are no longer open for notes.');
     }
   } else if (payload.entityType === 'issue') {
     // Any authenticated user may add a note while the issue is open — no ownership/assignment

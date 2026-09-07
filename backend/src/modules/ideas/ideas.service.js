@@ -2,7 +2,8 @@ const { Op } = require('sequelize');
 const { createCrudService } = require('../../utils/crudFactory');
 const { buildQueryOptions, buildPaginationMeta } = require('../../utils/paginate');
 const {
-  Idea, User, Role, RolePermission, Department, Application, StatusHistory, Vote, Comment, IdeaReview, sequelize,
+  Idea, User, Role, RolePermission, Department, Application, ApplicationTrack, ApplicationTrackStage,
+  StatusHistory, Vote, Comment, IdeaReview, sequelize,
 } = require('../../models');
 const ApiError = require('../../utils/ApiError');
 const logger = require('../../config/logger');
@@ -517,11 +518,15 @@ async function submitTieBreak(idea, { decision, note, ownerId }, req) {
  */
 async function finalizeIdea(idea, { actingRow, actingRowIsNew, actingDecision, note, ownerId, outcome, reasonRows }, req) {
   const toStatus = outcome === 'approve' ? 'approved' : 'rejected';
-  // Always true for a not-yet-registered idea now — a new_idea is the only category this module
-  // handles post-split, and the "raise a change request instead" path (for a feature request
-  // against an existing application) lives entirely in featureRequests.service.js now.
-  const registersApplication = toStatus === 'approved' && !idea.applicationId;
-  if (registersApplication && !ownerId) {
+  // Same trigger condition as before Application Tracking existed, unchanged (per explicit
+  // instruction A3) — a new_idea is the only category this module handles post-split, and the
+  // "raise a change request instead" path (existing-application feature requests) lives entirely
+  // in featureRequests.service.js. Approving used to register an Application directly; now it
+  // creates a track instead (Stage 2a) — but the "this needs an owner-to-be" requirement the
+  // guard below enforces is exactly as real for a track as it was for an Application, so the
+  // guard, its trigger, and its message all carry across unchanged.
+  const needsTrack = toStatus === 'approved' && !idea.applicationId;
+  if (needsTrack && !ownerId) {
     throw ApiError.badRequest('An Application owner (ownerId) is required to approve this idea.');
   }
 
@@ -547,7 +552,11 @@ async function finalizeIdea(idea, { actingRow, actingRowIsNew, actingDecision, n
     });
   const finalNote = reasons.length > 0 ? reasons.join('\n') : note;
 
-  let applicationId = idea.applicationId;
+  // Set only if a track is actually created below — drives the "track created" notification.
+  // ideas.application_id is deliberately never touched here anymore; it stays NULL until Stage
+  // 2b's go-live backfills it.
+  let trackCreated = false;
+  let trackId = null;
 
   await sequelize.transaction(async (t) => {
     if (actingRowIsNew) {
@@ -559,32 +568,41 @@ async function finalizeIdea(idea, { actingRow, actingRowIsNew, actingDecision, n
       await actingRow.update({ decision: actingDecision, note: note ?? null }, { transaction: t });
     }
 
-    if (registersApplication) {
-      const ownerUser = await User.findByPk(ownerId, {
-        include: [{ model: Role, as: 'role', include: [{ model: RolePermission, as: 'permissions' }] }],
-        transaction: t,
-      });
-      if (!ownerUser || ownerUser.status !== 'active') {
-        throw ApiError.badRequest('Application owner must be an existing, active user');
-      }
-      if (!isEligibleOwner(ownerUser)) {
-        throw ApiError.badRequest('Application owner must have edit access to applications');
-      }
+    if (needsTrack) {
+      // Idempotent: the UNIQUE index on idea_id is the backstop, not the control flow — checked
+      // proactively so a retried approval (e.g. after a partial network failure) succeeds silently
+      // instead of erroring on a duplicate-key violation.
+      const existingTrack = await ApplicationTrack.findOne({ where: { ideaId: idea.id }, transaction: t });
+      if (!existingTrack) {
+        const ownerUser = await User.findByPk(ownerId, {
+          include: [{ model: Role, as: 'role', include: [{ model: RolePermission, as: 'permissions' }] }],
+          transaction: t,
+        });
+        if (!ownerUser || ownerUser.status !== 'active') {
+          throw ApiError.badRequest('Application owner must be an existing, active user');
+        }
+        if (!isEligibleOwner(ownerUser)) {
+          throw ApiError.badRequest('Application owner must have edit access to applications');
+        }
 
-      const app = await Application.create({
-        name: idea.title,
-        description: idea.description,
-        departmentId: idea.departmentId,
-        industry: idea.industry,
-        functionalArea: idea.functionalArea,
-        ownerId,
-        status: 'planning',
-        createdBy: req.user.id,
-      }, { transaction: t });
-      applicationId = app.id;
+        const track = await ApplicationTrack.create({
+          ideaId: idea.id,
+          ownerId,
+          priority: 'medium',
+          status: 'active',
+          name: null,
+          description: null,
+        }, { transaction: t });
+        await ApplicationTrackStage.bulkCreate(
+          ['scoping', 'development', 'testing', 'deployment'].map((stage) => ({ applicationTrackId: track.id, stage })),
+          { transaction: t },
+        );
+        trackCreated = true;
+        trackId = track.id;
+      }
     }
 
-    await idea.update({ status: toStatus, ...(applicationId !== idea.applicationId ? { applicationId } : {}) }, { transaction: t });
+    await idea.update({ status: toStatus }, { transaction: t });
 
     await StatusHistory.create({
       entityType: 'idea', entityId: idea.id, fromStatus, toStatus, changedBy: req.user.id, note: finalNote,
@@ -606,10 +624,13 @@ async function finalizeIdea(idea, { actingRow, actingRowIsNew, actingDecision, n
       message: `"${idea.title}" was ${toStatus === 'approved' ? 'approved' : 'rejected'}.`, link: `/ideas/${idea.id}`,
     });
   });
-  if (registersApplication) {
+  // 2c: "a track is created" -> the track owner. Only on an actual creation (not the idempotent
+  // no-op branch, not on reject) — and, per the house pattern, never notifying the actor about
+  // their own action, so this is skipped if the completing approver named themselves owner.
+  if (trackCreated && ownerId !== req.user.id) {
     recipients.push({
-      userId: ownerId, type: 'application_assigned', title: 'You were assigned an application',
-      message: `"${idea.title}" was registered as an Application you own.`, link: `/applications/${applicationId}`,
+      userId: ownerId, type: 'application_track_created', title: 'You are the owner of a new track',
+      message: `"${idea.title}" was approved. Scoping can start.`, link: `/application-tracking/${trackId}`,
     });
   }
 

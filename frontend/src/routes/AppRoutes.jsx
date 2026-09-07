@@ -8,6 +8,8 @@ import ApplicationsListPage from '../pages/Applications/ApplicationsListPage';
 import ApplicationDetailPage from '../pages/Applications/ApplicationDetailPage';
 import ApplicationStagesPage from '../pages/Applications/ApplicationStagesPage';
 import ChangeRequestDetailPage from '../pages/Applications/ChangeRequestDetailPage';
+import ApplicationTrackingListPage from '../pages/ApplicationTracking/ApplicationTrackingListPage';
+import ApplicationTrackingDetailPage from '../pages/ApplicationTracking/ApplicationTrackingDetailPage';
 import IdeasListPage from '../pages/Ideas/IdeasListPage';
 import IdeaDetailPage from '../pages/Ideas/IdeaDetailPage';
 import FeatureRequestsListPage from '../pages/Ideas/FeatureRequestsListPage';
@@ -49,6 +51,9 @@ export default function AppRoutes() {
 
       <Route path="/feature-requests" element={<Protected resource="feature_requests" action="read"><FeatureRequestsListPage /></Protected>} />
       <Route path="/feature-requests/:id" element={<Protected resource="feature_requests" action="read"><FeatureRequestDetailPage /></Protected>} />
+
+      <Route path="/application-tracking" element={<Protected resource="application_tracks" action="read"><ApplicationTrackingListPage /></Protected>} />
+      <Route path="/application-tracking/:id" element={<Protected resource="application_tracks" action="read"><ApplicationTrackingDetailPage /></Protected>} />
 
       <Route path="/suggestions" element={<Protected><SuggestionsListPage /></Protected>} />
       <Route path="/suggestions/:id" element={<Protected><SuggestionDetailPage /></Protected>} />

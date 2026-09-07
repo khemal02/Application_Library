@@ -17,7 +17,6 @@ const ENTITY_ROUTE = {
   idea: (id) => `/ideas/${id}`,
   feature_request: (id) => `/feature-requests/${id}`,
   suggestion: (id) => `/suggestions/${id}`,
-  ai_prompt: () => `/applications`,
 };
 
 export default function GlobalSearchBox() {
@@ -51,7 +50,6 @@ export default function GlobalSearchBox() {
     ['Ideas', results.ideas],
     ['Feature Requests', results.featureRequests],
     ['Suggestions', results.suggestions],
-    ['AI Prompts', results.aiPrompts],
   ].filter(([, items]) => items?.length) : [];
 
   return (

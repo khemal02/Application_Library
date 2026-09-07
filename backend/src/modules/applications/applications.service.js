@@ -1,8 +1,6 @@
 const { createCrudService } = require('../../utils/crudFactory');
 const {
-  Application, User, Role, RolePermission, Department, ApplicationTechStack, ApplicationFeature,
-  AiPrompt, ArchitectureDoc, ApiEndpoint, DbTableDoc, ReleaseNote, BugHistory,
-  RoadmapItem, TimelineMilestone, sequelize,
+  Application, User, Role, RolePermission, Department, sequelize,
 } = require('../../models');
 const ApiError = require('../../utils/ApiError');
 const logger = require('../../config/logger');
@@ -17,20 +15,6 @@ const listInclude = [
   { model: Department, as: 'department', attributes: ['id', 'name'] },
 ];
 
-const detailInclude = [
-  ...listInclude,
-  { model: ApplicationTechStack, as: 'techStack' },
-  { model: ApplicationFeature, as: 'features' },
-  { model: AiPrompt, as: 'aiPrompts' },
-  { model: ArchitectureDoc, as: 'architectureDocs' },
-  { model: ApiEndpoint, as: 'apiEndpoints' },
-  { model: DbTableDoc, as: 'dbTableDocs' },
-  { model: ReleaseNote, as: 'releaseNotes' },
-  { model: BugHistory, as: 'bugs' },
-  { model: RoadmapItem, as: 'roadmapItems' },
-  { model: TimelineMilestone, as: 'timelineMilestones' },
-];
-
 const base = createCrudService(Application, {
   searchableFields: ['name', 'description', 'category'],
   filterableFields: ['status', 'category', 'ownerId', 'departmentId', 'industry', 'functionalArea'],
@@ -39,7 +23,7 @@ const base = createCrudService(Application, {
 });
 
 async function getById(id) {
-  const record = await Application.findByPk(id, { include: detailInclude });
+  const record = await Application.findByPk(id, { include: listInclude });
   if (!record) throw ApiError.notFound('Application not found');
   return record;
 }
@@ -99,9 +83,7 @@ async function update(id, payload, req) {
  * has no way to accept a transaction, and the application's own destroy() must commit together
  * with its polymorphic cleanup (comments + their attachments, votes, tags, status history,
  * notifications) or not at all. Applications have exactly one comment channel (no separate
- * "_note" thread, unlike suggestions), so only 'application' needs cleaning directly. This does
- * not touch the application's own real sub-resource tables (tech stack, features, bugs, etc.) —
- * those have genuine foreign keys to applications.id and cascade at the DB level.
+ * "_note" thread, unlike suggestions), so only 'application' needs cleaning directly.
  *
  * Issues are the one exception that needs help: `issues.application_id` cascades at the DB level
  * (deleting the issue rows themselves), but each issue's own comments/votes are polymorphic

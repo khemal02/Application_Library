@@ -55,13 +55,6 @@ export const suggestionsApi = {
   submitDecision: (id, payload) => api.post(`/suggestions/${id}/decision`, payload).then((r) => r.data),
 };
 
-export const techStackApi = createNestedResourceApi((appId) => `/applications/${appId}/tech-stack`);
-export const featuresApi = createNestedResourceApi((appId) => `/applications/${appId}/features`);
-export const aiPromptsApi = createNestedResourceApi((appId) => `/applications/${appId}/ai-prompts`);
-export const apiDocsApi = createNestedResourceApi((appId) => `/applications/${appId}/api-docs`);
-export const dbDocsApi = createNestedResourceApi((appId) => `/applications/${appId}/db-docs`);
-export const releasesApi = createNestedResourceApi((appId) => `/applications/${appId}/releases`);
-export const bugsApi = createNestedResourceApi((appId) => `/applications/${appId}/bugs`);
 // Not built on createNestedResourceApi — issues has no generic PUT/DELETE surface (see
 // backend/src/modules/issues/issues.routes.js), just report + named triage/assign/resolve/
 // reopen/convert actions.
@@ -76,8 +69,6 @@ export const issuesApi = {
   convert: (appId, id) => api.post(`/applications/${appId}/issues/${id}/convert`).then((r) => r.data),
   assigneeCandidates: (appId) => api.get(`/applications/${appId}/issues/assignee-candidates`).then((r) => r.data),
 };
-export const roadmapApi = createNestedResourceApi((appId) => `/applications/${appId}/roadmap`);
-export const timelineApi = createNestedResourceApi((appId) => `/applications/${appId}/timeline`);
 export const changeRequestsApi = {
   ...createNestedResourceApi((appId) => `/applications/${appId}/change-requests`),
   updateStage: (appId, id, stage, payload) => api
@@ -92,10 +83,20 @@ export const changeRequestsApi = {
     .get('/change-requests/my-stages', { params: { stage } }).then((r) => r.data),
 };
 
-export const architectureDocsApi = {
-  list: (appId, params) => api.get(`/applications/${appId}/architecture-docs`, { params }).then((r) => r.data),
-  upsert: (appId, payload) => api.put(`/applications/${appId}/architecture-docs`, { ...payload, applicationId: appId }).then((r) => r.data),
-  remove: (appId, id) => api.delete(`/applications/${appId}/architecture-docs/${id}`).then((r) => r.data),
+// Top-level, not nested under an application — a track precedes one. No create/remove (a track is
+// only ever created by an idea being approved, never deleted, only cancelled — see
+// backend/src/modules/applicationTracking/applicationTracking.routes.js). update() is PATCH, not
+// PUT — createResourceApi's generic shape doesn't fit here either.
+export const applicationTrackingApi = {
+  list: (params) => api.get('/application-tracking', { params }).then((r) => r.data),
+  getById: (id) => api.get(`/application-tracking/${id}`).then((r) => r.data),
+  update: (id, payload) => api.patch(`/application-tracking/${id}`, payload).then((r) => r.data),
+  updateStage: (id, stage, payload) => api.patch(`/application-tracking/${id}/stages/${stage}`, payload).then((r) => r.data),
+  assignStages: (id, payload) => api.post(`/application-tracking/${id}/stages/assign`, payload).then((r) => r.data),
+  assigneeCandidates: (id) => api.get(`/application-tracking/${id}/assignee-candidates`).then((r) => r.data),
+  hold: (id, payload) => api.patch(`/application-tracking/${id}/hold`, payload).then((r) => r.data),
+  resume: (id) => api.patch(`/application-tracking/${id}/resume`).then((r) => r.data),
+  cancel: (id, payload) => api.patch(`/application-tracking/${id}/cancel`, payload).then((r) => r.data),
 };
 
 export const usersApi = {
