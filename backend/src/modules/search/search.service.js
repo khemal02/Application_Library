@@ -4,7 +4,7 @@ const { QueryTypes } = require('sequelize');
 async function globalSearch(q, limit = 8) {
   if (!q || !q.trim()) {
     return {
-      applications: [], ideas: [], featureRequests: [], suggestions: [],
+      applications: [], ideas: [], featureRequests: [],
     };
   }
 
@@ -24,22 +24,16 @@ async function globalSearch(q, limit = 8) {
     FROM feature_requests WHERE search_vector @@ plainto_tsquery('english', :q)
     ORDER BY rank DESC LIMIT :limit
   `;
-  const suggestionQuery = `
-    SELECT id, title, 'suggestion' AS entity_type, ts_rank(search_vector, plainto_tsquery('english', :q)) AS rank
-    FROM application_suggestions WHERE search_vector @@ plainto_tsquery('english', :q)
-    ORDER BY rank DESC LIMIT :limit
-  `;
 
   const replacements = { q, limit };
-  const [applications, ideas, featureRequests, suggestions] = await Promise.all([
+  const [applications, ideas, featureRequests] = await Promise.all([
     sequelize.query(query, { replacements, type: QueryTypes.SELECT }),
     sequelize.query(ideaQuery, { replacements, type: QueryTypes.SELECT }),
     sequelize.query(featureRequestQuery, { replacements, type: QueryTypes.SELECT }),
-    sequelize.query(suggestionQuery, { replacements, type: QueryTypes.SELECT }),
   ]);
 
   return {
-    applications, ideas, featureRequests, suggestions,
+    applications, ideas, featureRequests,
   };
 }
 

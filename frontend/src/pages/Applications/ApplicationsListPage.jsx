@@ -13,7 +13,7 @@ import FilterBar from '../../components/common/FilterBar';
 import StatusBadge from '../../components/common/StatusBadge';
 import usePermission from '../../routes/usePermission';
 import ApplicationFormDialog from './ApplicationFormDialog';
-import { APPLICATION_STATUS_OPTIONS, INDUSTRY_OPTIONS, FUNCTIONAL_AREA_OPTIONS } from '../../constants/options';
+import { APPLICATION_STATUS_OPTIONS, INDUSTRY_OPTIONS, FUNCTIONAL_AREA_OPTIONS, applicationStatusLabel } from '../../constants/options';
 import humanize from '../../utils/humanize';
 
 export default function ApplicationsListPage() {
@@ -40,7 +40,7 @@ export default function ApplicationsListPage() {
     { key: 'department', label: 'Department', render: (row) => row.department?.name || '—' },
     { key: 'industry', label: 'Industry', render: (row) => (row.industry ? humanize(row.industry) : '—') },
     { key: 'functionalArea', label: 'Functional Area', render: (row) => (row.functionalArea ? humanize(row.functionalArea) : '—') },
-    { key: 'status', label: 'Status', sortable: true, render: (row) => <StatusBadge value={row.status} /> },
+    { key: 'status', label: 'Status', sortable: true, render: (row) => <StatusBadge value={row.status} label={applicationStatusLabel(row.status)} /> },
   ];
 
   return (

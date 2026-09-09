@@ -3,6 +3,7 @@ import { useForm, Controller } from 'react-hook-form';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
 import Stack from '@mui/material/Stack';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
@@ -16,40 +17,69 @@ import Alert from '@mui/material/Alert';
 import Checkbox from '@mui/material/Checkbox';
 import ListItemText from '@mui/material/ListItemText';
 import AddIcon from '@mui/icons-material/Add';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import useServerList from '../../hooks/useServerList';
 import useToast from '../../hooks/useToast';
 import { usersApi, rolesApi, departmentsApi } from '../../services/domains';
 import DataTable from '../../components/common/DataTable';
 import FilterBar from '../../components/common/FilterBar';
 import StatusBadge from '../../components/common/StatusBadge';
-import { FUNCTIONAL_AREA_OPTIONS } from '../../constants/options';
+import { FUNCTIONAL_AREA_OPTIONS, INDUSTRY_OPTIONS } from '../../constants/options';
 
-function UserFormDialog({ open, onClose, onSaved, roles, departments }) {
+const EMPTY_VALUES = {
+  name: '', email: '', password: '', roleId: '', departmentId: '', functionalAreas: [], industry: '',
+};
+
+/**
+ * One dialog for both New User and Edit User — `user` (null for create, the row's record for
+ * edit) is the only thing that switches its behavior: no password field once editing (the update
+ * endpoint doesn't accept one — resetting a password isn't this form's job), email locked
+ * read-only (changing a login identity has bigger implications than the other fields here, so
+ * that stays out of scope), and the submit action calls create vs update accordingly.
+ */
+function UserFormDialog({
+  open, onClose, onSaved, roles, departments, user,
+}) {
+  const isEdit = !!user;
   const { register, control, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
-    defaultValues: { name: '', email: '', password: '', roleId: '', departmentId: '', functionalAreas: [] },
+    defaultValues: EMPTY_VALUES,
   });
   const [submitError, setSubmitError] = useState(null);
 
   useEffect(() => {
     if (open) {
       setSubmitError(null);
-      reset({ name: '', email: '', password: '', roleId: '', departmentId: '', functionalAreas: [] });
+      reset(isEdit ? {
+        name: user.name || '',
+        email: user.email || '',
+        password: '',
+        roleId: user.roleId || '',
+        departmentId: user.departmentId || '',
+        functionalAreas: user.functionalAreas || [],
+        industry: user.industry || '',
+      } : EMPTY_VALUES);
     }
-  }, [open, reset]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, user]);
 
   const onSubmit = async (values) => {
     setSubmitError(null);
     try {
-      await usersApi.create(values);
+      if (isEdit) {
+        const { email, password, ...rest } = values;
+        await usersApi.update(user.id, { ...rest, departmentId: rest.departmentId || null, industry: rest.industry || null });
+      } else {
+        await usersApi.create({ ...values, departmentId: values.departmentId || null, industry: values.industry || null });
+      }
       onSaved();
     } catch (err) {
-      setSubmitError(err.response?.data?.message || 'Failed to create user — please try again');
+      setSubmitError(err.response?.data?.message || `Failed to ${isEdit ? 'update' : 'create'} user — please try again`);
     }
   };
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>New User</DialogTitle>
+      <DialogTitle>{isEdit ? 'Edit User' : 'New User'}</DialogTitle>
       <DialogContent>
         {submitError && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setSubmitError(null)}>{submitError}</Alert>}
         <Grid container spacing={2} sx={{ mt: 0.5 }}>
@@ -57,16 +87,22 @@ function UserFormDialog({ open, onClose, onSaved, roles, departments }) {
             <TextField fullWidth label="Name" {...register('name', { required: 'Required' })} error={!!errors.name} />
           </Grid>
           <Grid item xs={12} sm={6}>
-            <TextField fullWidth label="Email" {...register('email', { required: 'Required' })} error={!!errors.email} />
-          </Grid>
-          <Grid item xs={12} sm={6}>
             <TextField
-              fullWidth type="password" label="Temporary Password"
-              helperText="At least 10 characters, including a letter and a number"
-              {...register('password', { required: 'Required', minLength: 10 })}
-              error={!!errors.password}
+              fullWidth label="Email" disabled={isEdit}
+              helperText={isEdit ? 'Email can\'t be changed here' : undefined}
+              {...register('email', { required: 'Required' })} error={!!errors.email}
             />
           </Grid>
+          {!isEdit && (
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth type="password" label="Temporary Password"
+                helperText="At least 10 characters, including a letter and a number"
+                {...register('password', { required: 'Required', minLength: 10 })}
+                error={!!errors.password}
+              />
+            </Grid>
+          )}
           <Grid item xs={12} sm={6}>
             <Controller name="roleId" control={control} rules={{ required: true }} render={({ field }) => (
               <TextField select fullWidth label="Role" {...field} error={!!errors.roleId}>
@@ -82,12 +118,20 @@ function UserFormDialog({ open, onClose, onSaved, roles, departments }) {
               </TextField>
             )} />
           </Grid>
+          <Grid item xs={12} sm={6}>
+            <Controller name="industry" control={control} render={({ field }) => (
+              <TextField select fullWidth label="Industry" {...field}>
+                <MenuItem value="">—</MenuItem>
+                {INDUSTRY_OPTIONS.map((opt) => <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>)}
+              </TextField>
+            )} />
+          </Grid>
           <Grid item xs={12}>
             <Controller name="functionalAreas" control={control} render={({ field }) => (
               <TextField
                 select fullWidth label="Functional Areas" value={field.value}
                 onChange={(e) => field.onChange(e.target.value)}
-                helperText="Optional — lets this user review ideas/suggestions in these areas even outside their department"
+                helperText="Optional — lets this user review ideas in these areas even outside their department"
                 SelectProps={{
                   multiple: true,
                   renderValue: (selected) => (
@@ -112,7 +156,9 @@ function UserFormDialog({ open, onClose, onSaved, roles, departments }) {
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" disabled={isSubmitting} onClick={handleSubmit(onSubmit)}>Create</Button>
+        <Button variant="contained" disabled={isSubmitting} onClick={handleSubmit(onSubmit)}>
+          {isEdit ? 'Save' : 'Create'}
+        </Button>
       </DialogActions>
     </Dialog>
   );
@@ -121,6 +167,7 @@ function UserFormDialog({ open, onClose, onSaved, roles, departments }) {
 export default function UsersPage() {
   const list = useServerList(usersApi.list);
   const [formOpen, setFormOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
   const [roles, setRoles] = useState([]);
   const [departments, setDepartments] = useState([]);
   const { showSuccess } = useToast();
@@ -130,11 +177,14 @@ export default function UsersPage() {
     departmentsApi.list({ limit: 50 }).then((res) => setDepartments(res.data));
   }, []);
 
+  const openCreate = () => { setEditingUser(null); setFormOpen(true); };
+  const openEdit = (user) => { setEditingUser(user); setFormOpen(true); };
+
   return (
     <Box>
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
         <Typography variant="h5" fontWeight={700}>Users</Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setFormOpen(true)}>New User</Button>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>New User</Button>
       </Stack>
 
       <FilterBar
@@ -154,6 +204,7 @@ export default function UsersPage() {
           { key: 'email', label: 'Email' },
           { key: 'role', label: 'Role', render: (r) => <Chip size="small" label={r.role?.label} /> },
           { key: 'department', label: 'Department', render: (r) => r.department?.name || '—' },
+          { key: 'industry', label: 'Industry', render: (r) => INDUSTRY_OPTIONS.find((o) => o.value === r.industry)?.label || '—' },
           {
             key: 'functionalAreas',
             label: 'Functional Areas',
@@ -168,6 +219,15 @@ export default function UsersPage() {
               : '—'),
           },
           { key: 'status', label: 'Status', render: (r) => <StatusBadge value={r.status} /> },
+          {
+            key: 'actions',
+            label: '',
+            render: (r) => (
+              <IconButton size="small" aria-label={`Edit ${r.name}`} onClick={() => openEdit(r)}>
+                <EditOutlinedIcon fontSize="small" />
+              </IconButton>
+            ),
+          },
         ]}
         rows={list.rows}
         pagination={list.pagination}
@@ -178,8 +238,9 @@ export default function UsersPage() {
 
       <UserFormDialog
         open={formOpen}
+        user={editingUser}
         onClose={() => setFormOpen(false)}
-        onSaved={() => { setFormOpen(false); showSuccess('User created'); list.reload(); }}
+        onSaved={() => { setFormOpen(false); showSuccess(editingUser ? 'User updated' : 'User created'); list.reload(); }}
         roles={roles} departments={departments}
       />
     </Box>

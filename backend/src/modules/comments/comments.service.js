@@ -7,7 +7,7 @@ const logger = require('../../config/logger');
 const { isPrivileged } = require('../../middlewares/ownership.middleware');
 const notificationsService = require('../notifications/notifications.service');
 
-// Comments are generic (shared across ideas, suggestions, applications, ...), but the idea
+// Comments are generic (shared across ideas, applications, ...), but the idea
 // submitter specifically wants to know whenever anyone weighs in on THEIR idea — covers both
 // entityTypes an idea's detail page posts comments under: 'idea' (the general Comments thread)
 // and 'idea_note' (the "Discussion" notes section).
@@ -43,26 +43,34 @@ async function listByEntity(entityType, entityId) {
   return roots;
 }
 
-async function create(requester, payload) {
+/**
+ * The entity-specific "may this person write a note here right now" gate — shared by create()
+ * (a brand new note) and update() (editing one of your own existing notes). Editing must re-check
+ * the same rules a fresh post would: a stage that's since gone `not_started`->frozen (rejected
+ * change request, cancelled track) or a decided idea/feature-request shouldn't become newly
+ * writable again just because the note already existed. Returns `{ idea, featureRequest }` so
+ * create() can still fire its own notification off the fetched record without a second query.
+ */
+async function assertNoteWritable(entityType, entityId, requester) {
   const userId = requester.id;
   let idea = null;
   let featureRequest = null;
-  if (IDEA_ENTITY_TYPES.includes(payload.entityType)) {
-    idea = await Idea.findByPk(payload.entityId, { attributes: ['id', 'title', 'submittedBy', 'status'] });
+  if (IDEA_ENTITY_TYPES.includes(entityType)) {
+    idea = await Idea.findByPk(entityId, { attributes: ['id', 'title', 'submittedBy', 'status'] });
     // Frozen once decided — a decision (approved/rejected) is final, and re-opening the thread
     // after the fact would misrepresent it as still-open discussion. Enforced here, not just
     // hidden in the UI, so the rule holds regardless of client.
     if (idea && (idea.status === 'approved' || idea.status === 'rejected')) {
       throw ApiError.badRequest('This idea has been decided — the discussion thread is now read-only.');
     }
-  } else if (FEATURE_REQUEST_ENTITY_TYPES.includes(payload.entityType)) {
-    featureRequest = await FeatureRequest.findByPk(payload.entityId, {
+  } else if (FEATURE_REQUEST_ENTITY_TYPES.includes(entityType)) {
+    featureRequest = await FeatureRequest.findByPk(entityId, {
       attributes: ['id', 'title', 'submittedBy', 'status'],
     });
     if (featureRequest && (featureRequest.status === 'approved' || featureRequest.status === 'rejected')) {
       throw ApiError.badRequest('This feature request has been decided — the discussion thread is now read-only.');
     }
-  } else if (payload.entityType === 'change_request_stage') {
+  } else if (entityType === 'change_request_stage') {
     // Not frozen once decided, unlike ideas/feature requests — a note is a work-log entry, not a
     // discussion that stops mattering once terminal. Gated instead on WHO may write here (only the
     // people actually running this delivery) and WHETHER there's any work yet to log:
@@ -70,7 +78,7 @@ async function create(requester, payload) {
     //   - the change request itself rejected: refused — the pipeline never ran.
     //   - complete stage / implemented request: ALLOWED — a correction after the fact is
     //     legitimate, and the timestamp on the note makes it honest about when it was added.
-    const stage = await ChangeRequestStage.findByPk(payload.entityId, {
+    const stage = await ChangeRequestStage.findByPk(entityId, {
       attributes: ['id', 'status', 'assigneeId'],
       include: [{
         model: ChangeRequest,
@@ -93,30 +101,44 @@ async function create(requester, payload) {
         throw ApiError.conflict('This change request was rejected — its stages are no longer open for notes.');
       }
     }
-  } else if (payload.entityType === 'application_track_stage') {
-    // Simpler than change_request_stage's notes: any authenticated user may add one (no owner/
-    // assignee/super-admin gate — 1f), and there's no not_started gate either — a track's own
-    // stages are visible read-only to everyone, so there's no reason to block a note about work
-    // that hasn't started yet the way an unstarted change-request stage does. Only cancelled closes
-    // the door, since a cancelled track's stages are done being worked. No notification fires from
-    // this branch, same as issue notes.
-    const stage = await ApplicationTrackStage.findByPk(payload.entityId, {
-      attributes: ['id'],
+  } else if (entityType === 'application_track_stage') {
+    // Narrower than change_request_stage's notes: only THIS stage's own assignee (or a
+    // super-admin) may write here — not the track's owner, unlike change_request_stage, and not
+    // "any authenticated user" like the 1f decision this replaced. A note is a work-log entry for
+    // whoever is actually doing the work, not a discussion thread the wider org weighs in on.
+    // There's still no not_started gate — a track's own stages are visible read-only to everyone,
+    // so there's no reason to block a note about work that hasn't started yet the way an unstarted
+    // change-request stage does. Only cancelled closes the door, since a cancelled track's stages
+    // are done being worked. No notification fires from this branch, same as issue notes.
+    const stage = await ApplicationTrackStage.findByPk(entityId, {
+      attributes: ['id', 'assigneeId'],
       include: [{ model: ApplicationTrack, as: 'applicationTrack', attributes: ['id', 'status'] }],
     });
-    if (stage?.applicationTrack?.status === 'cancelled') {
-      throw ApiError.conflict('This track was cancelled — its stages are no longer open for notes.');
+    if (stage) {
+      const isAssignee = !!stage.assigneeId && stage.assigneeId === userId;
+      if (!isAssignee && !isPrivileged(requester)) {
+        throw ApiError.forbidden('Only this stage\'s assignee or a super-admin may add notes here.');
+      }
+      if (stage.applicationTrack?.status === 'cancelled') {
+        throw ApiError.conflict('This track was cancelled — its stages are no longer open for notes.');
+      }
     }
-  } else if (payload.entityType === 'issue') {
+  } else if (entityType === 'issue') {
     // Any authenticated user may add a note while the issue is open — no ownership/assignment
     // gate, unlike change_request_stage's notes. Blocked once closed (any of the four closed
     // statuses); reopening the issue first is what makes it postable again. No notification fires
     // from this branch — see the project report, Stage 1d.
-    const issue = await Issue.findByPk(payload.entityId, { attributes: ['id', 'status'] });
+    const issue = await Issue.findByPk(entityId, { attributes: ['id', 'status'] });
     if (issue && ['resolved', 'known_limitation', 'duplicate', 'not_an_issue'].includes(issue.status)) {
       throw ApiError.conflict('This issue is closed — reopen it before adding a note.');
     }
   }
+  return { idea, featureRequest };
+}
+
+async function create(requester, payload) {
+  const userId = requester.id;
+  const { idea, featureRequest } = await assertNoteWritable(payload.entityType, payload.entityId, requester);
 
   const comment = await Comment.create({ ...payload, userId });
   const full = await Comment.findByPk(comment.id, { include: [authorInclude] });
@@ -163,6 +185,25 @@ async function create(requester, payload) {
   return full;
 }
 
+/**
+ * Editing your own note — narrower than create()'s gate: being ALLOWED to post here isn't enough,
+ * this must be YOUR OWN note (or a super-admin's moderation override), same ownership rule
+ * remove() already uses. Re-runs assertNoteWritable() too, so a note can't be edited once its
+ * entity has since frozen (e.g. the change request was rejected after the note was written).
+ */
+async function update(id, payload, requester) {
+  const comment = await Comment.findByPk(id);
+  if (!comment) throw ApiError.notFound('Comment not found');
+  const isOwner = comment.userId === requester.id;
+  const privileged = isPrivileged(requester);
+  if (!isOwner && !privileged) throw ApiError.forbidden('You can only edit your own notes');
+
+  await assertNoteWritable(comment.entityType, comment.entityId, requester);
+
+  await comment.update({ body: payload.body });
+  return Comment.findByPk(comment.id, { include: [authorInclude] });
+}
+
 async function remove(id, requester) {
   const comment = await Comment.findByPk(id);
   if (!comment) throw ApiError.notFound('Comment not found');
@@ -189,4 +230,6 @@ async function remove(id, requester) {
   return comment;
 }
 
-module.exports = { listByEntity, create, remove };
+module.exports = {
+  listByEntity, create, update, remove,
+};

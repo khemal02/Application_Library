@@ -594,7 +594,7 @@ async function finalizeIdea(idea, { actingRow, actingRowIsNew, actingDecision, n
           description: null,
         }, { transaction: t });
         await ApplicationTrackStage.bulkCreate(
-          ['scoping', 'development', 'testing', 'deployment'].map((stage) => ({ applicationTrackId: track.id, stage })),
+          ['development', 'testing', 'deployment'].map((stage) => ({ applicationTrackId: track.id, stage })),
           { transaction: t },
         );
         trackCreated = true;
@@ -630,7 +630,7 @@ async function finalizeIdea(idea, { actingRow, actingRowIsNew, actingDecision, n
   if (trackCreated && ownerId !== req.user.id) {
     recipients.push({
       userId: ownerId, type: 'application_track_created', title: 'You are the owner of a new track',
-      message: `"${idea.title}" was approved. Scoping can start.`, link: `/application-tracking/${trackId}`,
+      message: `"${idea.title}" was approved. Development can start.`, link: `/application-tracking/${trackId}`,
     });
   }
 

@@ -3,7 +3,7 @@
 // so this lives in one place rather than two copies that could quietly drift apart.
 export const STAGE_ORDER = ['development', 'testing', 'deployment'];
 export const STAGE_LABELS = { development: 'Development', testing: 'Testing', deployment: 'Deployment' };
-export const STAGE_STATUS_LABELS = { not_started: 'Not started', in_progress: 'In progress', complete: 'Complete' };
+export const STAGE_STATUS_LABELS = { not_started: 'Not started', in_progress: 'In progress', complete: 'Completed' };
 
 /**
  * The chip reads the delivery pipeline, not just `status` — `status` alone can't tell "approved,
@@ -29,6 +29,6 @@ export function deriveStatusChip(cr) {
   const lastCompleted = [...STAGE_ORDER].reverse()
     .find((stage) => stages.find((s) => s.stage === stage)?.status === 'complete');
   return lastCompleted
-    ? { color: 'info', label: `${STAGE_LABELS[lastCompleted]} complete` }
+    ? { color: 'info', label: `${STAGE_LABELS[lastCompleted]} completed` }
     : { color: 'default', label: 'Not started' };
 }

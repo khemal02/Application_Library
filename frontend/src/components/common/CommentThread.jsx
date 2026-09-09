@@ -401,7 +401,7 @@ export default function CommentThread({
   disabledAt = null,
   newestFirst = false, composerAtTop = false, allowAttachments = false,
   showRoleBadges = false, collapsibleComposer = false, attachmentViewer = false, sortToggle = false,
-  submitterId = null, reviewChain = null,
+  submitterId = null, reviewChain = null, maxListHeight = null,
 }) {
   const richMode = showRoleBadges || collapsibleComposer || attachmentViewer || sortToggle;
   const [rawComments, setRawComments] = useState([]);
@@ -632,7 +632,12 @@ export default function CommentThread({
         </Box>
       )}
 
-      <Box sx={richMode && disabled ? { opacity: 0.72 } : undefined}>
+      <Box
+        sx={{
+          ...(richMode && disabled ? { opacity: 0.72 } : null),
+          ...(maxListHeight ? { maxHeight: maxListHeight, overflowY: 'auto', pr: 0.5 } : null),
+        }}
+      >
         {comments.map((c) => (
           <CommentRow
             key={c.id} comment={c} entityType={entityType} entityId={entityId}

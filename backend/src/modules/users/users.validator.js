@@ -1,5 +1,5 @@
 const Joi = require('joi');
-const { passwordSchema, FUNCTIONAL_AREAS } = require('../../utils/validators');
+const { passwordSchema, FUNCTIONAL_AREAS, INDUSTRIES } = require('../../utils/validators');
 
 const create = Joi.object({
   name: Joi.string().max(150).required(),
@@ -8,6 +8,7 @@ const create = Joi.object({
   roleId: Joi.string().uuid().required(),
   departmentId: Joi.string().uuid().allow(null),
   functionalAreas: Joi.array().items(Joi.string().valid(...FUNCTIONAL_AREAS)),
+  industry: Joi.string().valid(...INDUSTRIES).allow(null),
   status: Joi.string().valid('active', 'inactive'),
 });
 
@@ -16,6 +17,7 @@ const update = Joi.object({
   roleId: Joi.string().uuid(),
   departmentId: Joi.string().uuid().allow(null),
   functionalAreas: Joi.array().items(Joi.string().valid(...FUNCTIONAL_AREAS)),
+  industry: Joi.string().valid(...INDUSTRIES).allow(null),
   status: Joi.string().valid('active', 'inactive'),
   avatarUrl: Joi.string().uri().allow(null, ''),
 });

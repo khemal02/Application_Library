@@ -10,10 +10,12 @@ import Alert from '@mui/material/Alert';
 import Paper from '@mui/material/Paper';
 import Chip from '@mui/material/Chip';
 import AddIcon from '@mui/icons-material/Add';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import CloseIcon from '@mui/icons-material/Close';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import dayjs from 'dayjs';
 import { commentsApi, attachmentsApi } from '../../services/domains';
+import { useAppSelector } from '../../app/hooks';
 import humanize from '../../utils/humanize';
 import avatarColor from '../../utils/avatarColor';
 import AttachmentGallery from './AttachmentGallery';
@@ -26,30 +28,47 @@ function wordCount(text) {
   return trimmed ? trimmed.split(/\s+/).length : 0;
 }
 
-function NoteCard({ note }) {
-  return (
-    <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-      <Stack direction="row" spacing={1.5} alignItems="flex-start">
+function NoteCard({ note, hideAuthor, plain }) {
+  const content = (
+    <Stack direction="row" spacing={1.5} alignItems="flex-start">
+      {!hideAuthor && (
         <Avatar
           sx={{ width: 36, height: 36, bgcolor: avatarColor(note.author?.id || note.author?.name), color: '#fff' }}
           src={note.author?.avatarUrl || undefined}
         >
           {note.author?.name?.[0]}
         </Avatar>
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-            <Typography variant="body2" fontWeight={700}>{note.author?.name}</Typography>
-            {note.author?.role?.name && (
-              <Chip size="small" variant="outlined" label={humanize(note.author.role.name)} />
-            )}
-            <Typography variant="caption" color="text.secondary">{dayjs(note.createdAt).format('MMM D, YYYY HH:mm')}</Typography>
-          </Stack>
-          {note.body && (
-            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', mt: 0.5 }}>{note.body}</Typography>
+      )}
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+          {!hideAuthor && <Typography variant="body2" fontWeight={700}>{note.author?.name}</Typography>}
+          {!hideAuthor && note.author?.role?.name && (
+            <Chip size="small" variant="outlined" label={humanize(note.author.role.name)} />
           )}
-          <AttachmentGallery entityType={NOTE_ATTACHMENT_ENTITY} entityId={note.id} />
-        </Box>
-      </Stack>
+          <Typography variant="caption" color="text.secondary">{dayjs(note.createdAt).format('MMM D, YYYY HH:mm')}</Typography>
+        </Stack>
+        {note.body && (
+          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', mt: 0.5 }}>{note.body}</Typography>
+        )}
+        <AttachmentGallery entityType={NOTE_ATTACHMENT_ENTITY} entityId={note.id} />
+      </Box>
+    </Stack>
+  );
+
+  // Plain mode (stage Notes on Change Request/Application Tracking cards): the note already sits
+  // inside the stage's own outlined Paper — wrapping it in a second nested box read as a box-in-a-box.
+  // A bottom divider between entries takes its place instead of a border all the way around.
+  if (plain) {
+    return (
+      <Box sx={{ mb: 2, pb: 2, '&:not(:last-of-type)': { borderBottom: 1, borderColor: 'divider' } }}>
+        {content}
+      </Box>
+    );
+  }
+
+  return (
+    <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+      {content}
     </Paper>
   );
 }
@@ -58,19 +77,29 @@ function NoteCard({ note }) {
  * Flat (non-threaded) list of longer-form entries, each posted by a user (shown with name + role)
  * and optionally carrying screenshot attachments. New entries are composed one at a time via the
  * "+" button rather than a single always-open box, per how this is used on the Idea detail page.
+ *
+ * `editableOwn` (stage Notes on Change Request/Application Tracking cards): once the signed-in
+ * user already has a note here, the bottom control becomes "Edit" on THEIR note instead of "Add"
+ * another one — a stage note is a single evolving work-log entry per person, not an open thread,
+ * so there's nothing to add a second one of. Other people's notes are unaffected and still just
+ * display; a user with no note of their own yet still sees "Add" until they write one.
  */
 export default function NotesThread({
   entityType, entityId, title = 'Details', emptyLabel = 'Nothing added yet — click + to add the first detail.',
-  disabled = false, disabledReason = 'This is now read-only.',
+  disabled = false, disabledReason = 'This is now read-only.', hideAuthor = false, plain = false, editableOwn = false,
 }) {
+  const currentUser = useAppSelector((s) => s.auth.user);
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [composing, setComposing] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState(null);
   const [text, setText] = useState('');
   const [files, setFiles] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const fileInputRef = useRef(null);
+
+  const ownNote = editableOwn ? notes.find((n) => n.author?.id === currentUser?.id) : null;
 
   const load = async () => {
     setError(null);
@@ -91,11 +120,23 @@ export default function NotesThread({
 
   const openComposer = () => {
     setError(null);
+    setEditingNoteId(null);
+    setText('');
+    setFiles([]);
+    setComposing(true);
+  };
+
+  const openEditor = (note) => {
+    setError(null);
+    setEditingNoteId(note.id);
+    setText(note.body || '');
+    setFiles([]);
     setComposing(true);
   };
 
   const closeComposer = () => {
     setComposing(false);
+    setEditingNoteId(null);
     setText('');
     setFiles([]);
   };
@@ -115,8 +156,9 @@ export default function NotesThread({
     setSubmitting(true);
     setError(null);
     try {
-      const res = await commentsApi.create({ entityType, entityId, body: text.trim() });
-      const noteId = res.data.id;
+      const noteId = editingNoteId
+        ? (await commentsApi.update(editingNoteId, { body: text.trim() })).data.id
+        : (await commentsApi.create({ entityType, entityId, body: text.trim() })).data.id;
       for (const file of files) {
         await attachmentsApi.upload(NOTE_ATTACHMENT_ENTITY, noteId, file);
       }
@@ -142,7 +184,7 @@ export default function NotesThread({
         <Typography variant="body2" color="text.secondary">Nothing was added while this was open.</Typography>
       )}
 
-      {notes.map((note) => <NoteCard key={note.id} note={note} />)}
+      {notes.map((note) => <NoteCard key={note.id} note={note} hideAuthor={hideAuthor} plain={plain} />)}
 
       {composing && !disabled && (
         <Paper variant="outlined" sx={{ p: 2 }}>
@@ -176,7 +218,7 @@ export default function NotesThread({
           <Stack direction="row" justifyContent="flex-end" spacing={1} sx={{ mt: 1.5 }}>
             <Button size="small" startIcon={<CloseIcon />} onClick={closeComposer} disabled={submitting}>Cancel</Button>
             <Button size="small" variant="contained" disabled={submitting || !canSubmit || overLimit} onClick={submit}>
-              {submitting ? 'Submitting...' : 'Submit'}
+              {submitting ? (editingNoteId ? 'Saving...' : 'Submitting...') : (editingNoteId ? 'Save' : 'Submit')}
             </Button>
           </Stack>
         </Paper>
@@ -184,13 +226,19 @@ export default function NotesThread({
 
       {!composing && !disabled && (
         <Stack direction="row" justifyContent="flex-end" sx={{ mt: notes.length > 0 ? 2 : 1 }}>
-          <Button variant="outlined" startIcon={<AddIcon />} onClick={openComposer}>
-            Add
-          </Button>
+          {ownNote ? (
+            <Button variant="outlined" startIcon={<EditOutlinedIcon />} onClick={() => openEditor(ownNote)}>
+              Edit
+            </Button>
+          ) : (
+            <Button variant="outlined" startIcon={<AddIcon />} onClick={openComposer}>
+              Add
+            </Button>
+          )}
         </Stack>
       )}
 
-      {!composing && disabled && (
+      {!composing && disabled && disabledReason && (
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: notes.length > 0 ? 2 : 1, textAlign: 'right' }}>
           {disabledReason}
         </Typography>

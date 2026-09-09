@@ -1,11 +1,11 @@
 // Shared by ApplicationTrackingListPage.jsx and (Stage 4) ApplicationTrackingDetailPage.jsx — same
 // reasoning changeRequestStatus.js already documents: the list row and the detail header must
 // never disagree about what a track's status chip reads, so the derivation lives in one place.
-export const STAGE_ORDER = ['scoping', 'development', 'testing', 'deployment'];
+export const STAGE_ORDER = ['development', 'testing', 'deployment'];
 export const STAGE_LABELS = {
-  scoping: 'Scoping', development: 'Development', testing: 'Testing', deployment: 'Deployment',
+  development: 'Development', testing: 'Testing', deployment: 'Deployment',
 };
-export const STAGE_STATUS_LABELS = { not_started: 'Not started', in_progress: 'In progress', complete: 'Complete' };
+export const STAGE_STATUS_LABELS = { not_started: 'Not started', in_progress: 'In progress', complete: 'Completed' };
 
 function stageRow(track, stage) {
   return track.stages?.find((s) => s.stage === stage) || { stage, status: 'not_started' };
@@ -29,14 +29,14 @@ export function deriveStatusChip(track) {
   if (!anyStarted) return { color: 'default', label: 'Not started' };
 
   const lastCompleted = [...STAGE_ORDER].reverse().find((s) => stageRow(track, s).status === 'complete');
-  return lastCompleted ? { color: 'info', label: `${STAGE_LABELS[lastCompleted]} complete` } : { color: 'default', label: 'Not started' };
+  return lastCompleted ? { color: 'info', label: `${STAGE_LABELS[lastCompleted]} completed` } : { color: 'default', label: 'Not started' };
 }
 
 /** The Stage column's text — named explicitly so the current stage never depends on color alone. */
 export function currentStageLabel(track) {
   const stages = STAGE_ORDER.map((s) => stageRow(track, s));
   const currentIndex = stages.findIndex((s) => s.status !== 'complete');
-  return currentIndex === -1 ? 'Complete' : STAGE_LABELS[STAGE_ORDER[currentIndex]];
+  return currentIndex === -1 ? 'Completed' : STAGE_LABELS[STAGE_ORDER[currentIndex]];
 }
 
 /** Four pips for the Progress column: complete / current (first non-complete) / upcoming. */

@@ -19,8 +19,7 @@ const COLOR_MAP = {
   // them), kept here only so old entries still render a color instead of falling back to default.
   submitted: 'info', discussion: 'warning', technical_review_1: 'warning', technical_review_2: 'warning',
   review: 'warning', under_review: 'warning', approved: 'success', rejected: 'error', development_ready: 'success',
-  // suggestions
-  technical_review: 'warning', assigned: 'info', implemented: 'success', closed: 'default',
+  implemented: 'success',
   // change requests
   pending: 'default', in_review: 'warning',
   // priority / severity

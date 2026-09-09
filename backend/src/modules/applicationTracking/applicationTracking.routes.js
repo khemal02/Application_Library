@@ -40,6 +40,8 @@ router.get(
   controller.assigneeCandidates,
 );
 
+router.patch('/:id/go-live', authorize('application_tracks', 'update'), validate({ params: idParam }), controller.goLive);
+
 router.patch('/:id/hold', authorize('application_tracks', 'update'), validate({ params: idParam, body: holdBody }), controller.hold);
 router.patch('/:id/resume', authorize('application_tracks', 'update'), validate({ params: idParam }), controller.resume);
 router.patch('/:id/cancel', authorize('application_tracks', 'update'), validate({ params: idParam, body: cancelBody }), controller.cancel);

@@ -147,25 +147,23 @@ export default function FeatureRequestDetailPage() {
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
-        <Stack direction="row" alignItems="center" spacing={1}>
-          <BackButton />
-          {featureRequest.application?.name && (
-            <Stack direction="row" spacing={0.25} alignItems="center">
-              <Typography variant="h0" fontWeight={700}>{featureRequest.application.name}</Typography>
-              <IconButton
-                size="small" aria-label={`Open ${featureRequest.application.name}`}
-                onClick={() => navigate(`/applications/${featureRequest.applicationId}`)}
-              >
-                <OpenInNewIcon fontSize="inherit" />
-              </IconButton>
-            </Stack>
-          )}
-        </Stack>
+      <Stack direction="row" alignItems="center" spacing={1}>
+        <BackButton />
         <Typography variant="body2" color="text.secondary">
           Submitted by, <Typography component="span" variant="body2" fontWeight={700} color="text.primary">{featureRequest.submitter?.name || '—'}</Typography>
         </Typography>
       </Stack>
+      {featureRequest.application?.name && (
+        <Stack direction="row" spacing={0.25} alignItems="center" sx={{ mt: 0.5 }}>
+          <Typography variant="h0" fontWeight={700}>{featureRequest.application.name}</Typography>
+          <IconButton
+            size="small" aria-label={`Open ${featureRequest.application.name}`}
+            onClick={() => navigate(`/applications/${featureRequest.applicationId}`)}
+          >
+            <OpenInNewIcon fontSize="inherit" />
+          </IconButton>
+        </Stack>
+      )}
       <Box sx={{ mb: 2 }}>
         <Typography variant="h5" fontWeight={700}>{featureRequest.title}</Typography>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
@@ -222,7 +220,7 @@ export default function FeatureRequestDetailPage() {
           )}
         </Grid>
 
-        <Grid item xs={12} sx={{ flexBasis: { md: '40%' }, maxWidth: { md: '40%' } }}>
+        <Grid item xs={12} sx={{ flexBasis: { md: '40%' }, maxWidth: { md: '40%' }, mt: { md: '-123px' } }}>
           <FeatureRequestPanelCard
             featureRequest={featureRequest} panel={featureRequest.panel}
             voteDecision={voteDecision} onVoteDecisionChange={setVoteDecision}
@@ -236,6 +234,7 @@ export default function FeatureRequestDetailPage() {
               entityType="feature_request" entityId={id} title="Discussion" maxLength={0} newestFirst composerAtTop allowAttachments
               showRoleBadges collapsibleComposer attachmentViewer sortToggle
               submitterId={featureRequest.submittedBy} reviewChain={panelReviewChain}
+              maxListHeight={260}
               disabled={isDecided} disabledAt={decidedAt}
               disabledReason="This feature request has been decided — the discussion thread is now read-only."
             />

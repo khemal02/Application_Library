@@ -44,6 +44,7 @@ const updateStageBody = Joi.object({
   // key. Notes no longer live here — see comments.service.js's 'change_request_stage' branch.
   startDate: Joi.date().iso().allow(null),
   endDate: Joi.date().iso().allow(null),
+  documentUrl: Joi.string().uri().max(500).allow(null),
 });
 
 // PATCH /applications/:applicationId/change-requests/:id/assignments — see

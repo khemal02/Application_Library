@@ -3,13 +3,14 @@ const { authenticate } = require('../../middlewares/auth.middleware');
 const { authorize } = require('../../middlewares/rbac.middleware');
 const validate = require('../../middlewares/validate.middleware');
 const controller = require('./comments.controller');
-const { create, listQuery } = require('./comments.validator');
+const { create, listQuery, update } = require('./comments.validator');
 
 const router = express.Router();
 router.use(authenticate);
 
 router.get('/', authorize('comments', 'read'), validate({ query: listQuery }), controller.list);
 router.post('/', authorize('comments', 'create'), validate(create), controller.create);
+router.patch('/:id', authorize('comments', 'create'), validate(update), controller.update);
 router.delete('/:id', authorize('comments', 'read'), controller.remove);
 
 module.exports = router;

@@ -225,12 +225,7 @@ export default function FeatureRequestPanelCard({
         {isDecided ? (
           <Chip size="small" color={featureRequest.status === 'approved' ? 'success' : 'error'} label={featureRequest.status === 'approved' ? 'Approved' : 'Rejected'} />
         ) : (
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Typography variant="caption" color="text.secondary">
-              Reviewers {panel.reviewersResponded}/{panel.reviewersTotal} · Approvers {panel.approversApproved}/{panel.approversTotal}
-            </Typography>
-            {panel.isTied && <Chip size="small" color="warning" label="Tied" />}
-          </Stack>
+          panel.isTied && <Chip size="small" color="warning" label="Tied" />
         )}
       </Stack>
 
@@ -341,9 +336,6 @@ export default function FeatureRequestPanelCard({
             <Typography variant="body2" fontWeight={600}>Reviewers</Typography>
           </Box>
           <Stack direction="row" spacing={1} alignItems="center">
-            <Typography variant="caption" color="text.secondary">
-              {panel.reviewersResponded} of {panel.reviewersTotal} responded
-            </Typography>
             {panel.canManagePanel && (
               <Button size="small" startIcon={<AddIcon fontSize="small" />} onClick={() => setPickerKind('reviewer')}>Add</Button>
             )}
@@ -368,9 +360,6 @@ export default function FeatureRequestPanelCard({
             <Typography variant="body2" fontWeight={600}>Approvers</Typography>
           </Box>
           <Stack direction="row" spacing={1} alignItems="center">
-            <Typography variant="caption" color="text.secondary">
-              {panel.approversApproved} approve · {panel.approversRejected} reject · {panel.approversTotal} total
-            </Typography>
             {panel.canManagePanel && (
               <Button size="small" startIcon={<AddIcon fontSize="small" />} onClick={() => setPickerKind('approver')}>Add</Button>
             )}

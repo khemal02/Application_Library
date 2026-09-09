@@ -10,6 +10,9 @@ module.exports = (sequelize, DataTypes) => {
     // ideas.service.js#eligibleReviewers. A user can hold any number of these (a manager can own
     // both Finance and Supply Chain), unlike departmentId's single FK.
     functionalAreas: { type: DataTypes.ARRAY(DataTypes.STRING), allowNull: false, defaultValue: [] },
+    // Single value, same shared list Applications/Ideas use (utils/validators.js#INDUSTRIES) —
+    // set by an admin via the Users management form, shown read-only on Profile.
+    industry: { type: DataTypes.STRING(60), allowNull: true },
     avatarUrl: { type: DataTypes.STRING(500) },
     status: { type: DataTypes.ENUM('active', 'inactive'), allowNull: false, defaultValue: 'active' },
     lastLoginAt: { type: DataTypes.DATE },
@@ -34,7 +37,6 @@ module.exports = (sequelize, DataTypes) => {
     User.hasMany(db.Notification, { foreignKey: 'userId', as: 'notifications' });
     User.hasMany(db.Application, { foreignKey: 'ownerId', as: 'ownedApplications' });
     User.hasMany(db.Idea, { foreignKey: 'submittedBy', as: 'submittedIdeas' });
-    User.hasMany(db.ApplicationSuggestion, { foreignKey: 'submittedBy', as: 'submittedSuggestions' });
     User.hasMany(db.UserSession, { foreignKey: 'userId', as: 'sessions' });
   };
 

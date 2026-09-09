@@ -10,6 +10,11 @@ module.exports = (sequelize, DataTypes) => {
     assigneeId: { type: DataTypes.UUID, allowNull: true },
     startDate: { type: DataTypes.DATEONLY, allowNull: true },
     endDate: { type: DataTypes.DATEONLY, allowNull: true },
+    // A link to an external document (spec, test report, deployment runbook, ...) — plain text, no
+    // validation beyond the validator's Joi.string().uri(). Screenshots are NOT stored here; they go
+    // through the generic Attachment model instead (entityType 'change_request_stage', entityId
+    // this row's own id).
+    documentUrl: { type: DataTypes.STRING(500), allowNull: true },
   }, {
     tableName: 'change_request_stages',
     indexes: [{ unique: true, fields: ['change_request_id', 'stage'] }],

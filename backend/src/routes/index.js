@@ -26,7 +26,7 @@ router.use('/applications/:applicationId/change-requests', require('../modules/c
 // see changeRequests/myStages.routes.js for why it can't be.
 router.use('/change-requests/my-stages', require('../modules/changeRequests/myStages.routes'));
 
-// Application Tracking — a track is an approved idea being built (Scoping/Development/Testing/
+// Application Tracking — a track is an approved idea being built (Development/Testing/
 // Deployment), sitting between "idea approved" and "Application registered". Top-level, not
 // nested under an application — a track precedes one, same reasoning as change-requests/my-stages
 // just above.
@@ -37,14 +37,5 @@ router.use('/ideas', require('../modules/ideas/ideas.routes'));
 // Module 2b: Modify Current Application (feature requests) — split out from Ideas into its own
 // table/module/RBAC resource; see 20260130000035-split-feature-requests-from-ideas.js.
 router.use('/feature-requests', require('../modules/featureRequests/featureRequests.routes'));
-
-// Module 3: Existing Application Review & Improvement
-router.use('/suggestions', require('../modules/suggestions/suggestions.routes'));
-
-// Also expose application-scoped sub-resources for suggestions filed against a specific app
-router.use('/applications/:applicationId/suggestions', (req, res, next) => {
-  req.query.applicationId = req.params.applicationId;
-  next();
-}, require('../modules/suggestions/suggestions.routes'));
 
 module.exports = router;

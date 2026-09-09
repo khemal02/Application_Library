@@ -46,7 +46,6 @@ module.exports = (sequelize, DataTypes) => {
 
     // Deliberately no Issue association here — same as ChangeRequest, its card fetches via its
     // own dedicated endpoint (GET /applications/:id/issues), never embedded in this include list.
-    Application.hasMany(db.ApplicationSuggestion, { foreignKey: 'applicationId', as: 'suggestions' });
   };
 
   return Application;

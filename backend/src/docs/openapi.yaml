@@ -12,7 +12,6 @@ tags:
   - name: Applications
   - name: Application Documentation
   - name: Ideas
-  - name: Suggestions
   - name: Dashboard
   - name: Search
   - name: Administration
@@ -58,13 +57,6 @@ components:
         description: { type: string }
         status: { type: string, enum: [submitted, discussion, technical_review_1, technical_review_2, review, approved, rejected, development_ready] }
         priority: { type: string, enum: [low, medium, high, critical] }
-    Suggestion:
-      type: object
-      properties:
-        id: { type: string, format: uuid }
-        title: { type: string }
-        departmentId: { type: string, format: uuid, nullable: true }
-        status: { type: string, enum: [submitted, technical_review, discussion, approved, assigned, implemented, closed] }
 security:
   - bearerAuth: []
 paths:
@@ -191,33 +183,6 @@ paths:
       summary: Most popular ideas, most reviewed ideas, and top contributors
       responses:
         '200': { description: Analytics summary }
-  /suggestions:
-    get:
-      tags: [Suggestions]
-      summary: List improvement suggestions filed against applications
-      responses:
-        '200': { description: Paginated list of suggestions }
-    post:
-      tags: [Suggestions]
-      summary: Submit an improvement suggestion (feature request, bug, security, performance, etc.)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/Suggestion' }
-      responses:
-        '201': { description: Created }
-  /suggestions/{id}/status:
-    patch:
-      tags: [Suggestions]
-      summary: Move a suggestion through its workflow (submitted -> technical_review -> discussion -> approved -> assigned -> implemented -> closed)
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string, format: uuid }
-      responses:
-        '200': { description: Status updated }
   /dashboard:
     get:
       tags: [Dashboard]
@@ -227,7 +192,7 @@ paths:
   /search:
     get:
       tags: [Search]
-      summary: Global full-text search across applications, ideas, suggestions, and AI prompts
+      summary: Global full-text search across applications, ideas, and feature requests
       parameters:
         - in: query
           name: q
@@ -335,14 +300,14 @@ paths:
     post: { tags: [Administration], summary: Create a department, responses: { '201': { description: Created } } }
 
   # ---------------------------------------------------------------------------
-  # Collaboration — generic, reused across applications/ideas/suggestions via entityType+entityId
+  # Collaboration — generic, reused across applications/ideas/change-request stages via entityType+entityId
   # ---------------------------------------------------------------------------
   /comments:
     get:
       tags: [Collaboration]
       summary: List threaded comments for an entity
       parameters:
-        - { in: query, name: entityType, required: true, schema: { type: string, enum: [application, idea, suggestion] } }
+        - { in: query, name: entityType, required: true, schema: { type: string, enum: [application, idea] } }
         - { in: query, name: entityId, required: true, schema: { type: string, format: uuid } }
       responses: { '200': { description: Nested comment tree } }
     post:

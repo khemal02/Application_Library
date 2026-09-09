@@ -395,6 +395,7 @@ async function updateStage(applicationId, id, stage, payload, req) {
   if (payload.assigneeId !== undefined) updates.assigneeId = payload.assigneeId;
   if (payload.startDate !== undefined) updates.startDate = payload.startDate;
   if (payload.endDate !== undefined) updates.endDate = payload.endDate;
+  if (payload.documentUrl !== undefined) updates.documentUrl = payload.documentUrl;
 
   const today = new Date().toISOString().slice(0, 10);
   if (nextStatus === 'in_progress' && !stageRow.startDate && updates.startDate === undefined) {

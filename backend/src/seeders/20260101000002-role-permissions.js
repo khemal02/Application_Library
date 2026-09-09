@@ -30,40 +30,38 @@ module.exports = {
     // can grant privileges, including to oneself, so that stays a dedicated system-admin action.
     rows = rows.concat(expand(
       ROLE_IDS.ceo,
-      ['applications', ...DOC_SUBRESOURCES, 'ideas', 'suggestions', 'comments', 'votes', 'attachments', 'users', 'departments'],
+      ['applications', ...DOC_SUBRESOURCES, 'ideas', 'comments', 'votes', 'attachments', 'users', 'departments'],
       ['manage'],
     ));
     rows = rows.concat(expand(ROLE_IDS.ceo, ['dashboard', 'search', 'notifications', 'audit_logs'], ['read']));
     rows = rows.concat(expand(ROLE_IDS.ceo, ['change_requests', 'feature_requests'], ['manage']));
 
-    // Manager: near-full — full control over applications/docs, reviews & approves
-    // ideas/suggestions org-wide. The Administration area (Users, Roles & Permissions,
-    // Departments) is Admin-only.
+    // Manager: near-full — full control over applications/docs, reviews & approves ideas
+    // org-wide. The Administration area (Users, Roles & Permissions, Departments) is Admin-only.
     rows = rows.concat(expand(
       ROLE_IDS.manager,
-      ['applications', ...DOC_SUBRESOURCES, 'ideas', 'suggestions', 'comments', 'votes', 'attachments'],
+      ['applications', ...DOC_SUBRESOURCES, 'ideas', 'comments', 'votes', 'attachments'],
       ['manage'],
     ));
     rows = rows.concat(expand(ROLE_IDS.manager, ['dashboard', 'search', 'notifications', 'audit_logs'], ['read']));
     rows = rows.concat(expand(ROLE_IDS.manager, ['change_requests', 'feature_requests'], ['manage']));
 
-    // Team Lead: full ownership over applications + docs, reviews ideas/suggestions for their team.
+    // Team Lead: full ownership over applications + docs, reviews ideas for their team.
     rows = rows.concat(expand(ROLE_IDS.team_lead, ['applications'], ['create', 'read', 'update']));
     rows = rows.concat(expand(ROLE_IDS.team_lead, DOC_SUBRESOURCES, ['create', 'read', 'update', 'delete']));
     rows = rows.concat(expand(ROLE_IDS.team_lead, ['ideas'], ['create', 'read', 'review', 'update']));
     rows = rows.concat(expand(ROLE_IDS.team_lead, ['feature_requests'], ['create', 'read', 'review', 'update']));
-    rows = rows.concat(expand(ROLE_IDS.team_lead, ['suggestions'], ['create', 'read', 'review', 'update', 'assign']));
     rows = rows.concat(expand(ROLE_IDS.team_lead, ['comments', 'votes', 'attachments'], ['create', 'read']));
     rows = rows.concat(expand(ROLE_IDS.team_lead, ['dashboard', 'search', 'notifications', 'audit_logs'], ['read']));
     rows = rows.concat(expand(ROLE_IDS.team_lead, ['change_requests'], ['create', 'read', 'update', 'delete']));
 
     // Employee: browses the application catalog and comments on it (read-only on applications and
-    // every doc sub-resource — no add/edit there), submits ideas/suggestions and edits their own
-    // submissions. No 'review' — moving an idea/suggestion through its workflow (Discussion ->
-    // Review -> Approved -> Development Ready, etc.) is Team Lead+ only.
+    // every doc sub-resource — no add/edit there), submits ideas and edits their own submissions.
+    // No 'review' — moving an idea through its workflow (Discussion -> Review -> Approved ->
+    // Development Ready, etc.) is Team Lead+ only.
     rows = rows.concat(expand(ROLE_IDS.employee, ['applications'], ['read']));
     rows = rows.concat(expand(ROLE_IDS.employee, DOC_SUBRESOURCES, ['read']));
-    rows = rows.concat(expand(ROLE_IDS.employee, ['ideas', 'suggestions', 'feature_requests'], ['create', 'read', 'update']));
+    rows = rows.concat(expand(ROLE_IDS.employee, ['ideas', 'feature_requests'], ['create', 'read', 'update']));
     rows = rows.concat(expand(ROLE_IDS.employee, ['comments', 'votes', 'attachments'], ['create', 'read']));
     rows = rows.concat(expand(ROLE_IDS.employee, ['dashboard', 'search', 'notifications'], ['read']));
     // Everyone gets full CRUD on Change Requests, same shape as Team Lead — unlike every other

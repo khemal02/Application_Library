@@ -24,6 +24,7 @@ import { LoadingBlock, ErrorBlock } from '../../components/common/AsyncState';
 import StatusBadge from '../../components/common/StatusBadge';
 import BackButton from '../../components/common/BackButton';
 import NotesThread from '../../components/common/NotesThread';
+import AttachmentsPanel from '../../components/common/AttachmentsPanel';
 import { STAGE_ORDER, STAGE_LABELS, STAGE_STATUS_LABELS, deriveStatusChip } from '../../utils/changeRequestStatus';
 
 const formatDate = (value) => (value ? dayjs(value).format('MMM D, YYYY') : '—');
@@ -93,9 +94,13 @@ function MarkCompleteDialog({
 function StageCard({
   stage, stageData,
   isViewerStage, canAct, isRequestReady, isBlockedByPredecessor, predecessorLabel, predecessorAssigneeName,
-  onStart, onOpenComplete, submitting,
+  onStart, onOpenComplete, onSaveDocumentUrl, submitting,
 }) {
   const isComplete = stageData.status === 'complete';
+
+  const [docDraft, setDocDraft] = useState(stageData.documentUrl || '');
+  useEffect(() => { setDocDraft(stageData.documentUrl || ''); }, [stageData.documentUrl]);
+  const docDirty = docDraft.trim() !== (stageData.documentUrl || '');
 
   let chip;
   if (isViewerStage && !isComplete) {
@@ -127,14 +132,47 @@ function StageCard({
         <Box sx={{ flex: 1 }}><ReadField label="Finished" value={formatDate(stageData.endDate)} /></Box>
       </Stack>
 
-      <NotesThread
-        entityType="change_request_stage"
-        entityId={stageData.id}
-        title="Notes"
-        emptyLabel="No notes yet."
-        disabled={!!notesDisabled}
-        disabledReason={notesDisabled || undefined}
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="caption" sx={CAPTION_SX}>Document link</Typography>
+        {canAct ? (
+          <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
+            <TextField
+              fullWidth size="small" placeholder="https://..." type="url"
+              value={docDraft} onChange={(e) => setDocDraft(e.target.value)}
+            />
+            <Button
+              variant="outlined" size="small" disabled={submitting || !docDirty}
+              onClick={() => onSaveDocumentUrl(docDraft.trim() || null)}
+            >
+              Save
+            </Button>
+          </Stack>
+        ) : (
+          <Typography variant="body2" sx={{ mt: 0.25 }}>
+            {stageData.documentUrl ? (
+              <Link href={stageData.documentUrl} target="_blank" rel="noopener noreferrer">{stageData.documentUrl}</Link>
+            ) : '—'}
+          </Typography>
+        )}
+      </Box>
+
+      <AttachmentsPanel
+        entityType="change_request_stage" entityId={stageData.id}
+        accept="image/*" label="Screenshots" disabled={!canAct}
       />
+
+      <Box sx={{ mt: 2 }}>
+        <NotesThread
+          entityType="change_request_stage"
+          entityId={stageData.id}
+          title="Notes"
+          emptyLabel="No notes yet."
+          disabled={!!notesDisabled}
+          disabledReason={notesDisabled || undefined}
+          plain
+          editableOwn
+        />
+      </Box>
 
       {canAct && isRequestReady && (
         <Box sx={{ mt: 2 }}>
@@ -351,7 +389,7 @@ export default function ChangeRequestDetailPage() {
 
   return (
     <Box>
-      <BackButton>Back to {data.application?.name || 'application'}</BackButton>
+      <BackButton />
 
       <Paper variant="outlined" sx={{ p: 2, mt: 1, mb: 2 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" useFlexGap rowGap={1}>
@@ -422,6 +460,7 @@ export default function ChangeRequestDetailPage() {
                   submitting={submitting}
                   onStart={() => patchStage(stage, { status: 'in_progress' }, `${STAGE_LABELS[stage]} started`)}
                   onOpenComplete={() => setCompletingStage(stage)}
+                  onSaveDocumentUrl={(documentUrl) => patchStage(stage, { documentUrl }, 'Document link saved')}
                 />
               );
             })}

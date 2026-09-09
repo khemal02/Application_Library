@@ -16,7 +16,6 @@ const ENTITY_ROUTE = {
   application: (id) => `/applications/${id}`,
   idea: (id) => `/ideas/${id}`,
   feature_request: (id) => `/feature-requests/${id}`,
-  suggestion: (id) => `/suggestions/${id}`,
 };
 
 export default function GlobalSearchBox() {
@@ -49,7 +48,6 @@ export default function GlobalSearchBox() {
     ['Applications', results.applications],
     ['Ideas', results.ideas],
     ['Feature Requests', results.featureRequests],
-    ['Suggestions', results.suggestions],
   ].filter(([, items]) => items?.length) : [];
 
   return (
@@ -61,8 +59,8 @@ export default function GlobalSearchBox() {
         >
           <SearchIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
           <InputBase
-            placeholder="Search applications, ideas, suggestions, prompts..."
-            inputProps={{ 'aria-label': 'Search applications, ideas, suggestions, and prompts' }}
+            placeholder="Search applications, ideas, feature requests..."
+            inputProps={{ 'aria-label': 'Search applications, ideas, and feature requests' }}
             fullWidth
             value={query}
             onChange={handleChange}

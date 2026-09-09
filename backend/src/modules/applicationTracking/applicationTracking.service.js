@@ -12,9 +12,9 @@ const notificationsService = require('../notifications/notifications.service');
 // notificationsService/tagsService-shaped dependencies elsewhere in the codebase (see C4/C9).
 const changeRequestsService = require('../changeRequests/changeRequests.service');
 
-const STAGE_ORDER = ['scoping', 'development', 'testing', 'deployment'];
+const STAGE_ORDER = ['development', 'testing', 'deployment'];
 const STAGE_LABELS = {
-  scoping: 'Scoping', development: 'Development', testing: 'Testing', deployment: 'Deployment',
+  development: 'Development', testing: 'Testing', deployment: 'Deployment',
 };
 const STAGE_STATUS_ORDER = ['not_started', 'in_progress', 'complete'];
 const STATUS_LABELS = {
@@ -238,9 +238,9 @@ async function update(id, payload, req) {
  *   2. Stage status is forward-only (400 backwards).
  *   3. in_progress defaults start_date to today if unset; complete defaults end_date. Explicit
  *      always wins.
- *   4. Completing `deployment` registers the Application (Stage 2b) — the only place that ever
- *      happens, in the same transaction as the stage completion (see V14: a stage that completes
- *      but fails to register the Application, or the reverse, must never partially persist).
+ *   4. Completing `deployment` does NOT register the Application by itself — it just notifies the
+ *      owner the track is ready. Registering it is a deliberate, separate owner action; see
+ *      goLive() below.
  *   5. Authorization: the stage's assignee, the track owner, or a super-admin may progress it;
  *      only the owner or a super-admin may set/change assigneeId.
  *   6. Every transition writes status_history and the audit log (audit log: controller).
@@ -308,6 +308,7 @@ async function updateStage(id, stage, payload, req) {
   if (payload.assigneeId !== undefined) updates.assigneeId = payload.assigneeId;
   if (payload.startDate !== undefined) updates.startDate = payload.startDate;
   if (payload.endDate !== undefined) updates.endDate = payload.endDate;
+  if (payload.documentUrl !== undefined) updates.documentUrl = payload.documentUrl;
 
   if (nextStatus === 'in_progress' && !stageRow.startDate && updates.startDate === undefined) {
     updates.startDate = today();
@@ -324,11 +325,6 @@ async function updateStage(id, stage, payload, req) {
     updates.startDate = today();
   }
 
-  // Set only inside the transaction below, on an actual go-live — used after commit to build the
-  // "track goes live" notification (needs the idea's author, not otherwise loaded on `record`).
-  let goLiveApplicationId = null;
-  let ideaSubmittedBy = null;
-
   await sequelize.transaction(async (t) => {
     const fromStageStatus = stageRow.status;
     await stageRow.update(updates, { transaction: t });
@@ -341,47 +337,6 @@ async function updateStage(id, stage, payload, req) {
         changedBy: req.user.id,
         note: null,
       }, { transaction: t });
-    }
-
-    // Rule 4 / Stage 2b — the only place this ever happens. Same transaction as the stage
-    // completion above: a stage that completes but fails to register the Application (or the
-    // reverse) must never partially persist — see V14.
-    if (stage === 'deployment' && updates.status === 'complete') {
-      const idea = await Idea.findByPk(record.ideaId, {
-        attributes: ['id', 'title', 'description', 'departmentId', 'industry', 'functionalArea', 'submittedBy'],
-        transaction: t,
-      });
-
-      const app = await Application.create({
-        // Exactly finalizeIdea's old field list (D1), plus B2's derived release_date. name/
-        // description resolve through the track's own override first, else the idea — same
-        // resolveTrack() rule the read paths already apply.
-        name: record.name || idea.title,
-        description: record.description || idea.description,
-        departmentId: idea.departmentId,
-        industry: idea.industry,
-        functionalArea: idea.functionalArea,
-        ownerId: record.ownerId,
-        // B1: explicit, honest, never the 'development' default — see the discovery report's D13.
-        status: 'deployment',
-        // B2: derived from the stage that just completed (rule 3 already defaulted it to today if
-        // it wasn't set explicitly), not invented. current_version stays NULL — nobody but the
-        // owner can know it; they set it later from the Applications edit form.
-        releaseDate: updates.endDate || stageRow.endDate,
-        // A4: whoever completed Deployment registers it — not the idea's original approver, who
-        // may have moved on, changed roles, or simply not be the one who actually delivered it.
-        createdBy: req.user.id,
-      }, { transaction: t });
-
-      await record.update({ applicationId: app.id, status: 'live', closedAt: today() }, { transaction: t });
-      await idea.update({ applicationId: app.id }, { transaction: t });
-
-      await StatusHistory.create({
-        entityType: 'application_track', entityId: record.id, fromStatus: 'active', toStatus: 'live', changedBy: req.user.id, note: null,
-      }, { transaction: t });
-
-      goLiveApplicationId = app.id;
-      ideaSubmittedBy = idea.submittedBy;
     }
   });
 
@@ -410,21 +365,17 @@ async function updateStage(id, stage, payload, req) {
       });
     }
   }
-  // 2c: "the track goes live" -> the owner and the idea's author, de-duplicated, actor excluded.
-  // Deployment has no next stage, so the "ready for you" block above is naturally a no-op here —
-  // this is the one notification that actually fires when Deployment completes.
-  if (goLiveApplicationId) {
-    const appLink = `/applications/${goLiveApplicationId}`;
-    const liveRecipients = [...new Set([record.ownerId, ideaSubmittedBy].filter(Boolean))]
-      .filter((uid) => uid !== req.user.id);
-    liveRecipients.forEach((uid) => {
-      recipients.push({
-        userId: uid,
-        type: 'application_track_live',
-        title: 'A track is now live',
-        message: `"${name}" is live and now in the catalogue.`,
-        link: appLink,
-      });
+  // Deployment has no next stage, so the "ready for you" block above is naturally a no-op here.
+  // Completing it no longer registers the Application by itself (see goLive() below) — it just
+  // tells the owner the track is ready for them to do that, if they weren't the one who just
+  // completed it themselves.
+  if (stage === 'deployment' && updates.status === 'complete' && record.ownerId && record.ownerId !== req.user.id) {
+    recipients.push({
+      userId: record.ownerId,
+      type: 'application_track_ready_for_go_live',
+      title: 'A track is ready to go live',
+      message: `All stages of "${name}" are complete — move it to the Applications catalogue when you're ready.`,
+      link,
     });
   }
   if (recipients.length > 0) {
@@ -433,6 +384,83 @@ async function updateStage(id, stage, payload, req) {
     } catch (err) {
       logger.error('Failed to create track-stage notifications', {
         applicationTrackId: id, stage, error: { message: err.message, stack: err.stack },
+      });
+    }
+  }
+
+  return getById(id);
+}
+
+/**
+ * PATCH /:id/go-live — the deliberate, owner-only step that used to happen automatically the
+ * instant Deployment was marked complete. Splitting it out means whoever is assigned Deployment
+ * can finish their own work without unilaterally registering the Application on the owner's
+ * behalf — the owner (or a super-admin) reviews it and clicks this separately.
+ * Same transaction-safety reasoning updateStage's old inline version had (a stage completing
+ * without the Application registering, or the reverse, must never partially persist).
+ */
+async function goLive(id, req) {
+  const record = await ApplicationTrack.findByPk(id, { include: stageAndIdeaInclude });
+  if (!record) throw ApiError.notFound('Application track not found');
+  if (!isOwnerOrSuper(record, req)) {
+    throw ApiError.forbidden("Only this track's owner (or a super-admin) may move it to the Applications catalogue.");
+  }
+  if (record.status !== 'active') {
+    throw ApiError.conflict(`Only an active track can go live — this one is ${STATUS_LABELS[record.status]}.`);
+  }
+  const incomplete = STAGE_ORDER.filter((stage) => record.stages.find((s) => s.stage === stage)?.status !== 'complete');
+  if (incomplete.length > 0) {
+    throw ApiError.conflict(`${incomplete.map((s) => STAGE_LABELS[s]).join(', ')} must be complete before this track can go live.`);
+  }
+
+  const idea = await Idea.findByPk(record.ideaId, {
+    attributes: ['id', 'title', 'description', 'departmentId', 'industry', 'functionalArea', 'submittedBy'],
+  });
+  const deploymentStage = record.stages.find((s) => s.stage === 'deployment');
+  let app;
+
+  await sequelize.transaction(async (t) => {
+    app = await Application.create({
+      // Exactly finalizeIdea's old field list (D1), plus B2's derived release_date. name/
+      // description resolve through the track's own override first, else the idea — same
+      // resolveTrack() rule the read paths already apply.
+      name: record.name || idea.title,
+      description: record.description || idea.description,
+      departmentId: idea.departmentId,
+      industry: idea.industry,
+      functionalArea: idea.functionalArea,
+      ownerId: record.ownerId,
+      // B1: explicit, honest, never the 'development' default — see the discovery report's D13.
+      status: 'deployment',
+      // B2: derived from whenever Deployment itself was actually completed, not invented — and
+      // not today(), which would misreport a track that sat waiting on the owner for a while.
+      releaseDate: deploymentStage.endDate,
+      // Whoever clicks this registers it — the owner (or a super-admin) making the call, not
+      // whoever happened to complete Deployment.
+      createdBy: req.user.id,
+    }, { transaction: t });
+
+    await record.update({ applicationId: app.id, status: 'live', closedAt: today() }, { transaction: t });
+    await idea.update({ applicationId: app.id }, { transaction: t });
+
+    await StatusHistory.create({
+      entityType: 'application_track', entityId: record.id, fromStatus: 'active', toStatus: 'live', changedBy: req.user.id, note: null,
+    }, { transaction: t });
+  });
+
+  const name = record.name || idea.title;
+  const appLink = `/applications/${app.id}`;
+  const recipients = [...new Set([record.ownerId, idea.submittedBy].filter(Boolean))]
+    .filter((uid) => uid !== req.user.id)
+    .map((userId) => ({
+      userId, type: 'application_track_live', title: 'A track is now live', message: `"${name}" is live and now in the catalogue.`, link: appLink,
+    }));
+  if (recipients.length > 0) {
+    try {
+      await notificationsService.createMany(recipients);
+    } catch (err) {
+      logger.error('Failed to create track-live notifications', {
+        applicationTrackId: id, error: { message: err.message, stack: err.stack },
       });
     }
   }
@@ -616,6 +644,7 @@ module.exports = {
   getById,
   update,
   updateStage,
+  goLive,
   assignStages,
   hold,
   resume,

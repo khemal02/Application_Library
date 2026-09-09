@@ -4,16 +4,11 @@ import Paper from '@mui/material/Paper';
 import Grid from '@mui/material/Grid';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import Chip from '@mui/material/Chip';
 import Link from '@mui/material/Link';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import dayjs from 'dayjs';
 import humanize from '../../utils/humanize';
-
-const STATUS_FLOW = ['development', 'testing', 'deployment'];
-// Same semantics as StatusBadge's COLOR_MAP for these three values — kept local since only the
-// active stage needs a resolved theme color here, everything before/after it just reads as muted.
-const STAGE_COLOR = { development: 'default', testing: 'info', deployment: 'success' };
+import { applicationStatusLabel } from '../../constants/options';
+import StatusBadge from '../../components/common/StatusBadge';
 
 function InfoField({ label, value, fullWidth }) {
   return (
@@ -53,20 +48,10 @@ export default function ProjectInfoBox({ application }) {
         <Typography variant="h6" fontWeight={700} color="text.primary">
           {application.name}
         </Typography>
-        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-          {STATUS_FLOW.map((stage, i) => (
-            <Stack key={stage} direction="row" spacing={1} alignItems="center">
-              <Chip
-                size="small"
-                label={humanize(stage)}
-                color={stage === application.status ? STAGE_COLOR[stage] : 'default'}
-                variant={stage === application.status ? 'filled' : 'outlined'}
-                sx={stage === application.status ? { fontWeight: 700 } : undefined}
-              />
-              {i < STATUS_FLOW.length - 1 && <ArrowForwardIcon fontSize="small" color="disabled" />}
-            </Stack>
-          ))}
-        </Stack>
+        {/* Just the current status, not the whole Development -> Testing -> Live journey — by the
+            time an app is registered here (almost always via Application Tracking's go-live step),
+            it's already live; showing the full stepper implied it was still mid-rollout. */}
+        <StatusBadge value={application.status} label={applicationStatusLabel(application.status)} />
       </Stack>
 
       {application.description && (

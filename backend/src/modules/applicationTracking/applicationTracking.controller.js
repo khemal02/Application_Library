@@ -35,6 +35,14 @@ module.exports = {
     return ApiResponse.success(res, record, 'Stage updated');
   }),
 
+  goLive: asyncHandler(async (req, res) => {
+    const record = await service.goLive(req.params.id, req);
+    await logAction({
+      req, action: 'update', entityType: 'application_track', entityId: req.params.id, newValue: { status: 'live', applicationId: record.application?.id },
+    });
+    return ApiResponse.success(res, record, 'Application registered — this track is now live');
+  }),
+
   assignStages: asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { record, changes } = await service.assignStages(id, req.body, req);

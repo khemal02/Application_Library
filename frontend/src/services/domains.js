@@ -46,14 +46,6 @@ export const featureRequestsApi = {
   addParticipants: (id, payload) => api.post(`/feature-requests/${id}/panel`, payload).then((r) => r.data),
   removeParticipant: (id, userId) => api.delete(`/feature-requests/${id}/panel/${userId}`).then((r) => r.data),
 };
-export const suggestionsApi = {
-  ...createResourceApi('/suggestions'),
-  transition: (id, payload) => api.patch(`/suggestions/${id}/status`, payload).then((r) => r.data),
-  statusHistory: (id) => api.get(`/suggestions/${id}/status-history`).then((r) => r.data),
-  eligibleReviewers: (id) => api.get(`/suggestions/${id}/eligible-reviewers`).then((r) => r.data),
-  submitReview: (id, payload) => api.post(`/suggestions/${id}/reviews`, payload).then((r) => r.data),
-  submitDecision: (id, payload) => api.post(`/suggestions/${id}/decision`, payload).then((r) => r.data),
-};
 
 // Not built on createNestedResourceApi — issues has no generic PUT/DELETE surface (see
 // backend/src/modules/issues/issues.routes.js), just report + named triage/assign/resolve/
@@ -92,6 +84,7 @@ export const applicationTrackingApi = {
   getById: (id) => api.get(`/application-tracking/${id}`).then((r) => r.data),
   update: (id, payload) => api.patch(`/application-tracking/${id}`, payload).then((r) => r.data),
   updateStage: (id, stage, payload) => api.patch(`/application-tracking/${id}/stages/${stage}`, payload).then((r) => r.data),
+  goLive: (id) => api.patch(`/application-tracking/${id}/go-live`).then((r) => r.data),
   assignStages: (id, payload) => api.post(`/application-tracking/${id}/stages/assign`, payload).then((r) => r.data),
   assigneeCandidates: (id) => api.get(`/application-tracking/${id}/assignee-candidates`).then((r) => r.data),
   hold: (id, payload) => api.patch(`/application-tracking/${id}/hold`, payload).then((r) => r.data),
@@ -113,6 +106,7 @@ export const auditLogsApi = createResourceApi('/audit-logs');
 export const commentsApi = {
   list: (entityType, entityId) => api.get('/comments', { params: { entityType, entityId } }).then((r) => r.data),
   create: (payload) => api.post('/comments', payload).then((r) => r.data),
+  update: (id, payload) => api.patch(`/comments/${id}`, payload).then((r) => r.data),
   remove: (id) => api.delete(`/comments/${id}`).then((r) => r.data),
 };
 

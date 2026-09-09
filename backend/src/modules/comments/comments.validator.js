@@ -15,4 +15,11 @@ const listQuery = Joi.object({
   entityId: Joi.string().uuid().required(),
 }).unknown(true);
 
-module.exports = { create, listQuery };
+// PATCH /comments/:id — body text only; entityType/entityId/parentCommentId aren't reparentable.
+const update = Joi.object({
+  body: Joi.string().allow('').required(),
+});
+
+module.exports = {
+  create, listQuery, update,
+};

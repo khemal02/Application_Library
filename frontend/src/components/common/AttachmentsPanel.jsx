@@ -22,7 +22,9 @@ function formatSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function AttachmentsPanel({ entityType, entityId }) {
+export default function AttachmentsPanel({
+  entityType, entityId, accept, label = 'Attachments', disabled = false,
+}) {
   const [attachments, setAttachments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -72,16 +74,18 @@ export default function AttachmentsPanel({ entityType, entityId }) {
   return (
     <Box>
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-        <Typography variant="subtitle1" fontWeight={700}>Attachments ({attachments.length})</Typography>
-        <Button
-          size="small"
-          startIcon={uploading ? <CircularProgress size={14} /> : <UploadIcon />}
-          disabled={uploading}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          {uploading ? 'Uploading...' : 'Upload'}
-        </Button>
-        <input ref={fileInputRef} type="file" hidden onChange={handleUpload} aria-label="Upload attachment" />
+        <Typography variant="subtitle1" fontWeight={700}>{label} ({attachments.length})</Typography>
+        {!disabled && (
+          <Button
+            size="small"
+            startIcon={uploading ? <CircularProgress size={14} /> : <UploadIcon />}
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {uploading ? 'Uploading...' : 'Upload'}
+          </Button>
+        )}
+        <input ref={fileInputRef} type="file" accept={accept} hidden onChange={handleUpload} aria-label={`Upload ${label.toLowerCase()}`} />
       </Stack>
       {error && <Alert severity="error" sx={{ mb: 1 }} onClose={() => setError(null)}>{error}</Alert>}
       {loading ? (
@@ -91,7 +95,7 @@ export default function AttachmentsPanel({ entityType, entityId }) {
           {attachments.map((a) => (
             <ListItem
               key={a.id}
-              secondaryAction={(
+              secondaryAction={!disabled && (
                 <IconButton size="small" aria-label={`Delete ${a.fileName}`} onClick={() => handleDelete(a.id)}>
                   <DeleteOutlineIcon fontSize="small" />
                 </IconButton>
@@ -106,7 +110,7 @@ export default function AttachmentsPanel({ entityType, entityId }) {
               <ListItemText primary={a.fileName} secondary={formatSize(a.fileSize)} />
             </ListItem>
           ))}
-          {attachments.length === 0 && <Typography variant="body2" color="text.secondary">No attachments yet</Typography>}
+          {attachments.length === 0 && <Typography variant="body2" color="text.secondary">None yet</Typography>}
         </List>
       )}
     </Box>

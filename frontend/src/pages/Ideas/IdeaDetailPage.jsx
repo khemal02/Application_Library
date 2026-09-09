@@ -8,6 +8,10 @@ import Stack from '@mui/material/Stack';
 import Chip from '@mui/material/Chip';
 import TextField from '@mui/material/TextField';
 import IconButton from '@mui/material/IconButton';
+import Accordion from '@mui/material/Accordion';
+import AccordionSummary from '@mui/material/AccordionSummary';
+import AccordionDetails from '@mui/material/AccordionDetails';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
@@ -210,10 +214,8 @@ export default function IdeaDetailPage() {
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
-        <Stack direction="row" alignItems="center" spacing={1}>
-          <BackButton />
-        </Stack>
+      <Stack direction="row" alignItems="center" spacing={1}>
+        <BackButton />
         <Typography variant="body2" color="text.secondary">
           Submitted by, <Typography component="span" variant="body2" fontWeight={700} color="text.primary">{idea.submitter?.name || '—'}</Typography>
         </Typography>
@@ -250,109 +252,121 @@ export default function IdeaDetailPage() {
             full width on mobile via xs={12}. */}
         <Grid item xs={12} sx={{ flexBasis: { md: '60%' }, maxWidth: { md: '60%' } }}>
           {(idea.description || canEditIdeaFields) && (
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>Problem Statement</Typography>
-              {editingDescription ? (
-                <Box>
-                  <TextField
-                    fullWidth multiline minRows={3} autoFocus
-                    value={descDraft} onChange={(e) => setDescDraft(e.target.value)}
-                    sx={{ '& .MuiInputBase-input': { textAlign: 'justify' } }}
-                  />
-                  <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                    <IconButton size="small" color="primary" aria-label="Save problem statement" disabled={savingDesc} onClick={saveDescription}>
-                      <CheckIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton size="small" aria-label="Cancel editing problem statement" disabled={savingDesc} onClick={() => setEditingDescription(false)}>
-                      <CloseIcon fontSize="small" />
-                    </IconButton>
+            <Accordion disableGutters variant="outlined" sx={{ mb: 1.5, '&:before': { display: 'none' } }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="subtitle2" fontWeight={700}>Problem Statement</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                {editingDescription ? (
+                  <Box>
+                    <TextField
+                      fullWidth multiline minRows={3} autoFocus
+                      value={descDraft} onChange={(e) => setDescDraft(e.target.value)}
+                      sx={{ '& .MuiInputBase-input': { textAlign: 'justify' } }}
+                    />
+                    <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                      <IconButton size="small" color="primary" aria-label="Save problem statement" disabled={savingDesc} onClick={saveDescription}>
+                        <CheckIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton size="small" aria-label="Cancel editing problem statement" disabled={savingDesc} onClick={() => setEditingDescription(false)}>
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </Stack>
+                  </Box>
+                ) : (
+                  <Stack direction="row" spacing={1} alignItems="flex-start">
+                    <Typography variant="body1" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', textAlign: 'justify', flexGrow: 1 }}>
+                      {idea.description || '—'}
+                    </Typography>
+                    {canEditIdeaFields && (
+                      <IconButton size="small" aria-label="Edit problem statement" onClick={startEditDescription}>
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    )}
                   </Stack>
-                </Box>
-              ) : (
-                <Stack direction="row" spacing={1} alignItems="flex-start">
-                  <Typography variant="body1" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', textAlign: 'justify', flexGrow: 1 }}>
-                    {idea.description || '—'}
-                  </Typography>
-                  {canEditIdeaFields && (
-                    <IconButton size="small" aria-label="Edit problem statement" onClick={startEditDescription}>
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                  )}
-                </Stack>
-              )}
-            </Box>
+                )}
+              </AccordionDetails>
+            </Accordion>
           )}
 
           {(idea.proposedSolution || canEditIdeaFields) && (
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>Solution</Typography>
-              {editingSolution ? (
-                <Box>
-                  <TextField
-                    fullWidth multiline minRows={3} autoFocus
-                    value={solutionDraft} onChange={(e) => setSolutionDraft(e.target.value)}
-                    sx={{ '& .MuiInputBase-input': { textAlign: 'justify' } }}
-                  />
-                  <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                    <IconButton size="small" color="primary" aria-label="Save solution" disabled={savingSolution} onClick={saveSolution}>
-                      <CheckIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton size="small" aria-label="Cancel editing solution" disabled={savingSolution} onClick={() => setEditingSolution(false)}>
-                      <CloseIcon fontSize="small" />
-                    </IconButton>
+            <Accordion disableGutters variant="outlined" sx={{ mb: 1.5, '&:before': { display: 'none' } }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="subtitle2" fontWeight={700}>Solution</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                {editingSolution ? (
+                  <Box>
+                    <TextField
+                      fullWidth multiline minRows={3} autoFocus
+                      value={solutionDraft} onChange={(e) => setSolutionDraft(e.target.value)}
+                      sx={{ '& .MuiInputBase-input': { textAlign: 'justify' } }}
+                    />
+                    <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                      <IconButton size="small" color="primary" aria-label="Save solution" disabled={savingSolution} onClick={saveSolution}>
+                        <CheckIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton size="small" aria-label="Cancel editing solution" disabled={savingSolution} onClick={() => setEditingSolution(false)}>
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </Stack>
+                  </Box>
+                ) : (
+                  <Stack direction="row" spacing={1} alignItems="flex-start">
+                    <Typography variant="body1" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', textAlign: 'justify', flexGrow: 1 }}>
+                      {idea.proposedSolution || '—'}
+                    </Typography>
+                    {canEditIdeaFields && (
+                      <IconButton size="small" aria-label="Edit solution" onClick={startEditSolution}>
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    )}
                   </Stack>
-                </Box>
-              ) : (
-                <Stack direction="row" spacing={1} alignItems="flex-start">
-                  <Typography variant="body1" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', textAlign: 'justify', flexGrow: 1 }}>
-                    {idea.proposedSolution || '—'}
-                  </Typography>
-                  {canEditIdeaFields && (
-                    <IconButton size="small" aria-label="Edit solution" onClick={startEditSolution}>
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                  )}
-                </Stack>
-              )}
-            </Box>
+                )}
+              </AccordionDetails>
+            </Accordion>
           )}
 
           {(idea.technologiesAndEfficiency || canEditIdeaFields) && (
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>Technologies and Efficiency</Typography>
-              {editingTech ? (
-                <Box>
-                  <TextField
-                    fullWidth multiline minRows={3} autoFocus
-                    value={techDraft} onChange={(e) => setTechDraft(e.target.value)}
-                    sx={{ '& .MuiInputBase-input': { textAlign: 'justify' } }}
-                  />
-                  <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                    <IconButton size="small" color="primary" aria-label="Save Technologies and Efficiency" disabled={savingTech} onClick={saveTech}>
-                      <CheckIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton size="small" aria-label="Cancel editing Technologies and Efficiency" disabled={savingTech} onClick={() => setEditingTech(false)}>
-                      <CloseIcon fontSize="small" />
-                    </IconButton>
+            <Accordion disableGutters variant="outlined" sx={{ mb: 1.5, '&:before': { display: 'none' } }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="subtitle2" fontWeight={700}>Technologies and Efficiency</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                {editingTech ? (
+                  <Box>
+                    <TextField
+                      fullWidth multiline minRows={3} autoFocus
+                      value={techDraft} onChange={(e) => setTechDraft(e.target.value)}
+                      sx={{ '& .MuiInputBase-input': { textAlign: 'justify' } }}
+                    />
+                    <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                      <IconButton size="small" color="primary" aria-label="Save Technologies and Efficiency" disabled={savingTech} onClick={saveTech}>
+                        <CheckIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton size="small" aria-label="Cancel editing Technologies and Efficiency" disabled={savingTech} onClick={() => setEditingTech(false)}>
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </Stack>
+                  </Box>
+                ) : (
+                  <Stack direction="row" spacing={1} alignItems="flex-start">
+                    <Typography variant="body1" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', textAlign: 'justify', flexGrow: 1 }}>
+                      {idea.technologiesAndEfficiency || '—'}
+                    </Typography>
+                    {canEditIdeaFields && (
+                      <IconButton size="small" aria-label="Edit Technologies and Efficiency" onClick={startEditTech}>
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    )}
                   </Stack>
-                </Box>
-              ) : (
-                <Stack direction="row" spacing={1} alignItems="flex-start">
-                  <Typography variant="body1" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', textAlign: 'justify', flexGrow: 1 }}>
-                    {idea.technologiesAndEfficiency || '—'}
-                  </Typography>
-                  {canEditIdeaFields && (
-                    <IconButton size="small" aria-label="Edit Technologies and Efficiency" onClick={startEditTech}>
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                  )}
-                </Stack>
-              )}
-            </Box>
+                )}
+              </AccordionDetails>
+            </Accordion>
           )}
         </Grid>
 
-        <Grid item xs={12} sx={{ flexBasis: { md: '40%' }, maxWidth: { md: '40%' } }}>
+        <Grid item xs={12} sx={{ flexBasis: { md: '40%' }, maxWidth: { md: '40%' }, mt: { md: -12 } }}>
           <IdeaPanelCard
             idea={idea} panel={idea.panel}
             voteDecision={voteDecision} onVoteDecisionChange={setVoteDecision}
@@ -367,6 +381,7 @@ export default function IdeaDetailPage() {
               entityType="idea" entityId={id} title="Discussion" maxLength={0} newestFirst composerAtTop allowAttachments
               showRoleBadges collapsibleComposer attachmentViewer sortToggle
               submitterId={idea.submittedBy} reviewChain={panelReviewChain}
+              maxListHeight={260}
               disabled={isDecided} disabledAt={decidedAt}
               disabledReason="This idea has been decided — the discussion thread is now read-only."
             />

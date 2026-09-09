@@ -4,12 +4,12 @@ import Typography from '@mui/material/Typography';
 import { useAppSelector } from '../../app/hooks';
 
 const LABELS = {
-  applications: 'Applications', ideas: 'Ideas', suggestions: 'Suggestions',
+  applications: 'Applications', ideas: 'Ideas',
   'feature-requests': 'Modify Current Application',
   admin: 'Administration', users: 'Users', roles: 'Roles & Permissions',
   departments: 'Departments', 'audit-logs': 'Audit Logs', profile: 'Profile',
   new: 'New', settings: 'Settings', stages: 'Stages', 'change-requests': 'Change Requests',
-  'my-stages': 'My Stages', 'application-tracking': 'Application Tracking',
+  'my-stages': 'My Stages', 'application-tracking': 'Idea Prioritization',
 };
 
 export default function Breadcrumb() {

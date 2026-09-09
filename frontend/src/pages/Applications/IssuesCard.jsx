@@ -39,17 +39,17 @@ dayjs.extend(relativeTime);
 
 const MAX_VISIBLE = 5;
 const OPEN_STATUSES = ['needs_triage', 'acknowledged', 'being_fixed'];
-const RESOLVED_TAB_STATUSES = ['resolved', 'duplicate', 'not_an_issue'];
+// Known-limitation closures fold into the Resolved tab — there's no separate "Known limitations"
+// tab anymore, but an issue can still be closed that way via the triage action below.
+const RESOLVED_TAB_STATUSES = ['resolved', 'known_limitation', 'duplicate', 'not_an_issue'];
 const CLOSED_STATUSES = ['resolved', 'known_limitation', 'duplicate', 'not_an_issue'];
 const TABS = [
   { key: 'open', label: 'Open' },
-  { key: 'known_limitation', label: 'Known limitations' },
   { key: 'resolved', label: 'Resolved' },
 ];
 const EMPTY_META = {
   open: { title: 'No open issues', body: 'Anyone can report one with the button above.' },
-  known_limitation: { title: 'No known limitations', body: 'Issues closed as a known limitation will appear here.' },
-  resolved: { title: 'Nothing resolved yet', body: 'Resolved, duplicate, and not-an-issue reports will appear here.' },
+  resolved: { title: 'Nothing resolved yet', body: 'Resolved, known-limitation, duplicate, and not-an-issue reports will appear here.' },
 };
 
 // Severity is scanned by, so it's outlined and never competes with the filled status chip — see
@@ -616,9 +616,8 @@ export default function IssuesCard({ applicationId, applicationOwnerId }) {
   };
 
   const openRows = rows.filter((r) => OPEN_STATUSES.includes(r.status));
-  const knownLimitationRows = rows.filter((r) => r.status === 'known_limitation');
   const resolvedRows = rows.filter((r) => RESOLVED_TAB_STATUSES.includes(r.status));
-  const rowsByTab = { open: openRows, known_limitation: knownLimitationRows, resolved: resolvedRows };
+  const rowsByTab = { open: openRows, resolved: resolvedRows };
   const activeRows = rowsByTab[tab] || [];
   const visible = showAll ? activeRows : activeRows.slice(0, MAX_VISIBLE);
 

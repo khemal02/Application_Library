@@ -7,8 +7,8 @@ const {
 // builds by hand (e.g. `/ideas/${id}`), not a foreign key, so matching on it is inherently
 // fragile string matching rather than a real relationship. This map only covers the entityTypes
 // that actually have their own detail-page URL; `_note`-style secondary comment channels
-// (idea_note, suggestion_note) have no independent link of their own — any notification a comment
-// on one of those generates is already linked to the core entity's page and gets caught there.
+// (idea_note) have no independent link of their own — any notification a comment on one of those
+// generates is already linked to the core entity's page and gets caught there.
 //
 // Each entry builds the `LIKE` pattern for that entityType's link shape. Most entities' id sits
 // right after a fixed prefix (`/ideas/{id}`), but a change request's link is nested under its
@@ -19,7 +19,6 @@ const {
 const NOTIFICATION_LINK_PATTERN = {
   idea: (id) => `/ideas/${id}%`,
   feature_request: (id) => `/feature-requests/${id}%`,
-  suggestion: (id) => `/suggestions/${id}%`,
   application: (id) => `/applications/${id}%`,
   change_request: (id) => `%/change-requests/${id}%`,
   // An issue has no detail route of its own — its link is a deep link back into the Application

@@ -14,8 +14,6 @@ import IdeasListPage from '../pages/Ideas/IdeasListPage';
 import IdeaDetailPage from '../pages/Ideas/IdeaDetailPage';
 import FeatureRequestsListPage from '../pages/Ideas/FeatureRequestsListPage';
 import FeatureRequestDetailPage from '../pages/Ideas/FeatureRequestDetailPage';
-import SuggestionsListPage from '../pages/Suggestions/SuggestionsListPage';
-import SuggestionDetailPage from '../pages/Suggestions/SuggestionDetailPage';
 import UsersPage from '../pages/Admin/UsersPage';
 import RolesPage from '../pages/Admin/RolesPage';
 import DepartmentsPage from '../pages/Admin/DepartmentsPage';
@@ -54,9 +52,6 @@ export default function AppRoutes() {
 
       <Route path="/application-tracking" element={<Protected resource="application_tracks" action="read"><ApplicationTrackingListPage /></Protected>} />
       <Route path="/application-tracking/:id" element={<Protected resource="application_tracks" action="read"><ApplicationTrackingDetailPage /></Protected>} />
-
-      <Route path="/suggestions" element={<Protected><SuggestionsListPage /></Protected>} />
-      <Route path="/suggestions/:id" element={<Protected><SuggestionDetailPage /></Protected>} />
 
       <Route path="/admin/users" element={<Protected resource="users" action="read"><UsersPage /></Protected>} />
       <Route path="/admin/roles" element={<Protected resource="users" action="read"><RolesPage /></Protected>} />

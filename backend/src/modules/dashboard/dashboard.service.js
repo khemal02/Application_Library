@@ -1,6 +1,6 @@
 const { Op } = require('sequelize');
 const {
-  Application, Idea, FeatureRequest, ApplicationSuggestion, AuditLog, User,
+  Application, Idea, FeatureRequest, AuditLog, User,
 } = require('../../models');
 const ideasService = require('../ideas/ideas.service');
 const featureRequestsService = require('../featureRequests/featureRequests.service');
@@ -11,7 +11,6 @@ async function getSummary(userId) {
     totalApplications, inProgressApplications, completedApplications,
     pendingIdeas, approvedIdeas,
     pendingFeatureRequests, approvedFeatureRequests,
-    openSuggestions, technicalReviewSuggestions,
     recentApplications, recentActivity,
     myIdeaCounts, myFeatureRequestCounts, myStageCounts,
   ] = await Promise.all([
@@ -25,8 +24,6 @@ async function getSummary(userId) {
     Idea.count({ where: { status: 'approved' } }),
     FeatureRequest.count({ where: { status: 'under_review' } }),
     FeatureRequest.count({ where: { status: 'approved' } }),
-    ApplicationSuggestion.count({ where: { status: { [Op.notIn]: ['closed', 'implemented'] } } }),
-    ApplicationSuggestion.count({ where: { status: 'technical_review' } }),
     Application.findAll({ order: [['updatedAt', 'DESC']], limit: 5 }),
     AuditLog.findAll({
       order: [['createdAt', 'DESC']], limit: 10,
@@ -48,15 +45,10 @@ async function getSummary(userId) {
       totalApplications,
       applicationsInProgress: inProgressApplications,
       completedApplications,
-      // The old idea-review sub-status this also summed ('discussion'/'review') is retired — the
-      // review chain (Team Lead/Manager/Reviewer-3) all runs while an idea stays 'under_review',
-      // so there's no separate "in review" idea count distinct from pendingIdeas anymore.
-      pendingReviews: technicalReviewSuggestions,
       pendingIdeas,
       approvedIdeas,
       pendingFeatureRequests,
       approvedFeatureRequests,
-      openImprovements: openSuggestions,
       // Kept separate per module (not summed) — the Dashboard links each to its own list
       // (Ideas vs Feature Requests), not a combined view, so the count shown on each tile must
       // match exactly what that tile's own click-through will show.

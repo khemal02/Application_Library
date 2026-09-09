@@ -6,7 +6,7 @@ const Joi = require('joi');
 const listQuery = Joi.object({
   status: Joi.string().valid('active', 'on_hold', 'live', 'cancelled'),
   priority: Joi.string().valid('critical', 'high', 'medium', 'low'),
-  stage: Joi.string().valid('scoping', 'development', 'testing', 'deployment'),
+  stage: Joi.string().valid('development', 'testing', 'deployment'),
   assigneeId: Joi.string().uuid(),
   page: Joi.number().integer().min(1),
   limit: Joi.number().integer().min(1).max(100),
@@ -33,7 +33,7 @@ const update = Joi.object({
 
 const stageParams = Joi.object({
   id: Joi.string().uuid().required(),
-  stage: Joi.string().valid('scoping', 'development', 'testing', 'deployment').required(),
+  stage: Joi.string().valid('development', 'testing', 'deployment').required(),
 });
 
 const stageBody = Joi.object({
@@ -41,12 +41,12 @@ const stageBody = Joi.object({
   assigneeId: Joi.string().uuid().allow(null),
   startDate: Joi.date().iso().allow(null),
   endDate: Joi.date().iso().allow(null),
+  documentUrl: Joi.string().uri().max(500).allow(null),
 });
 
 // POST /:id/stages/assign — mirrors changeRequests.validator.js#bulkAssignBody exactly (same
-// "each key optional independently, .allow(null) clears" shape), four stages instead of three.
+// "each key optional independently, .allow(null) clears" shape).
 const assignBody = Joi.object({
-  scoping: Joi.string().uuid().allow(null),
   development: Joi.string().uuid().allow(null),
   testing: Joi.string().uuid().allow(null),
   deployment: Joi.string().uuid().allow(null),

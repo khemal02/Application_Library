@@ -1,23 +1,19 @@
 import { useNavigate } from 'react-router-dom';
-import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
 import { alpha } from '@mui/material/styles';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 
 // Browser-history back (same as the browser's own back button), not a hardcoded "go to module
-// root" — returns to whichever list/filter/page the user actually came from. Styled as a Button
-// rather than a bare IconButton to match the rest of the app's labeled affordances (Edit, Submit
-// Idea, ...) instead of an unlabeled floating icon.
-export default function BackButton({ children = 'Back' }) {
+// root" — returns to whichever list/filter/page the user actually came from. Icon-only, no label.
+export default function BackButton() {
   const navigate = useNavigate();
   return (
-    <Button
+    <IconButton
       size="small"
       onClick={() => navigate(-1)}
-      startIcon={<ArrowBackRoundedIcon fontSize="small" />}
+      aria-label="Back"
       sx={{
         mb: 0.25,
-        px: 1.25,
-        py: 0.25,
         color: 'text.secondary',
         '&:hover': {
           color: 'primary.main',
@@ -25,7 +21,7 @@ export default function BackButton({ children = 'Back' }) {
         },
       }}
     >
-      {children}
-    </Button>
+      <ArrowBackRoundedIcon fontSize="small" />
+    </IconButton>
   );
 }
