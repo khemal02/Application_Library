@@ -22,12 +22,18 @@ export default function ApplicationsListPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [departments, setDepartments] = useState([]);
   const { showSuccess } = useToast();
-  // A Dashboard stat tile (e.g. "Applications In Progress") links here with ?status=... —
-  // read once at mount, same convention every list page linked from a dashboard tile follows.
+  // A Dashboard stat tile (e.g. "Applications In Progress", "My Applications") links here with
+  // ?status=... / ?ownerId=... — read once at mount, same convention every list page linked from
+  // a dashboard tile follows.
   const [searchParams] = useSearchParams();
   const initialStatus = searchParams.get('status');
+  const initialOwnerId = searchParams.get('ownerId');
+  const initialFilters = {
+    ...(initialStatus ? { status: initialStatus } : {}),
+    ...(initialOwnerId ? { ownerId: initialOwnerId } : {}),
+  };
   const list = useServerList(applicationsApi.list, {
-    initialFilters: initialStatus ? { status: initialStatus } : undefined,
+    initialFilters: Object.keys(initialFilters).length > 0 ? initialFilters : undefined,
   });
 
   useEffect(() => {

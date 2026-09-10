@@ -17,7 +17,7 @@ import useToast from '../../hooks/useToast';
 const RESOURCES = [
   'applications', 'tech_stack', 'features', 'ai_prompts', 'architecture_docs', 'api_docs', 'db_docs',
   'releases', 'bugs', 'roadmap', 'timeline', 'ideas', 'feature_requests', 'comments', 'votes', 'attachments',
-  'users', 'roles', 'departments', 'dashboard', 'search', 'notifications', 'audit_logs', '*',
+  'users', 'roles', 'departments', 'dashboard', 'search', 'notifications', '*',
 ];
 const ACTIONS = ['create', 'read', 'update', 'delete', 'review', 'assign', 'manage'];
 

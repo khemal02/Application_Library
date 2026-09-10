@@ -129,7 +129,7 @@ export default function LoginPage() {
 
         <Stack direction="row" spacing={1} alignItems="center" sx={{ position: 'relative', color: 'rgba(255,255,255,0.55)' }}>
           <VerifiedUserOutlinedIcon fontSize="small" />
-          <Typography variant="caption">Role-based access · Full audit trail · Enterprise-grade security</Typography>
+          <Typography variant="caption">Role-based access · Enterprise-grade security</Typography>
         </Stack>
       </Box>
 

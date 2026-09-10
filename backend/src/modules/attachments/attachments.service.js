@@ -18,6 +18,20 @@ const MAX_IMAGE_DIMENSION = 1920;
 const IDEA_ENTITY_TYPES = ['idea', 'idea_note'];
 const FEATURE_REQUEST_ENTITY_TYPES = ['feature_request'];
 
+// A stage's "document link" is narrower than the generic upload.middleware.js allow-list (which
+// stays broad for every other attachment context — comments, notes, etc.) — only Word docs, PDFs,
+// and JPEGs, per an explicit product decision. Checked here, not in the shared multer middleware,
+// so this restriction applies only to this one entityType and nothing else on the platform gets
+// narrowed by accident.
+const ENTITY_TYPE_MIME_ALLOWLIST = {
+  application_track_stage: new Set([
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'image/jpeg',
+  ]),
+};
+
 // GIF is intentionally excluded — sharp would flatten an animated GIF to its first frame.
 const IMAGE_COMPRESSION = {
   'image/png': { format: 'png', options: { compressionLevel: 9, palette: true } },
@@ -54,6 +68,15 @@ async function listForEntity(entityType, entityId) {
 }
 
 async function upload({ file, entityType, entityId, uploadedBy }) {
+  const allowlist = ENTITY_TYPE_MIME_ALLOWLIST[entityType];
+  if (allowlist && !allowlist.has(file.mimetype)) {
+    // Multer already wrote the upload to the OS temp dir before this ever runs — since this
+    // rejection is a common, expected user mistake (unlike the rare-error paths elsewhere in this
+    // function that don't bother), it's worth actually cleaning that up rather than leaving it to
+    // accumulate.
+    fs.unlink(file.path, () => {});
+    throw ApiError.badRequest('Only Word documents (.doc, .docx), PDFs, and JPEG images are allowed here.');
+  }
   await compressImageIfApplicable(file);
   const driver = getStorageDriver();
   const { filePath, publicUrl } = await driver.save(file, entityType);

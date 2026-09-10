@@ -9,7 +9,6 @@ router.use('/users', require('../modules/users/users.routes'));
 router.use('/roles', require('../modules/roles/roles.routes'));
 router.use('/departments', require('../modules/departments/departments.routes'));
 router.use('/notifications', require('../modules/notifications/notifications.routes'));
-router.use('/audit-logs', require('../modules/auditLogs/auditLogs.routes'));
 router.use('/dashboard', require('../modules/dashboard/dashboard.routes'));
 router.use('/search', require('../modules/search/search.routes'));
 router.use('/comments', require('../modules/comments/comments.routes'));

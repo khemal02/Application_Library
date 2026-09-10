@@ -17,7 +17,6 @@ export const profileApi = {
   getSessions: () => api.get('/profile/sessions').then((r) => r.data),
   revokeSession: (id) => api.delete(`/profile/sessions/${id}`).then((r) => r.data),
   revokeOtherSessions: () => api.delete('/profile/sessions').then((r) => r.data),
-  getActivity: (params) => api.get('/profile/activity', { params }).then((r) => r.data),
 };
 
 export const applicationsApi = {
@@ -102,7 +101,6 @@ export const rolesApi = {
   setPermissions: (id, permissions) => api.put(`/roles/${id}/permissions`, { permissions }).then((r) => r.data),
 };
 export const departmentsApi = createResourceApi('/departments');
-export const auditLogsApi = createResourceApi('/audit-logs');
 
 export const commentsApi = {
   list: (entityType, entityId) => api.get('/comments', { params: { entityType, entityId } }).then((r) => r.data),

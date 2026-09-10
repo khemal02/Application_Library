@@ -17,7 +17,6 @@ import FeatureRequestDetailPage from '../pages/Ideas/FeatureRequestDetailPage';
 import UsersPage from '../pages/Admin/UsersPage';
 import RolesPage from '../pages/Admin/RolesPage';
 import DepartmentsPage from '../pages/Admin/DepartmentsPage';
-import AuditLogsPage from '../pages/Admin/AuditLogsPage';
 import ProfilePage from '../pages/Profile/ProfilePage';
 import NotFoundPage from '../pages/NotFoundPage';
 
@@ -56,7 +55,6 @@ export default function AppRoutes() {
       <Route path="/admin/users" element={<Protected resource="users" action="read"><UsersPage /></Protected>} />
       <Route path="/admin/roles" element={<Protected resource="users" action="read"><RolesPage /></Protected>} />
       <Route path="/admin/departments" element={<Protected resource="users" action="read"><DepartmentsPage /></Protected>} />
-      <Route path="/admin/audit-logs" element={<Protected resource="audit_logs" action="read"><AuditLogsPage /></Protected>} />
 
       <Route path="/profile" element={<Protected><ProfilePage /></Protected>} />
 

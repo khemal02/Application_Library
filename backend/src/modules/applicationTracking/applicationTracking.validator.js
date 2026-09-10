@@ -44,7 +44,11 @@ const stageBody = Joi.object({
   assigneeId: Joi.string().uuid().allow(null),
   startDate: Joi.date().iso().allow(null),
   endDate: Joi.date().iso().allow(null),
-  documentUrl: Joi.string().uri().max(500).allow(null),
+  // No longer a user-typed external link — the frontend always sends the app-relative URL a file
+  // upload returns (e.g. `/uploads/application_track_stage/<id>.pdf`), which plain `.uri()` would
+  // reject for having no scheme. `allowRelative` accepts that shape; `.max(500)` stays as a sanity
+  // cap, not a real security boundary (this value is never rendered as HTML, only used as an <a href>).
+  documentUrl: Joi.string().uri({ allowRelative: true }).max(500).allow(null),
 });
 
 // POST /:id/stages/assign — mirrors changeRequests.validator.js#bulkAssignBody exactly (same

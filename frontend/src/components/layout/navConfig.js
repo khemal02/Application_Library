@@ -4,7 +4,6 @@ import LightbulbIcon from '@mui/icons-material/LightbulbOutlined';
 import TrackChangesIcon from '@mui/icons-material/TrackChangesOutlined';
 import PeopleIcon from '@mui/icons-material/PeopleOutline';
 import AdminIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
-import HistoryIcon from '@mui/icons-material/HistoryOutlined';
 
 const navConfig = [
   { label: 'Dashboard', path: '/dashboard', icon: DashboardIcon },
@@ -31,7 +30,6 @@ const navConfig = [
       { label: 'Departments', path: '/admin/departments' },
     ],
   },
-  { label: 'Audit Logs', path: '/admin/audit-logs', icon: HistoryIcon, resource: 'audit_logs', action: 'read' },
 ];
 
 export default navConfig;

@@ -111,6 +111,7 @@ export default function IdeaPanelCard({
   const [removing, setRemoving] = useState(false);
   const [editingMyResponse, setEditingMyResponse] = useState(false);
   const [confirmReject, setConfirmReject] = useState(false);
+  const todayStr = dayjs().format('YYYY-MM-DD');
 
   if (!panel) return null;
 
@@ -224,10 +225,7 @@ export default function IdeaPanelCard({
     if (completingOutcome === 'tie') {
       return { severity: 'warning', text: `You are the last of ${panel.approversTotal} approvers. Right now this would tie ${approveTally}–${rejectTally} — the CEO would need to break it.` };
     }
-    if (completingOutcome === 'approve') {
-      return null;
-    }
-    return { severity: 'warning', text: `You are the last of ${panel.approversTotal} approvers. Rejecting ends this idea immediately — no further comments or edits.` };
+    return null;
   }
   const consequenceInfo = showVoteForm ? consequence() : null;
 
@@ -336,11 +334,13 @@ export default function IdeaPanelCard({
                   <TextField
                     fullWidth size="small" type="date" label="Start Date"
                     InputLabelProps={{ shrink: true }}
+                    inputProps={{ min: todayStr }}
                     value={startDate} onChange={(e) => onStartDateChange(e.target.value)}
                   />
                   <TextField
                     fullWidth size="small" type="date" label="Expected Deployment Date"
                     InputLabelProps={{ shrink: true }}
+                    inputProps={{ min: [todayStr, startDate].filter(Boolean).sort().slice(-1)[0] }}
                     value={targetGoLive} onChange={(e) => onTargetGoLiveChange(e.target.value)}
                   />
                 </Stack>

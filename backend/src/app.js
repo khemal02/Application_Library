@@ -23,14 +23,20 @@ app.use(express.urlencoded({ extended: true }));
 app.use(requestLogger);
 app.use('/api', apiWriteLimiter);
 
-// Force download rather than inline render — an uploaded .html/.svg must never execute as if it
-// were served from the app's own origin.
-app.use('/uploads', express.static(uploadRoot, {
-  setHeaders: (res) => {
-    res.setHeader('Content-Disposition', 'attachment');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-  },
-}));
+// Force download rather than inline render, by default — an uploaded .html/.svg must never
+// execute as if it were served from the app's own origin. PDFs and JPEGs are the exception: they
+// carry no script-execution risk in a browser (a sandboxed PDF viewer, or a raster image), so they
+// open inline instead — matching how a user expects "View document" to behave — while everything
+// else still forces a download. `?download` (any value, or none) always forces a download
+// regardless of type, for the explicit "Download" affordance next to that inline view.
+const INLINE_SAFE_EXTENSIONS = new Set(['.pdf', '.jpg', '.jpeg']);
+app.use('/uploads', (req, res, next) => {
+  const ext = path.extname(req.path).toLowerCase();
+  const inline = INLINE_SAFE_EXTENSIONS.has(ext) && req.query.download === undefined;
+  res.setHeader('Content-Disposition', inline ? 'inline' : 'attachment');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  next();
+}, express.static(uploadRoot));
 
 app.get('/health', (req, res) => res.json({ success: true, message: 'ALMS backend is healthy', timestamp: new Date().toISOString() }));
 

@@ -28,7 +28,9 @@ function wordCount(text) {
   return trimmed ? trimmed.split(/\s+/).length : 0;
 }
 
-function NoteCard({ note, hideAuthor, plain }) {
+function NoteCard({
+  note, hideAuthor, hideDate, plain,
+}) {
   const content = (
     <Stack direction="row" spacing={1.5} alignItems="flex-start">
       {!hideAuthor && (
@@ -45,7 +47,9 @@ function NoteCard({ note, hideAuthor, plain }) {
           {!hideAuthor && note.author?.role?.name && (
             <Chip size="small" variant="outlined" label={humanize(note.author.role.name)} />
           )}
-          <Typography variant="caption" color="text.secondary">{dayjs(note.createdAt).format('MMM D, YYYY HH:mm')}</Typography>
+          {!hideDate && (
+            <Typography variant="caption" color="text.secondary">{dayjs(note.createdAt).format('MMM D, YYYY HH:mm')}</Typography>
+          )}
         </Stack>
         {note.body && (
           <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', mt: 0.5 }}>{note.body}</Typography>
@@ -86,7 +90,7 @@ function NoteCard({ note, hideAuthor, plain }) {
  */
 export default function NotesThread({
   entityType, entityId, title = 'Details', emptyLabel = 'Nothing added yet — click + to add the first detail.',
-  disabled = false, disabledReason = 'This is now read-only.', hideAuthor = false, plain = false, editableOwn = false,
+  disabled = false, disabledReason = 'This is now read-only.', hideAuthor = false, hideDate = false, plain = false, editableOwn = false,
 }) {
   const currentUser = useAppSelector((s) => s.auth.user);
   const [notes, setNotes] = useState([]);
@@ -184,7 +188,9 @@ export default function NotesThread({
         <Typography variant="body2" color="text.secondary">Nothing was added while this was open.</Typography>
       )}
 
-      {notes.map((note) => <NoteCard key={note.id} note={note} hideAuthor={hideAuthor} plain={plain} />)}
+      {notes.map((note) => (
+        <NoteCard key={note.id} note={note} hideAuthor={hideAuthor} hideDate={hideDate} plain={plain} />
+      ))}
 
       {composing && !disabled && (
         <Paper variant="outlined" sx={{ p: 2 }}>

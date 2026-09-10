@@ -4,7 +4,6 @@ const { v4: uuidv4 } = require('uuid');
 const env = require('../../config/env');
 const ApiError = require('../../utils/ApiError');
 const parseUserAgent = require('../../utils/parseUserAgent');
-const { logAction } = require('../../utils/auditLogger');
 const { User, Role, RolePermission, UserSession } = require('../../models');
 
 function toSafeUser(user) {
@@ -35,11 +34,6 @@ async function login({ email, password }, req) {
   await UserSession.create({
     userId: user.id, jti, browser, os, device, ipAddress: req?.ip,
   });
-  // Login happens before the auth middleware runs, so there's no req.user yet — build a
-  // minimal stand-in so logAction attributes the entry to the account that just authenticated
-  // (otherwise it'd be logged with userId: null and never show up in that user's own Activity tab).
-  await logAction({ req: { user: { id: user.id }, ip: req?.ip }, action: 'login', entityType: 'auth', entityId: user.id });
-
   return { token: signToken(user, jti), user: toSafeUser(user) };
 }
 
@@ -47,7 +41,6 @@ async function logout(userId, jti) {
   if (jti) {
     await UserSession.update({ revokedAt: new Date() }, { where: { userId, jti } });
   }
-  await logAction({ req: { user: { id: userId } }, action: 'logout', entityType: 'auth', entityId: userId });
   return { message: 'Logged out' };
 }
 
@@ -65,7 +58,6 @@ async function changePassword(userId, { currentPassword, newPassword }) {
   const valid = await bcrypt.compare(currentPassword, user.passwordHash);
   if (!valid) throw ApiError.badRequest('Current password is incorrect');
   await user.update({ passwordHash: await bcrypt.hash(newPassword, 10) });
-  await logAction({ req: { user: { id: userId } }, action: 'update', entityType: 'password', entityId: userId });
   return { message: 'Password updated' };
 }
 

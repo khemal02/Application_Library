@@ -33,7 +33,7 @@ module.exports = {
       ['applications', ...DOC_SUBRESOURCES, 'ideas', 'comments', 'votes', 'attachments', 'users', 'departments'],
       ['manage'],
     ));
-    rows = rows.concat(expand(ROLE_IDS.ceo, ['dashboard', 'search', 'notifications', 'audit_logs'], ['read']));
+    rows = rows.concat(expand(ROLE_IDS.ceo, ['dashboard', 'search', 'notifications'], ['read']));
     rows = rows.concat(expand(ROLE_IDS.ceo, ['change_requests', 'feature_requests'], ['manage']));
 
     // Manager: near-full — full control over applications/docs, reviews & approves ideas
@@ -43,7 +43,7 @@ module.exports = {
       ['applications', ...DOC_SUBRESOURCES, 'ideas', 'comments', 'votes', 'attachments'],
       ['manage'],
     ));
-    rows = rows.concat(expand(ROLE_IDS.manager, ['dashboard', 'search', 'notifications', 'audit_logs'], ['read']));
+    rows = rows.concat(expand(ROLE_IDS.manager, ['dashboard', 'search', 'notifications'], ['read']));
     rows = rows.concat(expand(ROLE_IDS.manager, ['change_requests', 'feature_requests'], ['manage']));
 
     // Team Lead: full ownership over applications + docs, reviews ideas for their team.
@@ -52,7 +52,7 @@ module.exports = {
     rows = rows.concat(expand(ROLE_IDS.team_lead, ['ideas'], ['create', 'read', 'review', 'update']));
     rows = rows.concat(expand(ROLE_IDS.team_lead, ['feature_requests'], ['create', 'read', 'review', 'update']));
     rows = rows.concat(expand(ROLE_IDS.team_lead, ['comments', 'votes', 'attachments'], ['create', 'read']));
-    rows = rows.concat(expand(ROLE_IDS.team_lead, ['dashboard', 'search', 'notifications', 'audit_logs'], ['read']));
+    rows = rows.concat(expand(ROLE_IDS.team_lead, ['dashboard', 'search', 'notifications'], ['read']));
     rows = rows.concat(expand(ROLE_IDS.team_lead, ['change_requests'], ['create', 'read', 'update', 'delete']));
 
     // Employee: browses the application catalog and comments on it (read-only on applications and

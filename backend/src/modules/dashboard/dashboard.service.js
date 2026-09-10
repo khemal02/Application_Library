@@ -1,20 +1,18 @@
 const { Op } = require('sequelize');
-const {
-  Application, Idea, FeatureRequest, AuditLog, User,
-} = require('../../models');
+const { Application, Idea, FeatureRequest } = require('../../models');
 const ideasService = require('../ideas/ideas.service');
 const featureRequestsService = require('../featureRequests/featureRequests.service');
 const changeRequestsService = require('../changeRequests/changeRequests.service');
 
 async function getSummary(userId) {
   const [
-    totalApplications, inProgressApplications, completedApplications,
+    totalApplications, myApplications, inProgressApplications, completedApplications,
     pendingIdeas, approvedIdeas,
     pendingFeatureRequests, approvedFeatureRequests,
-    recentApplications, recentActivity,
     myIdeaCounts, myFeatureRequestCounts, myStageCounts,
   ] = await Promise.all([
     Application.count(),
+    Application.count({ where: { ownerId: userId } }),
     Application.count({ where: { status: { [Op.in]: ['development', 'testing'] } } }),
     Application.count({ where: { status: 'deployment' } }),
     // Split out of Ideas' formerly-shared counters — see 20260130000035-split-feature-requests-
@@ -24,11 +22,6 @@ async function getSummary(userId) {
     Idea.count({ where: { status: 'approved' } }),
     FeatureRequest.count({ where: { status: 'under_review' } }),
     FeatureRequest.count({ where: { status: 'approved' } }),
-    Application.findAll({ order: [['updatedAt', 'DESC']], limit: 5 }),
-    AuditLog.findAll({
-      order: [['createdAt', 'DESC']], limit: 10,
-      include: [{ model: User, as: 'user', attributes: ['id', 'name'] }],
-    }),
     // "My Review" / "My Approve" — the caller's own open panel rows across Ideas and Feature
     // Requests, split by kind (see ideas.service.js#myPendingCounts). Personalized, so this is the
     // one part of the summary that depends on who's asking.
@@ -43,6 +36,7 @@ async function getSummary(userId) {
   return {
     stats: {
       totalApplications,
+      myApplications,
       applicationsInProgress: inProgressApplications,
       completedApplications,
       pendingIdeas,
@@ -60,8 +54,6 @@ async function getSummary(userId) {
       myTestingStages: myStageCounts.testing,
       myDeploymentStages: myStageCounts.deployment,
     },
-    recentApplications,
-    recentActivity,
   };
 }
 

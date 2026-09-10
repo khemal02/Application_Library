@@ -535,6 +535,16 @@ async function finalizeIdea(idea, {
   if (needsTrack && !ownerId) {
     throw ApiError.badRequest('An Application owner (ownerId) is required to approve this idea.');
   }
+  if (needsTrack && startDate) {
+    // Joi's `.date()` coerces this into a real Date object; the DB-side comparisons elsewhere in
+    // this codebase compare against DATEONLY strings, but here we're only comparing against
+    // "today" freshly computed in JS, so a plain Date comparison is fine.
+    const todayStart = new Date(new Date().toISOString().slice(0, 10));
+    const chosenStart = startDate instanceof Date ? new Date(startDate.toISOString().slice(0, 10)) : new Date(startDate);
+    if (chosenStart < todayStart) {
+      throw ApiError.badRequest('Start Date cannot be before today.');
+    }
+  }
 
   const fromStatus = idea.status;
 

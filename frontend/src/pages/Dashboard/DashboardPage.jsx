@@ -1,28 +1,22 @@
 import { useNavigate } from 'react-router-dom';
 import Grid from '@mui/material/Grid';
-import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
 import Box from '@mui/material/Box';
-import List from '@mui/material/List';
-import ListItemButton from '@mui/material/ListItemButton';
-import ListItemText from '@mui/material/ListItemText';
-import Divider from '@mui/material/Divider';
 import AppsIcon from '@mui/icons-material/AppsOutlined';
 import RateReviewIcon from '@mui/icons-material/RateReviewOutlined';
 import ThumbUpIcon from '@mui/icons-material/ThumbUpOutlined';
 import CodeIcon from '@mui/icons-material/CodeOutlined';
 import FactCheckIcon from '@mui/icons-material/FactCheckOutlined';
 import RocketLaunchIcon from '@mui/icons-material/RocketLaunchOutlined';
-import dayjs from 'dayjs';
 import { dashboardApi } from '../../services/domains';
 import useResource from '../../hooks/useResource';
 import { LoadingBlock, ErrorBlock } from '../../components/common/AsyncState';
 import StatCard from '../../components/common/StatCard';
-import StatusBadge from '../../components/common/StatusBadge';
-import { describeAuditAction } from '../../utils/activityText';
+import { useAppSelector } from '../../app/hooks';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const user = useAppSelector((s) => s.auth.user);
   const { data, loading, error, reload } = useResource(() => dashboardApi.summary(), []);
 
   if (loading) return <LoadingBlock />;
@@ -38,6 +32,7 @@ export default function DashboardPage() {
   // counts come from.
   const cards = [
     { label: 'Total Applications', value: stats.totalApplications, icon: AppsIcon, color: 'primary', path: '/applications' },
+    { label: 'My Applications', value: stats.myApplications, icon: AppsIcon, color: 'secondary', path: `/applications?ownerId=${user?.id}` },
     { label: 'My Review for New Idea', value: stats.myReviewIdeas, icon: RateReviewIcon, color: 'warning', path: '/ideas?awaitingMyReview=true&kind=reviewer' },
     { label: 'My Review for Feature Request', value: stats.myReviewFeatureRequests, icon: RateReviewIcon, color: 'warning', path: '/feature-requests?awaitingMyReview=true&kind=reviewer' },
     { label: 'My Approve for New Idea', value: stats.myApproveIdeas, icon: ThumbUpIcon, color: 'success', path: '/ideas?awaitingMyReview=true&kind=approver' },
@@ -51,55 +46,12 @@ export default function DashboardPage() {
     <Box>
       <Typography variant="h5" fontWeight={700} sx={{ mb: 3 }}>Dashboard</Typography>
 
-      <Grid container spacing={2} sx={{ mb: 3 }}>
+      <Grid container spacing={2}>
         {cards.map(({ path, ...c }) => (
           <Grid item xs={12} sm={6} md={4} key={c.label}>
             <StatCard {...c} onClick={() => navigate(path)} />
           </Grid>
         ))}
-      </Grid>
-
-      <Grid container spacing={2}>
-        <Grid item xs={12} md={7}>
-          <Paper variant="outlined" sx={{ p: 2 }}>
-            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>Recently Updated Applications</Typography>
-            <List dense>
-              {(data?.recentApplications || []).map((app) => (
-                <ListItemButton key={app.id} onClick={() => navigate(`/applications/${app.id}`)}>
-                  <ListItemText
-                    primary={app.name}
-                    secondary={`Updated ${dayjs(app.updatedAt).format('MMM D, YYYY HH:mm')}`}
-                  />
-                  <StatusBadge value={app.status} />
-                </ListItemButton>
-              ))}
-              {data && data.recentApplications.length === 0 && (
-                <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>No applications yet</Typography>
-              )}
-            </List>
-          </Paper>
-        </Grid>
-        <Grid item xs={12} md={5}>
-          <Paper variant="outlined" sx={{ p: 2 }}>
-            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>Recent Activity</Typography>
-            <List dense>
-              {(data?.recentActivity || []).map((log, idx) => (
-                <Box key={log.id}>
-                  <ListItemButton disableRipple sx={{ cursor: 'default' }}>
-                    <ListItemText
-                      primary={describeAuditAction(log)}
-                      secondary={dayjs(log.createdAt).format('MMM D, YYYY HH:mm')}
-                    />
-                  </ListItemButton>
-                  {idx < data.recentActivity.length - 1 && <Divider />}
-                </Box>
-              ))}
-              {data && data.recentActivity.length === 0 && (
-                <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>No recent activity</Typography>
-              )}
-            </List>
-          </Paper>
-        </Grid>
       </Grid>
     </Box>
   );

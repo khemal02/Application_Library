@@ -1,7 +1,5 @@
 const { Op } = require('sequelize');
-const { User, Role, Department, UserSession, AuditLog, RolePermission } = require('../../models');
-const { buildQueryOptions, buildPaginationMeta } = require('../../utils/paginate');
-const { logAction } = require('../../utils/auditLogger');
+const { User, Role, Department, UserSession, RolePermission } = require('../../models');
 const ApiError = require('../../utils/ApiError');
 
 const DEFAULT_PRIVACY = {
@@ -28,7 +26,6 @@ async function updateProfile(userId, payload) {
   const user = await User.findByPk(userId);
   if (!user) throw ApiError.notFound('User not found');
   await user.update(payload);
-  await logAction({ req: { user: { id: userId } }, action: 'update', entityType: 'profile', entityId: userId, newValue: payload });
   return getProfile(userId);
 }
 
@@ -84,18 +81,7 @@ async function revokeOtherSessions(userId, currentJti) {
   return { message: 'All other sessions logged out' };
 }
 
-async function getActivity(userId, query) {
-  const { where, order, limit, offset, page } = buildQueryOptions(query, {
-    filterableFields: ['action', 'entityType'],
-    defaultSort: [['createdAt', 'DESC']],
-  });
-  const { rows, count } = await AuditLog.findAndCountAll({
-    where: { ...where, userId }, order, limit, offset,
-  });
-  return { items: rows, pagination: buildPaginationMeta({ page, limit, count }) };
-}
-
 module.exports = {
   getProfile, updateProfile, getAccount, getPrivacy, updatePrivacy,
-  listSessions, revokeSession, revokeOtherSessions, getActivity,
+  listSessions, revokeSession, revokeOtherSessions,
 };

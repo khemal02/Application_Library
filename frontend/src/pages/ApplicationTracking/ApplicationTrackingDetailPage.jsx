@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
@@ -11,6 +11,7 @@ import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
 import Grid from '@mui/material/Grid';
 import Alert from '@mui/material/Alert';
+import CircularProgress from '@mui/material/CircularProgress';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
@@ -19,8 +20,9 @@ import Accordion from '@mui/material/Accordion';
 import AccordionSummary from '@mui/material/AccordionSummary';
 import AccordionDetails from '@mui/material/AccordionDetails';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import dayjs from 'dayjs';
-import { applicationTrackingApi, commentsApi } from '../../services/domains';
+import { applicationTrackingApi, commentsApi, attachmentsApi } from '../../services/domains';
 import { useAppSelector } from '../../app/hooks';
 import useResource from '../../hooks/useResource';
 import useBreadcrumbLabel from '../../hooks/useBreadcrumbLabel';
@@ -50,6 +52,19 @@ function ReadField({ label, value }) {
         {value || '—'}
       </Typography>
     </Box>
+  );
+}
+
+/** A stage's document, opened two ways: "View" renders it inline (the backend only does that for
+ * PDF/JPG — see app.js's `/uploads` middleware; other types just download either way, since
+ * browsers have no built-in viewer for them) and "Download" always forces a save-to-disk via the
+ * same route's `?download` override, regardless of type. */
+function DocumentLinks({ url }) {
+  return (
+    <Stack direction="row" spacing={1} alignItems="center">
+      <Link href={url} target="_blank" rel="noopener noreferrer" variant="body2">View</Link>
+      <Link href={`${url}?download`} variant="body2">Download</Link>
+    </Stack>
   );
 }
 
@@ -135,16 +150,17 @@ function StageSection({
   // actually under way.
   const linkEditable = isInProgress && canWriteNotes;
   const [assigning, setAssigning] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const fileInputRef = useRef(null);
 
   const [startDraft, setStartDraft] = useState(stageData.startDate || '');
   const [endDraft, setEndDraft] = useState(stageData.endDate || '');
-  const [linkDraft, setLinkDraft] = useState(stageData.documentUrl || '');
   const [assigneeDraft, setAssigneeDraft] = useState(stageData.assigneeId || '');
   useEffect(() => {
     setStartDraft(stageData.startDate || '');
     setEndDraft(stageData.endDate || '');
-    setLinkDraft(stageData.documentUrl || '');
-  }, [stageData.startDate, stageData.endDate, stageData.documentUrl]);
+  }, [stageData.startDate, stageData.endDate]);
   // Deliberately its own effect, not folded into the one above — saving dates (Save button) must
   // never wipe out an assignee the owner already picked but hasn't confirmed yet via the
   // "Assignee" button. This one only resyncs when the stage's STORED assigneeId itself changes
@@ -160,22 +176,16 @@ function StageSection({
     ? candidates
     : [{ id: stageData.assigneeId, name: stageData.assignee?.name, roleLabel: null }, ...candidates];
 
-  // Picking a name only updates the draft — it commits (and notifies the new assignee) only once
-  // the "Assignee" button below is clicked, a deliberate confirm step rather than saving the
-  // instant the dropdown changes.
-  const assigneeDirty = canAssign && assigneeDraft !== (stageData.assigneeId || '');
-  // No one gets named to a stage with no timeline. Checks the DRAFT dates (whatever's currently
-  // typed into Started/Expected finish), not whether they've been Saved yet — the moment the
-  // owner has picked someone AND filled in both dates, both "Save" and "Assignee" light up
-  // together; there's no longer a forced Save-then-Assignee order. Clearing an assignment
-  // (picking "Unassigned") never needs dates — only checked while assigneeDraft names a person.
+  // "Assignee" only enables once every field it commits is actually filled in — name, Started, AND
+  // Expected finish. Picking "Unassigned" keeps it disabled too, same as leaving the name blank —
+  // there's no exception for clearing an existing assignment through this button.
   const needsDatesFirst = !!assigneeDraft && (!startDraft || !endDraft);
+  const assigneeDirty = canAssign && !!assigneeDraft && !!startDraft && !!endDraft;
   const confirmAssign = async () => {
     setAssigning(true);
     try {
-      // Carries the draft dates along with the assignment so clicking "Assignee" directly (without
-      // ever clicking "Save" first) still lands a real timeline — the backend accepts assigneeId
-      // alongside startDate/endDate in the same call, same as it always has.
+      // Carries the draft dates along with the assignment — this is now the ONLY way the owner's
+      // dates ever get persisted, there's no separate Save for them any more.
       await onAssign({
         assigneeId: assigneeDraft || null,
         ...(assigneeDraft && datesEditable ? { startDate: startDraft || null, endDate: endDraft || null } : {}),
@@ -204,10 +214,25 @@ function StageSection({
   const endMin = [trackStartDate, startDraft].filter(Boolean).sort().slice(-1)[0] || undefined;
   const endMax = trackTargetGoLive || undefined;
 
-  const dirty = (datesEditable && (
-    startDraft !== (stageData.startDate || '')
-    || endDraft !== (stageData.endDate || '')
-  )) || (linkEditable && linkDraft.trim() !== (stageData.documentUrl || ''));
+  // There's no "Save" button anywhere on this card any more. The owner's Started/Expected finish
+  // only ever commit together with the Assignee button (confirmAssign carries the draft dates
+  // along); the assignee's Document Link now commits itself the moment a file finishes uploading —
+  // picking the file IS the confirm action, so there's nothing left standing around to "save".
+  const handleDocumentUpload = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadError('');
+    setUploading(true);
+    try {
+      const uploaded = await attachmentsApi.upload('application_track_stage', stageData.id, file);
+      await onSaveDates({ documentUrl: uploaded.data.url });
+    } catch (err) {
+      setUploadError(err.response?.data?.message || 'Failed to upload the document');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   let chip;
   if (isViewerStage && !isComplete) {
@@ -251,10 +276,13 @@ function StageSection({
           )}
         </Grid>
         <Grid item xs={6} sm={2.4}>
+          {/* Locked during submitting/assigning — dates now commit only via the Assignee button, so
+              its own in-flight state is what could otherwise race an in-progress edit here, same
+              reasoning the Assignee dropdown's own disabled={assigning} already covers. */}
           {datesEditable ? (
             <TextField
               fullWidth size="small" label="Started" type="date" InputLabelProps={{ shrink: true }}
-              value={startDraft}
+              value={startDraft} disabled={submitting || assigning}
               onChange={(e) => setStartDraft(e.target.value)}
               inputProps={{ min: startMin, max: startMax }}
             />
@@ -266,7 +294,7 @@ function StageSection({
           {datesEditable ? (
             <TextField
               fullWidth size="small" label="Expected finish" type="date" InputLabelProps={{ shrink: true }}
-              value={endDraft}
+              value={endDraft} disabled={submitting || assigning}
               onChange={(e) => setEndDraft(e.target.value)}
               inputProps={{ min: endMin, max: endMax }}
             />
@@ -279,32 +307,48 @@ function StageSection({
         </Grid>
         <Grid item xs={6} sm={2.4}>
           {linkEditable ? (
-            <TextField
-              fullWidth size="small" label="Document link" placeholder="https://..." type="url"
-              InputLabelProps={{ shrink: true }}
-              value={linkDraft}
-              onChange={(e) => setLinkDraft(e.target.value)}
-            />
+            <Box>
+              <Typography variant="caption" sx={CAPTION_SX}>Document link</Typography>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.25 }}>
+                {stageData.documentUrl && <DocumentLinks url={stageData.documentUrl} />}
+                <Button
+                  size="small" variant="text"
+                  startIcon={uploading ? <CircularProgress size={14} /> : <UploadFileOutlinedIcon fontSize="small" />}
+                  disabled={uploading || submitting}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {uploading ? 'Uploading…' : stageData.documentUrl ? 'Replace' : 'Upload'}
+                </Button>
+                <input
+                  ref={fileInputRef} type="file" hidden onChange={handleDocumentUpload}
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg"
+                  aria-label="Upload document"
+                />
+              </Stack>
+              {uploadError && <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.25 }}>{uploadError}</Typography>}
+            </Box>
           ) : (
             <ReadField
               label="Document link"
-              value={datesVisible && stageData.documentUrl ? (
-                <Link href={stageData.documentUrl} target="_blank" rel="noopener noreferrer">{stageData.documentUrl}</Link>
-              ) : null}
+              value={datesVisible && stageData.documentUrl ? <DocumentLinks url={stageData.documentUrl} /> : null}
             />
           )}
         </Grid>
       </Grid>
 
       <Box sx={{ mt: 2 }}>
+        {/* Not started yet — whether blocked on the predecessor or simply not yet started — means
+            there's no work in motion to log a note about. Opens the moment the assignee actually
+            clicks Start, same as the assignee's own action buttons below. */}
         <NotesThread
           entityType="application_track_stage"
           entityId={stageData.id}
           title="Notes"
           emptyLabel="No notes yet."
-          disabled={!canWriteNotes || trackStatus === 'cancelled'}
-          disabledReason={trackStatus === 'cancelled' ? NOTES_CANCELLED_REASON : ''}
+          disabled={!canWriteNotes || trackStatus === 'cancelled' || stageData.status === 'not_started'}
+          disabledReason={trackStatus === 'cancelled' ? NOTES_CANCELLED_REASON : (stageData.status === 'not_started' ? 'Notes open once this stage has started.' : '')}
           hideAuthor
+          hideDate
           plain
           editableOwn
         />
@@ -319,32 +363,38 @@ function StageSection({
           )}
           <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" useFlexGap rowGap={1}>
             <Stack direction="row" spacing={1}>
-              {stageData.status === 'not_started' && !isBlockedByPredecessor && (
-                <Button variant="outlined" disabled={submitting} onClick={onStart}>Start {STAGE_LABELS[stage]}</Button>
+              {/* Starting the stage is the assignee's own call (or a super-admin's), not the
+                  owner's, unless the owner is themselves the assignee — same reasoning
+                  canWriteNotes already applies to Notes. Reused here rather than duplicating the
+                  assignee-or-super check. */}
+              {canWriteNotes && !isComplete && (
+                <Button
+                  variant="contained"
+                  disabled={submitting || stageData.status !== 'not_started' || isBlockedByPredecessor}
+                  onClick={onStart}
+                >
+                  Start {STAGE_LABELS[stage]}
+                </Button>
               )}
               {canAssign && (
                 <Tooltip title={needsDatesFirst ? 'Set Started and Expected finish before assigning someone.' : ''}>
                   <span>
-                    <Button variant="outlined" disabled={assigning || !assigneeDirty || needsDatesFirst} onClick={confirmAssign}>
+                    <Button variant="contained" disabled={assigning || !assigneeDirty || needsDatesFirst} onClick={confirmAssign}>
                       Assignee
                     </Button>
                   </span>
                 </Tooltip>
               )}
-              {(datesEditable || linkEditable) && (
-                <Button
-                  variant="outlined" disabled={submitting || !dirty}
-                  onClick={() => onSaveDates({
-                    ...(datesEditable ? { startDate: startDraft || null, endDate: endDraft || null } : {}),
-                    ...(linkEditable ? { documentUrl: linkDraft.trim() || null } : {}),
-                  })}
-                >
-                  Save
-                </Button>
-              )}
             </Stack>
-            {isInProgress && (
-              <Button variant="contained" disabled={submitting} onClick={onOpenComplete}>Mark {STAGE_LABELS[stage]} complete</Button>
+            {/* Visible as soon as there's a Start button on the row (so the two sit together from
+                the start), just disabled until the stage is actually in_progress — same as every
+                other action on this card, never a hidden-then-appearing button. Once complete,
+                there's nothing left to mark, so it disappears entirely (matches a finished stage
+                showing no action buttons at all). */}
+            {!isComplete && (
+              <Button variant="contained" disabled={submitting || !isInProgress} onClick={onOpenComplete}>
+                Mark {STAGE_LABELS[stage]} complete
+              </Button>
             )}
           </Stack>
         </Box>
@@ -519,7 +569,7 @@ export default function ApplicationTrackingDetailPage() {
           <Stack direction="row" alignItems="center" spacing={1}>
             <StatusBadge color={chip.color} label={chip.label} />
             {isOwnerOrSuper && track.status === 'on_hold' && (
-              <Button size="small" variant="outlined" onClick={handleResume} disabled={submitting}>Resume</Button>
+              <Button size="small" variant="contained" onClick={handleResume} disabled={submitting}>Resume</Button>
             )}
           </Stack>
         </Stack>
@@ -554,7 +604,7 @@ export default function ApplicationTrackingDetailPage() {
           <Alert
             severity="success"
             action={(
-              <Button color="inherit" size="small" variant="outlined" disabled={submitting} onClick={handleGoLive}>
+              <Button size="small" variant="contained" disabled={submitting} onClick={handleGoLive}>
                 Move to Application
               </Button>
             )}
@@ -601,7 +651,7 @@ export default function ApplicationTrackingDetailPage() {
                 predecessorAssigneeName={predecessor?.assignee?.name}
                 submitting={submitting}
                 onStart={() => patchStage(stage, { status: 'in_progress' }, `${STAGE_LABELS[stage]} started`)}
-                onSaveDates={(payload) => patchStage(stage, payload, 'Dates saved')}
+                onSaveDates={(payload) => patchStage(stage, payload, 'Saved')}
                 onAssign={(payload) => handleAssignStage(stage, payload)}
                 onOpenComplete={() => setCompletingStage(stage)}
               />

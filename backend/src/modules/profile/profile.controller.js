@@ -42,12 +42,7 @@ const revokeOtherSessions = asyncHandler(async (req, res) => {
   return ApiResponse.success(res, result, 'All other sessions logged out');
 });
 
-const getActivity = asyncHandler(async (req, res) => {
-  const { items, pagination } = await service.getActivity(req.user.id, req.query);
-  return ApiResponse.paginated(res, items, pagination);
-});
-
 module.exports = {
   getProfile, updateProfile, getAccount, getPrivacy, updatePrivacy,
-  listSessions, revokeSession, revokeOtherSessions, getActivity,
+  listSessions, revokeSession, revokeOtherSessions,
 };

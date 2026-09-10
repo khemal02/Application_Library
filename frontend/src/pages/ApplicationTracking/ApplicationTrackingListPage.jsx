@@ -164,13 +164,6 @@ export default function ApplicationTrackingListPage() {
 
       {error ? (
         <ErrorBlock message={error} onRetry={() => setPage((p) => p)} />
-      ) : !loading && rows.length === 0 ? (
-        <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 4, textAlign: 'center' }}>
-          <Typography variant="body2" fontWeight={600}>Nothing being tracked yet</Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-            Approved new ideas appear here while they&apos;re being built.
-          </Typography>
-        </Box>
       ) : (
         <DataTable
           columns={columns}
@@ -180,6 +173,7 @@ export default function ApplicationTrackingListPage() {
           onRowsPerPageChange={(n) => { setLimit(n); setPage(1); }}
           onRowClick={(row) => navigate(`/application-tracking/${row.id}`)}
           loading={loading}
+          emptyMessage="Approved new ideas appear here while they're being built."
         />
       )}
     </Box>

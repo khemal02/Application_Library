@@ -98,6 +98,26 @@ function isOwnerOrSuper(record, req) {
   return (!!record.ownerId && record.ownerId === req.user.id) || isSuperAdmin(req.user.permissions);
 }
 
+// Mirrors the frontend's own `datesVisible` rule (ApplicationTrackingDetailPage.jsx) — a stage
+// with no assignee yet is just the owner's private draft, not real, in-motion data, so nobody but
+// the owner (or a super-admin) should see it. The frontend already hides these fields visually,
+// but that's cosmetic only: the API was still handing the real values to every viewer regardless,
+// so anyone inspecting the response directly (or a future client that doesn't bother hiding them)
+// could see a stage's planned dates before it's ever actually assigned. Enforced here instead, so
+// withholding the data is real, not just a rendering choice.
+function redactUnassignedStages(record, req) {
+  if (!record || !Array.isArray(record.stages) || isOwnerOrSuper(record, req)) return record;
+  record.stages.forEach((stage) => {
+    if (!stage.assigneeId) {
+      stage.setDataValue('startDate', null);
+      stage.setDataValue('endDate', null);
+      stage.setDataValue('finishedDate', null);
+      stage.setDataValue('documentUrl', null);
+    }
+  });
+  return record;
+}
+
 const today = () => new Date().toISOString().slice(0, 10);
 
 /**
@@ -116,7 +136,7 @@ const today = () => new Date().toISOString().slice(0, 10);
  * the question changes from "what matters most org-wide" to "what do I personally need to start
  * next" — so the order switches to the track's own start_date ascending (nulls last) instead.
  */
-async function list(query) {
+async function list(query, req) {
   const page = Math.max(parseInt(query.page, 10) || 1, 1);
   const limit = Math.min(Math.max(parseInt(query.limit, 10) || 20, 1), 100);
   const offset = (page - 1) * limit;
@@ -172,6 +192,7 @@ async function list(query) {
 
   rows.forEach(sortStages);
   resolveTrackMany(rows);
+  rows.forEach((row) => redactUnassignedStages(row, req));
 
   return {
     items: rows,
@@ -179,12 +200,13 @@ async function list(query) {
   };
 }
 
-async function getById(id) {
+async function getById(id, req) {
   const record = await ApplicationTrack.findByPk(id, { include: detailInclude });
   if (!record) throw ApiError.notFound('Application track not found');
   sortStages(record);
   await attachStageNotes(record);
   resolveTrack(record);
+  redactUnassignedStages(record, req);
   return record;
 }
 
@@ -244,7 +266,7 @@ async function update(id, payload, req) {
     }
   }
 
-  return getById(id);
+  return getById(id, req);
 }
 
 /**
@@ -307,6 +329,14 @@ async function updateStage(id, stage, payload, req) {
   if ((payload.startDate !== undefined || payload.endDate !== undefined) && !isOwner && !isSuper) {
     throw ApiError.forbidden('Only this track\'s owner (or a super-admin) may set this stage\'s Started/Expected finish dates.');
   }
+  // Dates only ever commit together with an assignee now — the old standalone "Save" that let the
+  // owner draft dates before picking anyone is gone from the frontend, and this closes the same
+  // path here: a caller can no longer submit startDate/endDate without assigneeId present in the
+  // same request (it can still be `null`, e.g. re-saving dates for a stage while clearing its
+  // assignment in the same call — just not omitted entirely).
+  if ((payload.startDate !== undefined || payload.endDate !== undefined) && payload.assigneeId === undefined) {
+    throw ApiError.badRequest(`${STAGE_LABELS[stage]}'s Started/Expected finish can only be set together with its Assignee.`);
+  }
   // B3: naming who'll pick a PAUSED track back up is reasonable (on_hold falls through). Assigning
   // someone to a track that's already dead — cancelled, or already delivered (live) — is
   // meaningless and would notify them to start work on something that no longer needs it.
@@ -332,6 +362,12 @@ async function updateStage(id, stage, payload, req) {
   // complete the stage.
   if (payload.documentUrl !== undefined && !isAssignee && !isSuper) {
     throw ApiError.forbidden('Only this stage\'s assignee (or a super-admin) may set its document link.');
+  }
+  // Starting the stage is the assignee's own call to make (or a super-admin's) — not the owner's,
+  // unless the owner is themselves the assignee. The owner still names who's assigned and plans
+  // the dates; only actually starting the work belongs to whoever's doing it.
+  if (payload.status === 'in_progress' && !isAssignee && !isSuper) {
+    throw ApiError.forbidden('Only this stage\'s assignee (or a super-admin) may start it.');
   }
 
   // Keeps a planned timeline internally consistent — the owner can now set Started/Expected finish
@@ -491,7 +527,7 @@ async function updateStage(id, stage, payload, req) {
     }
   }
 
-  return getById(id);
+  return getById(id, req);
 }
 
 /**
@@ -568,7 +604,7 @@ async function goLive(id, req) {
     }
   }
 
-  return getById(id);
+  return getById(id, req);
 }
 
 /**
@@ -633,7 +669,7 @@ async function assignStages(id, payload, req) {
     }
   }
 
-  return { record: await getById(id), changes };
+  return { record: await getById(id, req), changes };
 }
 
 /**
@@ -659,7 +695,7 @@ async function hold(id, { reason }, req) {
   });
 
   await notifyOwnerAndAssignees(record, req, `"${record.name || record.idea?.title}" was put on hold: ${reason}`);
-  return getById(id);
+  return getById(id, req);
 }
 
 /** PATCH /:id/resume — only from `on_hold` (rule 8). No notification — the table lists none. */
@@ -681,7 +717,7 @@ async function resume(id, req) {
     }, { transaction: t });
   });
 
-  return getById(id);
+  return getById(id, req);
 }
 
 /**
@@ -711,7 +747,7 @@ async function cancel(id, { reason }, req) {
   });
 
   await notifyOwnerAndAssignees(record, req, `"${record.name || record.idea?.title}" was cancelled: ${reason}`);
-  return getById(id);
+  return getById(id, req);
 }
 
 // Shared by hold()/cancel() — owner + every stage assignee, de-duplicated, actor excluded. The
