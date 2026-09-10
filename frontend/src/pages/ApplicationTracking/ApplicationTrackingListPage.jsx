@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import Chip from '@mui/material/Chip';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
 import FormControlLabel from '@mui/material/FormControlLabel';
@@ -15,24 +14,7 @@ import { ErrorBlock } from '../../components/common/AsyncState';
 import { applicationTrackingApi } from '../../services/domains';
 import { useAppSelector } from '../../app/hooks';
 import useBreadcrumbLabel from '../../hooks/useBreadcrumbLabel';
-import {
-  STAGE_ORDER, STAGE_LABELS, deriveStatusChip, currentStageLabel, currentAssignee,
-} from '../../utils/applicationTrackStatus';
-
-// Same rule the Issues card uses for severity (SeverityChip in IssuesCard.jsx) — priority is
-// outlined so it never competes visually with the filled Status chip in the same row; they answer
-// two different questions ("how much it matters" vs "where it's got to").
-const PRIORITY_META = {
-  critical: { label: 'Critical', color: 'error' },
-  high: { label: 'High', color: 'warning' },
-  medium: { label: 'Medium', color: null },
-  low: { label: 'Low', color: null },
-};
-
-function PriorityChip({ priority }) {
-  const meta = PRIORITY_META[priority] || PRIORITY_META.medium;
-  return <Chip size="small" variant="outlined" color={meta.color || 'default'} label={meta.label} />;
-}
+import { STAGE_ORDER, STAGE_LABELS, deriveStatusChip } from '../../utils/applicationTrackStatus';
 
 // Muted, not hidden (per spec) — on_hold/cancelled rows stay fully visible and clickable, just
 // visually de-emphasized against active/live ones.
@@ -66,10 +48,11 @@ function ApplicationCell({ track }) {
  * Idea Prioritization (displayed name; module/route/API still say "Application Tracking" — see
  * the file/route names throughout this module) — sits between an approved idea and the
  * Applications catalogue. No create button (a track is only ever born from an idea being approved)
- * and no search box (the backend list has none to back it — see
- * applicationTracking.service.js#list, which owns a fixed priority-then-target-date order, not a
- * user-sortable one). `useServerList` isn't used here for the same reason: it always injects
- * `sort`/`search` query params this endpoint's validator would 400 on.
+ * and no search box (the backend list has none to back it — see applicationTracking.service.js#list,
+ * which owns the order: priority-then-target-date normally, or start-date-first the moment either
+ * "mine" toggle below is on — not a user-sortable column-header kind of order). `useServerList`
+ * isn't used here for the same reason: it always injects `sort`/`search` query params this
+ * endpoint's validator would 400 on.
  */
 export default function ApplicationTrackingListPage() {
   const navigate = useNavigate();
@@ -80,6 +63,7 @@ export default function ApplicationTrackingListPage() {
   const [limit, setLimit] = useState(20);
   const [stageFilter, setStageFilter] = useState('');
   const [assignedToMe, setAssignedToMe] = useState(false);
+  const [myApps, setMyApps] = useState(false);
   const [rows, setRows] = useState([]);
   const [pagination, setPagination] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -91,31 +75,38 @@ export default function ApplicationTrackingListPage() {
     const params = { page, limit };
     if (stageFilter) params.stage = stageFilter;
     if (assignedToMe && user?.id) params.assigneeId = user.id;
+    if (myApps && user?.id) params.ownerId = user.id;
     applicationTrackingApi.list(params)
       .then((res) => { setRows(res.data); setPagination(res.meta?.pagination || null); })
       .catch((err) => setError(err.response?.data?.message || 'Failed to load tracks'))
       .finally(() => setLoading(false));
-  }, [page, limit, stageFilter, assignedToMe, user?.id]);
+  }, [page, limit, stageFilter, assignedToMe, myApps, user?.id]);
 
   const columns = [
-    { key: 'priority', label: 'Priority', render: (t) => <MutedCell track={t}><PriorityChip priority={t.priority} /></MutedCell> },
     { key: 'application', label: 'Application', render: (t) => <MutedCell track={t}><ApplicationCell track={t} /></MutedCell> },
-    { key: 'stage', label: 'Stage', render: (t) => <MutedCell track={t}><Typography variant="body2">{currentStageLabel(t)}</Typography></MutedCell> },
     {
-      key: 'assignedNow',
-      label: 'Assigned now',
-      render: (t) => {
-        const assignee = currentAssignee(t);
-        return (
-          <MutedCell track={t}>
-            <Typography variant="body2" color={assignee ? 'text.primary' : 'text.disabled'}>{assignee?.name || '—'}</Typography>
-          </MutedCell>
-        );
-      },
+      key: 'owner',
+      label: 'Owner',
+      render: (t) => (
+        <MutedCell track={t}>
+          <Typography variant="body2" color={t.owner?.name ? 'text.primary' : 'text.disabled'}>{t.owner?.name || '—'}</Typography>
+        </MutedCell>
+      ),
     },
     {
-      key: 'target',
-      label: 'Target',
+      key: 'startDate',
+      label: 'Start Date',
+      render: (t) => (
+        <MutedCell track={t}>
+          <Typography variant="body2" color={t.startDate ? 'text.primary' : 'text.disabled'}>
+            {t.startDate ? dayjs(t.startDate).format('MMM D, YYYY') : '—'}
+          </Typography>
+        </MutedCell>
+      ),
+    },
+    {
+      key: 'targetGoLive',
+      label: 'Expected Deployment Date',
       render: (t) => (
         <MutedCell track={t}>
           <Typography variant="body2" color={t.targetGoLive ? 'text.primary' : 'text.disabled'}>
@@ -158,6 +149,15 @@ export default function ApplicationTrackingListPage() {
               />
             )}
             label="Assigned to me"
+          />
+          <FormControlLabel
+            control={(
+              <Switch
+                size="small" checked={myApps}
+                onChange={(e) => { setMyApps(e.target.checked); setPage(1); }}
+              />
+            )}
+            label="My Apps"
           />
         </Stack>
       </Stack>

@@ -24,7 +24,6 @@ import { LoadingBlock, ErrorBlock } from '../../components/common/AsyncState';
 import StatusBadge from '../../components/common/StatusBadge';
 import BackButton from '../../components/common/BackButton';
 import NotesThread from '../../components/common/NotesThread';
-import AttachmentsPanel from '../../components/common/AttachmentsPanel';
 import { STAGE_ORDER, STAGE_LABELS, STAGE_STATUS_LABELS, deriveStatusChip } from '../../utils/changeRequestStatus';
 
 const formatDate = (value) => (value ? dayjs(value).format('MMM D, YYYY') : '—');
@@ -155,11 +154,6 @@ function StageCard({
           </Typography>
         )}
       </Box>
-
-      <AttachmentsPanel
-        entityType="change_request_stage" entityId={stageData.id}
-        accept="image/*" label="Screenshots" disabled={!canAct}
-      />
 
       <Box sx={{ mt: 2 }}>
         <NotesThread

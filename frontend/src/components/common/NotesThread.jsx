@@ -225,7 +225,7 @@ export default function NotesThread({
       )}
 
       {!composing && !disabled && (
-        <Stack direction="row" justifyContent="flex-end" sx={{ mt: notes.length > 0 ? 2 : 1 }}>
+        <Stack direction="row" justifyContent={plain ? 'flex-start' : 'flex-end'} sx={{ mt: notes.length > 0 ? 2 : 1 }}>
           {ownNote ? (
             <Button variant="outlined" startIcon={<EditOutlinedIcon />} onClick={() => openEditor(ownNote)}>
               Edit

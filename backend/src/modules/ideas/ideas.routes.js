@@ -15,7 +15,12 @@ router.use(authenticate);
 const ownIdeaOnly = requireRecordOwnership(() => Idea, 'submittedBy');
 
 router.get('/analytics', authorize('ideas', 'read'), controller.analytics);
-router.get('/eligible-owners', authorize('ideas', 'review'), controller.eligibleOwners);
+// Gated on the coarse `ideas:read` permission, not `ideas:review` — same reasoning as /:id/reviews
+// below: R4 makes an approver "any active user" via panel membership, not a role-based permission,
+// so an Employee approver who's the deciding vote must be able to reach this (they need it to pick
+// an owner) even though they hold no `ideas:review` grant at all. `ideas:read` is universal, so
+// this never actually widens who can call it beyond "anyone who can see ideas."
+router.get('/eligible-owners', authorize('ideas', 'read'), controller.eligibleOwners);
 router.get('/', authorize('ideas', 'read'), controller.list);
 router.get('/:id', authorize('ideas', 'read'), controller.getById);
 router.get('/:id/status-history', authorize('ideas', 'read'), controller.statusHistory);

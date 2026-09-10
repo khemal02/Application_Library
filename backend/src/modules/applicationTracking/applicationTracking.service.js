@@ -33,7 +33,11 @@ const stageIncludeFull = {
 const stageAndIdeaInclude = [stageIncludeFull, { model: Idea, as: 'idea', attributes: ['id', 'title'] }];
 
 const detailInclude = [
-  { model: Idea, as: 'idea', attributes: ['id', 'ideaNumber', 'title', 'description', 'submittedBy'] },
+  {
+    model: Idea,
+    as: 'idea',
+    attributes: ['id', 'ideaNumber', 'title', 'description', 'proposedSolution', 'technologiesAndEfficiency', 'submittedBy'],
+  },
   { model: User, as: 'owner', attributes: ['id', 'name'] },
   { model: Application, as: 'application', attributes: ['id', 'name'] },
   stageIncludeFull,
@@ -97,16 +101,20 @@ function isOwnerOrSuper(record, req) {
 const today = () => new Date().toISOString().slice(0, 10);
 
 /**
- * GET / — filterable by status, priority, stage, assigneeId. The last two live on the STAGE row,
- * not the track, so they can't be a plain WHERE on ApplicationTrack — filtering via `include.where`
- * would also silently drop the other three stage rows from the response (Sequelize's eager-load
- * `where` restricts which child rows come back, not just which parents match), which would break
- * the four-pip progress rail on every filtered row. Resolved as a two-step: find which track ids
- * have a matching stage row, then filter the main (fully-included) query on `id IN (...)`.
+ * GET / — filterable by status, priority, stage, assigneeId, ownerId. `stage`/`assigneeId` live on
+ * the STAGE row, not the track, so they can't be a plain WHERE on ApplicationTrack — filtering via
+ * `include.where` would also silently drop the other three stage rows from the response
+ * (Sequelize's eager-load `where` restricts which child rows come back, not just which parents
+ * match), which would break the four-pip progress rail on every filtered row. Resolved as a
+ * two-step: find which track ids have a matching stage row, then filter the main (fully-included)
+ * query on `id IN (...)`. `ownerId` IS a plain column on the track itself, so it's just a WHERE.
  *
- * Order is the feature: priority critical->low, then target_go_live ascending with nulls last,
- * then oldest first — a literal CASE expression, since Sequelize has no built-in "order by this
- * enum's declared order" and target_go_live's nulls-last needs its own tiebreaker column.
+ * Order is the feature: normally priority critical->low, then target_go_live ascending with nulls
+ * last — a literal CASE expression, since Sequelize has no built-in "order by this enum's declared
+ * order" and target_go_live's nulls-last needs its own tiebreaker column. But once the caller is
+ * looking at only THEIR OWN tracks ("Assigned to me" / "My Apps" — assigneeId or ownerId given),
+ * the question changes from "what matters most org-wide" to "what do I personally need to start
+ * next" — so the order switches to the track's own start_date ascending (nulls last) instead.
  */
 async function list(query) {
   const page = Math.max(parseInt(query.page, 10) || 1, 1);
@@ -116,6 +124,7 @@ async function list(query) {
   const where = {};
   if (query.status) where.status = query.status;
   if (query.priority) where.priority = query.priority;
+  if (query.ownerId) where.ownerId = query.ownerId;
 
   if (query.stage || query.assigneeId) {
     const stageWhere = {};
@@ -135,11 +144,17 @@ async function list(query) {
   // queries instead. findAll() keeps Sequelize's default subQuery wrapping (needed so `limit`
   // counts tracks, not the 4x-multiplied joined stage rows) — inside that wrapping the literal
   // correctly resolves against the alias Sequelize itself generates for the subquery.
-  const order = [
-    [sequelize.literal("CASE \"ApplicationTrack\".\"priority\" WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END"), 'ASC'],
-    ['targetGoLive', 'ASC NULLS LAST'],
-    ['createdAt', 'ASC'],
-  ];
+  const isMineFilter = !!query.assigneeId || !!query.ownerId;
+  const order = isMineFilter
+    ? [
+      ['startDate', 'ASC NULLS LAST'],
+      ['createdAt', 'ASC'],
+    ]
+    : [
+      [sequelize.literal("CASE \"ApplicationTrack\".\"priority\" WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END"), 'ASC'],
+      ['targetGoLive', 'ASC NULLS LAST'],
+      ['createdAt', 'ASC'],
+    ];
 
   const count = await ApplicationTrack.count({ where, distinct: true, col: 'id' });
   const rows = await ApplicationTrack.findAll({
@@ -286,11 +301,96 @@ async function updateStage(id, stage, payload, req) {
   if (payload.assigneeId !== undefined && !isOwner && !isSuper) {
     throw ApiError.forbidden('Only this track\'s owner (or a super-admin) may assign or reassign this stage.');
   }
+  // Same rule as assigneeId, and for the same reason — planning Started/Expected finish is the
+  // owner's job (the same person who names the assignee), not the assignee's own to edit, even
+  // though they can otherwise progress/complete the stage they're on.
+  if ((payload.startDate !== undefined || payload.endDate !== undefined) && !isOwner && !isSuper) {
+    throw ApiError.forbidden('Only this track\'s owner (or a super-admin) may set this stage\'s Started/Expected finish dates.');
+  }
   // B3: naming who'll pick a PAUSED track back up is reasonable (on_hold falls through). Assigning
   // someone to a track that's already dead — cancelled, or already delivered (live) — is
   // meaningless and would notify them to start work on something that no longer needs it.
   if (payload.assigneeId !== undefined && (record.status === 'cancelled' || record.status === 'live')) {
     throw ApiError.conflict(`This track is ${STATUS_LABELS[record.status]} — its stages can no longer be assigned.`);
+  }
+  // No one gets named to a stage until its planned Started/Expected finish dates exist — an
+  // assignment with no timeline attached is exactly what the date-planning mechanism above exists
+  // to prevent. Only checked when actually naming someone (a truthy assigneeId) — clearing an
+  // assignment (assigneeId: null) never needs a timeline. Checks the EFFECTIVE dates (this same
+  // call's own startDate/endDate if it happens to carry them too, else whatever's already stored),
+  // same as the sequencing guardrail below.
+  if (payload.assigneeId) {
+    const effectiveStart = payload.startDate !== undefined ? payload.startDate : stageRow.startDate;
+    const effectiveEnd = payload.endDate !== undefined ? payload.endDate : stageRow.endDate;
+    if (!effectiveStart || !effectiveEnd) {
+      throw ApiError.badRequest(`Set ${STAGE_LABELS[stage]}'s Started and Expected finish dates before assigning someone to it.`);
+    }
+  }
+  // Narrower than the general gate above, same reasoning comments.service.js's note-writing rule
+  // already applies to this stage's Notes — the document link is the assignee's own deliverable to
+  // attach, not the owner's to set on their behalf, even though the owner can otherwise start/
+  // complete the stage.
+  if (payload.documentUrl !== undefined && !isAssignee && !isSuper) {
+    throw ApiError.forbidden('Only this stage\'s assignee (or a super-admin) may set its document link.');
+  }
+
+  // Keeps a planned timeline internally consistent — the owner can now set Started/Expected finish
+  // for every stage right after the track is created (not just once a stage is in_progress), so
+  // without this a Testing window could be planned to start before Development's own planned
+  // finish. Only checked when this call actually touches a date; an unrelated update (e.g. just
+  // documentUrl) never re-validates dates nobody asked to change. Uses the EFFECTIVE value (this
+  // call's new value if given, else whatever's already stored) on both sides of each comparison —
+  // normalized to a plain 'YYYY-MM-DD' string first: Joi's `.date()` coerces an incoming payload
+  // value into a real JS Date object, while a value read back off the model (DATEONLY) is already
+  // a plain string; comparing a Date to a string with </> silently always returns false, which let
+  // every cross-stage check below pass no matter what (caught in testing) — normalizing both sides
+  // the same way before comparing is what actually makes the comparison work.
+  const toDateStr = (value) => {
+    if (!value) return value;
+    return value instanceof Date ? value.toISOString().slice(0, 10) : value;
+  };
+  if (payload.startDate !== undefined || payload.endDate !== undefined) {
+    const effectiveStart = toDateStr(payload.startDate !== undefined ? payload.startDate : stageRow.startDate);
+    const effectiveEnd = toDateStr(payload.endDate !== undefined ? payload.endDate : stageRow.endDate);
+    if (effectiveStart && effectiveEnd && effectiveEnd < effectiveStart) {
+      throw ApiError.badRequest(`${STAGE_LABELS[stage]}'s Expected finish can't be before its Started date.`);
+    }
+    if (stageIndex > 0) {
+      const predecessor = record.stages.find((s) => s.stage === STAGE_ORDER[stageIndex - 1]);
+      const predecessorEnd = toDateStr(predecessor?.endDate);
+      if (predecessorEnd && effectiveStart && effectiveStart < predecessorEnd) {
+        throw ApiError.badRequest(
+          `${STAGE_LABELS[stage]} can't be planned to start before ${STAGE_LABELS[predecessor.stage]}'s expected finish (${predecessorEnd}).`,
+        );
+      }
+    }
+    if (stageIndex < STAGE_ORDER.length - 1) {
+      const successor = record.stages.find((s) => s.stage === STAGE_ORDER[stageIndex + 1]);
+      const successorStart = toDateStr(successor?.startDate);
+      if (successorStart && effectiveEnd && effectiveEnd > successorStart) {
+        throw ApiError.badRequest(
+          `${STAGE_LABELS[stage]} can't be planned to finish after ${STAGE_LABELS[successor.stage]}'s planned start (${successorStart}).`,
+        );
+      }
+    }
+    // The track's own startDate/targetGoLive are the overall window the approver set at idea
+    // approval (see ideas.service.js#finalizeIdea) — every stage's own planned window must stay
+    // inside it, not just consistent with its neighbors. Only enforced when the track actually HAS
+    // both bounds set — an idea approved before this pair existed (or approved without them, since
+    // neither is required) leaves the track with no outer window to check against, and that's not
+    // an error, just nothing to constrain against.
+    const trackStart = toDateStr(record.startDate);
+    const trackEnd = toDateStr(record.targetGoLive);
+    if (trackStart && effectiveStart && effectiveStart < trackStart) {
+      throw ApiError.badRequest(
+        `${STAGE_LABELS[stage]} can't be planned to start before the track's own Start Date (${trackStart}).`,
+      );
+    }
+    if (trackEnd && effectiveEnd && effectiveEnd > trackEnd) {
+      throw ApiError.badRequest(
+        `${STAGE_LABELS[stage]} can't be planned to finish after the track's Expected Deployment Date (${trackEnd}).`,
+      );
+    }
   }
 
   const updates = {};
@@ -313,14 +413,17 @@ async function updateStage(id, stage, payload, req) {
   if (nextStatus === 'in_progress' && !stageRow.startDate && updates.startDate === undefined) {
     updates.startDate = today();
   }
-  if (nextStatus === 'complete' && !stageRow.endDate && updates.endDate === undefined) {
-    updates.endDate = today();
+  // finishedDate is the actual completion date, set ONLY here, never user-submitted (payload never
+  // carries it — see the validator) — endDate ("Expected finish") is a manually-set target the
+  // owner controls and is deliberately no longer auto-filled on complete, so the two can't be
+  // conflated the way a single overloaded date column used to.
+  if (nextStatus === 'complete' && !stageRow.finishedDate) {
+    updates.finishedDate = today();
   }
   // E1: a stage can reach `complete` with no start_date two ways — an explicit clear (Save with
   // the Started field emptied, then a later Mark-complete call that never touches startDate again)
   // or a direct not_started -> complete jump (rule 2 permits it by index; it never passes through
-  // the in_progress branch above at all). Same shape as the end_date rule right above it: only
-  // fills a genuine hole, never overrides an explicit value from THIS call.
+  // the in_progress branch above at all).
   if (nextStatus === 'complete' && !stageRow.startDate && updates.startDate === undefined) {
     updates.startDate = today();
   }

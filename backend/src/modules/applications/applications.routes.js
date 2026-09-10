@@ -22,6 +22,7 @@ router.use(authenticate);
 router.get('/', authorize('applications', 'read'), controller.list);
 router.get('/eligible-owners', authorize('applications', 'update'), controller.eligibleOwners);
 router.get('/:id', authorize('applications', 'read'), controller.getById);
+router.get('/:id/origin', authorize('applications', 'read'), controller.getOrigin);
 router.post('/', authorize('applications', 'create'), validate(create), controller.create);
 router.put('/:id', authorize('applications', 'update'), ownApplicationOnly, validate(update), controller.update);
 router.delete('/:id', authorize('applications', 'delete'), requireApplicationAccess('id'), controller.remove);

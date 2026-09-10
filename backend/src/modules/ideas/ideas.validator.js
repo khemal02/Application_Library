@@ -1,11 +1,14 @@
 const Joi = require('joi');
 const { INDUSTRIES, FUNCTIONAL_AREAS } = require('../../utils/validators');
+const { capitalizeFirst } = require('../../utils/textNormalize');
 
 // No `category`/`applicationId` — as of the Ideas/Feature-Requests split, this module only ever
 // creates a 'new_idea' row ("Modify Current Application" is featureRequests.validator.js now,
 // with its own unconditionally-required applicationId).
 const create = Joi.object({
-  title: Joi.string().max(200).required(),
+  // .trim() first so a title typed/pasted with leading whitespace still gets its real first
+  // letter capitalized, not a space.
+  title: Joi.string().max(200).trim().custom((value) => capitalizeFirst(value)).required(),
   description: Joi.string().required(),
   industry: Joi.string().valid(...INDUSTRIES).allow('', null),
   // STILL required — it used to be "the ONLY thing that decides who reviews it" (functional-area-
@@ -59,6 +62,10 @@ const submitReview = Joi.object({
   decision: Joi.string().valid('approve', 'request_changes', 'reject').required(),
   note: Joi.string().allow('', null),
   ownerId: Joi.string().uuid(),
+  // Optional, shown alongside the owner picker on the same approve step — neither is required
+  // (unlike ownerId, which finalizeIdea() conditionally requires).
+  startDate: Joi.date().iso().allow(null),
+  targetGoLive: Joi.date().iso().allow(null),
 });
 
 // Adds one or more people to an idea's panel — see ideas.service.js#addParticipants. Who may call

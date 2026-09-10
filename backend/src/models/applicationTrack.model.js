@@ -16,6 +16,10 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.ENUM('active', 'on_hold', 'live', 'cancelled'), allowNull: false, defaultValue: 'active',
     },
     ownerId: { type: DataTypes.UUID, allowNull: true },
+    // Both optionally set at idea-approval time, alongside the owner picker — see
+    // ideas.service.js#finalizeIdea. Neither is required; a track created without them just has
+    // these unset, same as before this pair existed.
+    startDate: { type: DataTypes.DATEONLY, allowNull: true },
     targetGoLive: { type: DataTypes.DATEONLY, allowNull: true },
     // Set only when the Deployment stage completes (go-live) — null for the entire life of the
     // track until then.

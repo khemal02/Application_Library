@@ -41,6 +41,8 @@ export default function IdeaDetailPage() {
   const [savingTech, setSavingTech] = useState(false);
   const [ownerId, setOwnerId] = useState('');
   const [ownerCandidates, setOwnerCandidates] = useState([]);
+  const [startDate, setStartDate] = useState('');
+  const [targetGoLive, setTargetGoLive] = useState('');
   // Deliberately unset, not defaulted to 'approve' — a viewer who has never responded must see
   // NO pre-selected decision (see IdeaPanelCard's Change 1); resetting to '' on every idea change
   // below stops a stale choice from one idea silently carrying over to the next.
@@ -80,6 +82,8 @@ export default function IdeaDetailPage() {
     setVoteDecision('');
     setVoteNote('');
     setOwnerId('');
+    setStartDate('');
+    setTargetGoLive('');
   }, [id]);
 
   // Pre-fill the vote form with whatever the viewer already recorded, rather than resetting to
@@ -104,9 +108,13 @@ export default function IdeaDetailPage() {
         decision: voteDecision,
         note: voteNote || undefined,
         ...(ownerId ? { ownerId } : {}),
+        ...(startDate ? { startDate } : {}),
+        ...(targetGoLive ? { targetGoLive } : {}),
       });
       showSuccess('Review submitted');
       setOwnerId('');
+      setStartDate('');
+      setTargetGoLive('');
       await reload();
       return true;
     } catch (err) {
@@ -372,6 +380,8 @@ export default function IdeaDetailPage() {
             voteDecision={voteDecision} onVoteDecisionChange={setVoteDecision}
             voteNote={voteNote} onVoteNoteChange={setVoteNote}
             ownerId={ownerId} onOwnerIdChange={setOwnerId} ownerCandidates={ownerCandidates}
+            startDate={startDate} onStartDateChange={setStartDate}
+            targetGoLive={targetGoLive} onTargetGoLiveChange={setTargetGoLive}
             submitting={submitting} onSubmitReview={handleSubmitReview}
             onPanelChanged={reload}
           />

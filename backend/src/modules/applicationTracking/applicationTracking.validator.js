@@ -1,13 +1,16 @@
 const Joi = require('joi');
 
 // GET / — filterable by status, priority, stage (a stage row's own `stage` column — see
-// applicationTracking.service.js#list) and assigneeId (a stage row's assignee, not the track's
-// owner). None required; an empty query lists everything.
+// applicationTracking.service.js#list), assigneeId (a stage row's assignee — backs "Assigned to
+// me") and ownerId (the track's own owner — backs "My Apps"). None required; an empty query lists
+// everything. Either "mine" filter also switches the list's sort order to start-date-first — see
+// applicationTracking.service.js#list.
 const listQuery = Joi.object({
   status: Joi.string().valid('active', 'on_hold', 'live', 'cancelled'),
   priority: Joi.string().valid('critical', 'high', 'medium', 'low'),
   stage: Joi.string().valid('development', 'testing', 'deployment'),
   assigneeId: Joi.string().uuid(),
+  ownerId: Joi.string().uuid(),
   page: Joi.number().integer().min(1),
   limit: Joi.number().integer().min(1).max(100),
 });

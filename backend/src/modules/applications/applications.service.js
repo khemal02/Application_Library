@@ -1,6 +1,6 @@
 const { createCrudService } = require('../../utils/crudFactory');
 const {
-  Application, User, Role, RolePermission, Department, sequelize,
+  Application, User, Role, RolePermission, Department, ApplicationTrack, ApplicationTrackStage, Idea, sequelize,
 } = require('../../models');
 const ApiError = require('../../utils/ApiError');
 const logger = require('../../config/logger');
@@ -26,6 +26,43 @@ async function getById(id) {
   const record = await Application.findByPk(id, { include: listInclude });
   if (!record) throw ApiError.notFound('Application not found');
   return record;
+}
+
+const STAGE_ORDER = ['development', 'testing', 'deployment'];
+
+/**
+ * GET /applications/:id/origin — an application registered via the Idea -> Idea Prioritization ->
+ * go-live pipeline (see applicationTracking.service.js#goLive) traces back to the ApplicationTrack
+ * that produced it (found in reverse — Application carries no FK of its own back to it, only
+ * ApplicationTrack.applicationId points forward) and, through that, the originating Idea. Both
+ * survive go-live untouched (goLive only ever sets applicationId/status/closedAt on the track and
+ * applicationId on the idea — see that function), so their full history is still here to show:
+ * the idea's Problem Statement/Solution/Technologies and Efficiency, and the three
+ * Development/Testing/Deployment stages exactly as they were left (assignee, dates, document
+ * link). Returns `null` for an application that was registered directly (no track ever pointed at
+ * it) — most of the catalogue predates or bypasses this pipeline, so that's the common case, not
+ * an error.
+ */
+async function getOrigin(id) {
+  const track = await ApplicationTrack.findOne({
+    where: { applicationId: id },
+    include: [
+      {
+        model: Idea,
+        as: 'idea',
+        attributes: ['id', 'ideaNumber', 'title', 'description', 'proposedSolution', 'technologiesAndEfficiency'],
+      },
+      {
+        model: ApplicationTrackStage,
+        as: 'stages',
+        include: [{ model: User, as: 'assignee', attributes: ['id', 'name'] }],
+      },
+    ],
+  });
+  if (!track) return null;
+
+  const stages = [...track.stages].sort((a, b) => STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage));
+  return { idea: track.idea, stages };
 }
 
 /**
@@ -117,5 +154,5 @@ async function remove(id) {
 }
 
 module.exports = {
-  ...base, getById, create, update, remove, eligibleOwners,
+  ...base, getById, getOrigin, create, update, remove, eligibleOwners,
 };

@@ -1,5 +1,6 @@
 const Joi = require('joi');
 const { INDUSTRIES, FUNCTIONAL_AREAS } = require('../../utils/validators');
+const { capitalizeFirst } = require('../../utils/textNormalize');
 
 // Forked from ideas.validator.js. No `category` field at all — this module IS the
 // existing_app_feature lane now, so `applicationId` is unconditionally required (never a
@@ -7,7 +8,9 @@ const { INDUSTRIES, FUNCTIONAL_AREAS } = require('../../utils/validators');
 // inherited from the target Application in featureRequests.service.js#create, same as
 // departmentId already was).
 const create = Joi.object({
-  title: Joi.string().max(200).required(),
+  // .trim() first so a title typed/pasted with leading whitespace still gets its real first
+  // letter capitalized, not a space.
+  title: Joi.string().max(200).trim().custom((value) => capitalizeFirst(value)).required(),
   description: Joi.string().required(),
   applicationId: Joi.string().uuid().required(),
   industry: Joi.string().valid(...INDUSTRIES).allow('', null),

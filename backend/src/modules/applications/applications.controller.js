@@ -10,4 +10,9 @@ controller.eligibleOwners = asyncHandler(async (req, res) => {
   return ApiResponse.success(res, users);
 });
 
+controller.getOrigin = asyncHandler(async (req, res) => {
+  const origin = await service.getOrigin(req.params.id);
+  return ApiResponse.success(res, origin);
+});
+
 module.exports = controller;

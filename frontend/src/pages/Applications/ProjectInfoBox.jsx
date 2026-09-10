@@ -54,23 +54,6 @@ export default function ProjectInfoBox({ application }) {
         <StatusBadge value={application.status} label={applicationStatusLabel(application.status)} />
       </Stack>
 
-      {application.description && (
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{
-            mb: 2,
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {application.description}
-        </Typography>
-      )}
-
       <Grid container spacing={2}>
         <InfoField label="Department" value={application.department?.name || '—'} />
         <InfoField label="Owner" value={application.owner?.name || '—'} />

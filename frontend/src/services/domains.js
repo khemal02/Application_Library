@@ -23,6 +23,7 @@ export const profileApi = {
 export const applicationsApi = {
   ...createResourceApi('/applications'),
   eligibleOwners: () => api.get('/applications/eligible-owners').then((r) => r.data),
+  getOrigin: (id) => api.get(`/applications/${id}/origin`).then((r) => r.data),
 };
 export const ideasApi = {
   ...createResourceApi('/ideas'),

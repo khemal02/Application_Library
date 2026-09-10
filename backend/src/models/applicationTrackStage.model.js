@@ -14,6 +14,10 @@ module.exports = (sequelize, DataTypes) => {
     assigneeId: { type: DataTypes.UUID, allowNull: true },
     startDate: { type: DataTypes.DATEONLY, allowNull: true },
     endDate: { type: DataTypes.DATEONLY, allowNull: true },
+    // The actual completion date — set only by the server, only when status moves to 'complete'
+    // (see applicationTracking.service.js#updateStage). Distinct from endDate ("Expected finish"),
+    // which stays a manually-set target the owner controls and the server never overwrites.
+    finishedDate: { type: DataTypes.DATEONLY, allowNull: true },
     // A link to an external document (spec, test report, deployment runbook, ...) — plain text, no
     // validation beyond the validator's Joi.string().uri(). Screenshots are NOT stored here; they go
     // through the generic Attachment model instead (entityType 'application_track_stage', entityId

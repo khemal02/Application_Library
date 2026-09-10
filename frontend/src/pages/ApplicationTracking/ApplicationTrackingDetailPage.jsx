@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link as RouterLink } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import Link from '@mui/material/Link';
 import Button from '@mui/material/Button';
-import Chip from '@mui/material/Chip';
+import Tooltip from '@mui/material/Tooltip';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
 import Grid from '@mui/material/Grid';
@@ -15,7 +15,10 @@ import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
-import { alpha } from '@mui/material/styles';
+import Accordion from '@mui/material/Accordion';
+import AccordionSummary from '@mui/material/AccordionSummary';
+import AccordionDetails from '@mui/material/AccordionDetails';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import dayjs from 'dayjs';
 import { applicationTrackingApi, commentsApi } from '../../services/domains';
 import { useAppSelector } from '../../app/hooks';
@@ -27,7 +30,6 @@ import { LoadingBlock, ErrorBlock } from '../../components/common/AsyncState';
 import StatusBadge from '../../components/common/StatusBadge';
 import BackButton from '../../components/common/BackButton';
 import NotesThread from '../../components/common/NotesThread';
-import AttachmentsPanel from '../../components/common/AttachmentsPanel';
 import {
   STAGE_ORDER, STAGE_LABELS, STAGE_STATUS_LABELS, deriveStatusChip,
 } from '../../utils/applicationTrackStatus';
@@ -40,19 +42,6 @@ const CAPTION_SX = {
   display: 'block', textTransform: 'uppercase', letterSpacing: '.07em', color: 'text.disabled',
 };
 
-const PRIORITY_OPTIONS = [
-  { value: 'critical', label: 'Critical', description: 'A commitment with a date attached; slipping it costs something real.', color: 'error' },
-  { value: 'high', label: 'High', description: 'Wanted this quarter; someone is waiting and has been told roughly when.', color: 'warning' },
-  { value: 'medium', label: 'Medium', description: 'Approved and worth doing; no date promised.', color: null },
-  { value: 'low', label: 'Low', description: 'Good idea, no urgency; picked up when there is room.', color: null },
-];
-const PRIORITY_META = Object.fromEntries(PRIORITY_OPTIONS.map((o) => [o.value, o]));
-
-function PriorityChip({ priority }) {
-  const meta = PRIORITY_META[priority] || PRIORITY_META.medium;
-  return <Chip size="small" variant="outlined" color={meta.color || 'default'} label={meta.label} />;
-}
-
 function ReadField({ label, value }) {
   return (
     <Box>
@@ -64,114 +53,20 @@ function ReadField({ label, value }) {
   );
 }
 
-/**
- * Four described option cards, not a dropdown — same reasoning the Issues card's severity picker
- * used before it was changed to a dropdown at the user's request for THAT form specifically; here
- * the RICC is explicit the opposite way ("a dropdown of four bare words makes everything High").
- */
-function PriorityDialog({
-  open, currentPriority, onClose, onSubmit,
-}) {
-  const [selected, setSelected] = useState(currentPriority);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState(null);
-  useEffect(() => { if (open) { setSelected(currentPriority); setError(null); } }, [open, currentPriority]);
-
-  const handleSubmit = async () => {
-    if (selected === currentPriority) { onClose(); return; }
-    setSubmitting(true);
-    setError(null);
-    try {
-      await onSubmit(selected);
-      onClose();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to change priority');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
+/** Same collapsed-by-default accordion IdeaDetailPage.jsx uses for these three fields — read-only
+ * here, since the idea behind an already-approved track is frozen and never edited from this page. */
+function IdeaFieldAccordion({ label, value }) {
   return (
-    <Dialog open={open} onClose={() => !submitting && onClose()} maxWidth="sm" fullWidth>
-      <DialogTitle>Change priority</DialogTitle>
-      <DialogContent>
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-        <Grid container spacing={1} sx={{ mt: 0.5 }}>
-          {PRIORITY_OPTIONS.map((opt) => {
-            const isSelected = selected === opt.value;
-            return (
-              <Grid item xs={12} sm={6} key={opt.value}>
-                <Box
-                  role="button" tabIndex={0}
-                  onClick={() => setSelected(opt.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(opt.value); } }}
-                  sx={(theme) => ({
-                    p: 1.5, borderRadius: 1, cursor: 'pointer', height: '100%',
-                    border: 1,
-                    borderColor: isSelected ? (opt.color ? `${opt.color}.main` : 'text.secondary') : 'divider',
-                    bgcolor: isSelected ? (opt.color ? alpha(theme.palette[opt.color].main, 0.08) : theme.palette.action.selected) : 'transparent',
-                    '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: '-2px' },
-                  })}
-                >
-                  <Typography variant="body2" fontWeight={700}>{opt.label}</Typography>
-                  <Typography variant="caption" color="text.secondary">{opt.description}</Typography>
-                </Box>
-              </Grid>
-            );
-          })}
-        </Grid>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={submitting}>Cancel</Button>
-        <Button variant="contained" disabled={submitting || selected === currentPriority} onClick={handleSubmit}>
-          {submitting ? 'Saving...' : 'Save'}
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-}
-
-/** Shared by "Put on hold" and "Cancel" — both require a reason (1c: holdBody/cancelBody). */
-function ReasonDialog({
-  open, title, copy, submitLabel, danger, onClose, onSubmit,
-}) {
-  const [reason, setReason] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState(null);
-  useEffect(() => { if (open) { setReason(''); setError(null); } }, [open]);
-
-  const handleSubmit = async () => {
-    if (!reason.trim() || submitting) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      await onSubmit(reason.trim());
-      onClose();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to save');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onClose={() => !submitting && onClose()} maxWidth="sm" fullWidth>
-      <DialogTitle>{title}</DialogTitle>
-      <DialogContent>
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-        {copy && <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{copy}</Typography>}
-        <TextField
-          autoFocus fullWidth multiline minRows={3} label="Reason" required value={reason}
-          onChange={(e) => setReason(e.target.value)}
-        />
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={submitting}>Cancel</Button>
-        <Button variant="contained" color={danger ? 'error' : 'primary'} disabled={!reason.trim() || submitting} onClick={handleSubmit}>
-          {submitting ? 'Saving...' : submitLabel}
-        </Button>
-      </DialogActions>
-    </Dialog>
+    <Accordion disableGutters variant="outlined" sx={{ mb: 1.5, '&:before': { display: 'none' } }}>
+      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+        <Typography variant="subtitle2" fontWeight={700}>{label}</Typography>
+      </AccordionSummary>
+      <AccordionDetails>
+        <Typography variant="body1" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', textAlign: 'justify' }}>
+          {value || '—'}
+        </Typography>
+      </AccordionDetails>
+    </Accordion>
   );
 }
 
@@ -205,40 +100,114 @@ function MarkCompleteDialog({
 }
 
 /**
- * One of the four stacked sections — the three modes are the whole point of this component:
- *   complete    -> plain text, no inputs
- *   in_progress -> editable date inputs + Save/Mark complete (only if canAct)
- *   not_started -> inputs rendered but disabled, plus one line saying what's waited on
+ * One of the three stacked sections. Started/Expected finish are editable (and Save shows up) for
+ * the owner/assignee/super-admin at ANY status, not just in_progress — the owner can plan every
+ * stage's dates right after the track is created, laying out the whole timeline before Development
+ * even starts. Document link stays narrower (assignee-only, in_progress-only — see linkEditable)
+ * since it's a real deliverable, not a plan. A complete stage is always plain text, no inputs.
  * Never a disabled action BUTTON (1c/Stage 4 style rule) — canAct=false renders zero buttons, in
- * any mode, rather than greying them out. Assignee is display-only here — reassignment is done
- * from the AssignCard in the sticky rail, same split ChangeRequestDetailPage.jsx uses.
+ * any mode, rather than greying them out. Assignee is its own inline select, right here in the
+ * card — no separate "Assign the work" rail anymore; picking a name commits immediately (there's
+ * nothing else on the row to batch it with, unlike Started/Expected finish, which share one Save
+ * button since those two are genuinely edited together).
  *
  * The chip is assignee-aware, same as ChangeRequestDetailPage.jsx's StageCard: the person actually
  * assigned to THIS stage sees "Your turn" / "Waiting on {predecessor's assignee}" instead of the
  * generic Not started/In progress/Complete label — everyone else still sees the generic one.
  */
 function StageSection({
-  stage, stageData, canAct, canWriteNotes, isBlockedByPredecessor, predecessorLabel, predecessorAssigneeName,
-  isViewerStage, isRequestReady, trackStatus, onStart, onSaveDates, onOpenComplete, submitting,
+  stage, stageData, canAct, canAssign, candidates, canWriteNotes, isBlockedByPredecessor, predecessorLabel, predecessorAssigneeName,
+  trackStartDate, trackTargetGoLive, isViewerStage, isRequestReady, trackStatus, onStart, onSaveDates, onAssign, onOpenComplete, submitting,
 }) {
   const isComplete = stageData.status === 'complete';
   const isInProgress = stageData.status === 'in_progress';
-  const editable = isInProgress && canAct;
+  // Owner/super-admin only — same reasoning as canAssign, not canAct: planning Started/Expected
+  // finish is the owner's job (same person who names the assignee), not the assignee's own to
+  // edit. Reuses canAssign's exact condition rather than duplicating it — the two are the same
+  // permission scope. Deliberately NOT gated on isInProgress either — the owner can plan every
+  // stage's dates right after the track is created, laying out the whole Development -> Testing
+  // -> Deployment timeline before any of them actually begin. Only a completed stage locks these
+  // back down to a historical record (canAssign already excludes complete stages).
+  const datesEditable = canAssign;
+  // Narrower than datesEditable — the document link is the assignee's own deliverable to attach,
+  // same reasoning canWriteNotesOnStage already applies to Notes: the owner doesn't get a pass here
+  // just for being able to start/complete the stage, and it's only meaningful once work is
+  // actually under way.
+  const linkEditable = isInProgress && canWriteNotes;
+  const [assigning, setAssigning] = useState(false);
 
   const [startDraft, setStartDraft] = useState(stageData.startDate || '');
   const [endDraft, setEndDraft] = useState(stageData.endDate || '');
   const [linkDraft, setLinkDraft] = useState(stageData.documentUrl || '');
+  const [assigneeDraft, setAssigneeDraft] = useState(stageData.assigneeId || '');
   useEffect(() => {
     setStartDraft(stageData.startDate || '');
     setEndDraft(stageData.endDate || '');
     setLinkDraft(stageData.documentUrl || '');
   }, [stageData.startDate, stageData.endDate, stageData.documentUrl]);
+  // Deliberately its own effect, not folded into the one above — saving dates (Save button) must
+  // never wipe out an assignee the owner already picked but hasn't confirmed yet via the
+  // "Assignee" button. This one only resyncs when the stage's STORED assigneeId itself changes
+  // (i.e. after a real commit, or someone else's edit coming in via reload).
+  useEffect(() => {
+    setAssigneeDraft(stageData.assigneeId || '');
+  }, [stageData.assigneeId]);
 
-  const dirty = editable && (
+  // The current assignee might not be in the active-candidates list any more (e.g. deactivated,
+  // or a role change that dropped their eligibility) — same fallback AssignCard used to apply, so
+  // the select still shows who's actually assigned instead of rendering blank.
+  const assigneeOptions = (!stageData.assigneeId || candidates.some((c) => c.id === stageData.assigneeId))
+    ? candidates
+    : [{ id: stageData.assigneeId, name: stageData.assignee?.name, roleLabel: null }, ...candidates];
+
+  // Picking a name only updates the draft — it commits (and notifies the new assignee) only once
+  // the "Assignee" button below is clicked, a deliberate confirm step rather than saving the
+  // instant the dropdown changes.
+  const assigneeDirty = canAssign && assigneeDraft !== (stageData.assigneeId || '');
+  // No one gets named to a stage with no timeline. Checks the DRAFT dates (whatever's currently
+  // typed into Started/Expected finish), not whether they've been Saved yet — the moment the
+  // owner has picked someone AND filled in both dates, both "Save" and "Assignee" light up
+  // together; there's no longer a forced Save-then-Assignee order. Clearing an assignment
+  // (picking "Unassigned") never needs dates — only checked while assigneeDraft names a person.
+  const needsDatesFirst = !!assigneeDraft && (!startDraft || !endDraft);
+  const confirmAssign = async () => {
+    setAssigning(true);
+    try {
+      // Carries the draft dates along with the assignment so clicking "Assignee" directly (without
+      // ever clicking "Save" first) still lands a real timeline — the backend accepts assigneeId
+      // alongside startDate/endDate in the same call, same as it always has.
+      await onAssign({
+        assigneeId: assigneeDraft || null,
+        ...(assigneeDraft && datesEditable ? { startDate: startDraft || null, endDate: endDraft || null } : {}),
+      });
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  // A planned date is the owner's own draft of a stage nobody's picked up yet — showing it to every
+  // viewer before anyone's actually assigned made an unassigned stage look like it already had a
+  // start in motion. The owner still sees their own plan (they're the one editing it); everyone
+  // else sees "—" for these four fields until the stage genuinely has an assignee, same as the
+  // Assignee field itself already reads while unassigned.
+  const datesVisible = !!stageData.assigneeId || canAssign;
+
+  // ISO 'YYYY-MM-DD' strings sort correctly lexicographically, so plain string min/max works here
+  // without parsing into real Date objects. Each field's range depends on BOTH the track's own
+  // overall window AND the other field's current draft value — so picking Started bumps Expected
+  // finish's earliest selectable day up to match it, and vice versa, making the two mutually
+  // impossible to set backwards through the native date picker (the existing "Expected finish
+  // can't be before Started" rejection on Save is the backend's own safety net underneath this,
+  // for whatever bypasses the picker, e.g. a pasted value).
+  const startMin = trackStartDate || undefined;
+  const startMax = [trackTargetGoLive, endDraft].filter(Boolean).sort()[0] || undefined;
+  const endMin = [trackStartDate, startDraft].filter(Boolean).sort().slice(-1)[0] || undefined;
+  const endMax = trackTargetGoLive || undefined;
+
+  const dirty = (datesEditable && (
     startDraft !== (stageData.startDate || '')
     || endDraft !== (stageData.endDate || '')
-    || linkDraft.trim() !== (stageData.documentUrl || '')
-  );
+  )) || (linkEditable && linkDraft.trim() !== (stageData.documentUrl || ''));
 
   let chip;
   if (isViewerStage && !isComplete) {
@@ -263,54 +232,69 @@ function StageSection({
       </Stack>
 
       <Grid container spacing={2} sx={{ mt: 0.5, mb: 2 }}>
-        <Grid item xs={6} sm={3}>
-          <ReadField label="Assignee" value={stageData.assignee?.name} />
-        </Grid>
-        <Grid item xs={6} sm={3}>
-          {isComplete ? (
-            <ReadField label="Started" value={formatDate(stageData.startDate)} />
+        <Grid item xs={6} sm={2.4}>
+          {canAssign ? (
+            <TextField
+              select fullWidth size="small" label="Assignee"
+              value={assigneeDraft} disabled={assigning}
+              onChange={(e) => setAssigneeDraft(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+            >
+              <MenuItem value="">Unassigned</MenuItem>
+              {assigneeOptions.map((c) => (
+                <MenuItem key={c.id} value={c.id}>{c.name}{c.roleLabel ? ` — ${c.roleLabel}` : ''}</MenuItem>
+              ))}
+            </TextField>
           ) : (
+            <ReadField label="Assignee" value={stageData.assignee?.name} />
+          )}
+        </Grid>
+        <Grid item xs={6} sm={2.4}>
+          {datesEditable ? (
             <TextField
               fullWidth size="small" label="Started" type="date" InputLabelProps={{ shrink: true }}
-              value={startDraft} disabled={!editable}
+              value={startDraft}
               onChange={(e) => setStartDraft(e.target.value)}
+              inputProps={{ min: startMin, max: startMax }}
             />
+          ) : (
+            <ReadField label="Started" value={datesVisible ? formatDate(stageData.startDate) : null} />
           )}
         </Grid>
-        <Grid item xs={6} sm={3}>
-          {isComplete ? (
-            <ReadField label="Expected finish" value={formatDate(stageData.endDate)} />
-          ) : (
+        <Grid item xs={6} sm={2.4}>
+          {datesEditable ? (
             <TextField
               fullWidth size="small" label="Expected finish" type="date" InputLabelProps={{ shrink: true }}
-              value={endDraft} disabled={!editable}
+              value={endDraft}
               onChange={(e) => setEndDraft(e.target.value)}
-            />
-          )}
-        </Grid>
-        <Grid item xs={6} sm={3}>
-          {isComplete ? (
-            <ReadField
-              label="Document link"
-              value={stageData.documentUrl ? (
-                <Link href={stageData.documentUrl} target="_blank" rel="noopener noreferrer">{stageData.documentUrl}</Link>
-              ) : null}
+              inputProps={{ min: endMin, max: endMax }}
             />
           ) : (
+            <ReadField label="Expected finish" value={datesVisible ? formatDate(stageData.endDate) : null} />
+          )}
+        </Grid>
+        <Grid item xs={6} sm={2.4}>
+          <ReadField label="Finished date" value={datesVisible ? formatDate(stageData.finishedDate) : null} />
+        </Grid>
+        <Grid item xs={6} sm={2.4}>
+          {linkEditable ? (
             <TextField
               fullWidth size="small" label="Document link" placeholder="https://..." type="url"
               InputLabelProps={{ shrink: true }}
-              value={linkDraft} disabled={!editable}
+              value={linkDraft}
               onChange={(e) => setLinkDraft(e.target.value)}
+            />
+          ) : (
+            <ReadField
+              label="Document link"
+              value={datesVisible && stageData.documentUrl ? (
+                <Link href={stageData.documentUrl} target="_blank" rel="noopener noreferrer">{stageData.documentUrl}</Link>
+              ) : null}
             />
           )}
         </Grid>
       </Grid>
-
-      <AttachmentsPanel
-        entityType="application_track_stage" entityId={stageData.id}
-        accept="image/*" label="Screenshots" disabled={!canWriteNotes || trackStatus === 'cancelled'}
-      />
 
       <Box sx={{ mt: 2 }}>
         <NotesThread
@@ -329,92 +313,42 @@ function StageSection({
       {canAct && isRequestReady && (
         <Box sx={{ mt: 2 }}>
           {stageData.status === 'not_started' && isBlockedByPredecessor && (
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
               Starts when {predecessorLabel} is complete.
             </Typography>
           )}
-          {stageData.status === 'not_started' && !isBlockedByPredecessor && (
-            <Button variant="outlined" disabled={submitting} onClick={onStart}>Start {STAGE_LABELS[stage]}</Button>
-          )}
-          {isInProgress && (
+          <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" useFlexGap rowGap={1}>
             <Stack direction="row" spacing={1}>
-              <Button
-                variant="outlined" disabled={submitting || !dirty}
-                onClick={() => onSaveDates({ startDate: startDraft || null, endDate: endDraft || null, documentUrl: linkDraft.trim() || null })}
-              >
-                Save
-              </Button>
-              <Button variant="contained" disabled={submitting} onClick={onOpenComplete}>Mark {STAGE_LABELS[stage]} complete</Button>
+              {stageData.status === 'not_started' && !isBlockedByPredecessor && (
+                <Button variant="outlined" disabled={submitting} onClick={onStart}>Start {STAGE_LABELS[stage]}</Button>
+              )}
+              {canAssign && (
+                <Tooltip title={needsDatesFirst ? 'Set Started and Expected finish before assigning someone.' : ''}>
+                  <span>
+                    <Button variant="outlined" disabled={assigning || !assigneeDirty || needsDatesFirst} onClick={confirmAssign}>
+                      Assignee
+                    </Button>
+                  </span>
+                </Tooltip>
+              )}
+              {(datesEditable || linkEditable) && (
+                <Button
+                  variant="outlined" disabled={submitting || !dirty}
+                  onClick={() => onSaveDates({
+                    ...(datesEditable ? { startDate: startDraft || null, endDate: endDraft || null } : {}),
+                    ...(linkEditable ? { documentUrl: linkDraft.trim() || null } : {}),
+                  })}
+                >
+                  Save
+                </Button>
+              )}
             </Stack>
-          )}
+            {isInProgress && (
+              <Button variant="contained" disabled={submitting} onClick={onOpenComplete}>Mark {STAGE_LABELS[stage]} complete</Button>
+            )}
+          </Stack>
         </Box>
       )}
-    </Paper>
-  );
-}
-
-/** Same shape as ChangeRequestDetailPage.jsx's AssignCard — bulk-assign all three stages at once. */
-function AssignCard({
-  stages, candidates, onSave, submitting,
-}) {
-  const stageValue = (stage) => stages.find((s) => s.stage === stage)?.assigneeId || '';
-  const [draft, setDraft] = useState(() => ({
-    development: stageValue('development'), testing: stageValue('testing'), deployment: stageValue('deployment'),
-  }));
-  useEffect(() => {
-    setDraft({ development: stageValue('development'), testing: stageValue('testing'), deployment: stageValue('deployment') });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stages]);
-
-  const original = { development: stageValue('development'), testing: stageValue('testing'), deployment: stageValue('deployment') };
-  const hasChanges = STAGE_ORDER.some((stage) => draft[stage] !== original[stage]);
-
-  const optionsFor = (stage) => {
-    const stageData = stages.find((s) => s.stage === stage);
-    const already = candidates.some((c) => c.id === stageData?.assigneeId);
-    if (stageData?.assigneeId && !already && stageData.assignee) {
-      return [{ id: stageData.assigneeId, name: stageData.assignee.name, roleLabel: null }, ...candidates];
-    }
-    return candidates;
-  };
-
-  const save = () => {
-    const payload = {};
-    STAGE_ORDER.forEach((stage) => {
-      if (draft[stage] !== original[stage]) payload[stage] = draft[stage] || null;
-    });
-    onSave(payload);
-  };
-
-  return (
-    <Paper variant="outlined" sx={{ p: 2 }}>
-      <Typography variant="subtitle1" fontWeight={700}>Assign the work</Typography>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-        Only you can change these. Each person is notified when it becomes their turn, not when you assign.
-      </Typography>
-      <Stack spacing={2}>
-        {STAGE_ORDER.map((stage) => {
-          const stageData = stages.find((s) => s.stage === stage);
-          const isComplete = stageData?.status === 'complete';
-          return (
-            <TextField
-              key={stage}
-              select fullWidth size="small" label={STAGE_LABELS[stage]}
-              disabled={isComplete}
-              value={isComplete ? (stageData.assigneeId || '') : draft[stage]}
-              onChange={(e) => setDraft((prev) => ({ ...prev, [stage]: e.target.value }))}
-            >
-              <MenuItem value="">Unassigned</MenuItem>
-              {optionsFor(stage).map((c) => (
-                <MenuItem key={c.id} value={c.id}>{c.name}{c.roleLabel ? ` — ${c.roleLabel}` : ''}</MenuItem>
-              ))}
-            </TextField>
-          );
-        })}
-        <Button variant="contained" fullWidth disabled={!hasChanges || submitting} onClick={save}>
-          Save assignments
-        </Button>
-      </Stack>
     </Paper>
   );
 }
@@ -427,9 +361,6 @@ export default function ApplicationTrackingDetailPage() {
   const { data: track, loading, error, reload } = useResource(() => applicationTrackingApi.getById(id), [id]);
   const [submitting, setSubmitting] = useState(false);
   const [completingStage, setCompletingStage] = useState(null);
-  const [priorityOpen, setPriorityOpen] = useState(false);
-  const [holdOpen, setHoldOpen] = useState(false);
-  const [cancelOpen, setCancelOpen] = useState(false);
   const [candidates, setCandidates] = useState([]);
 
   useBreadcrumbLabel(track?.name);
@@ -453,8 +384,11 @@ export default function ApplicationTrackingDetailPage() {
   // Narrower than canActOnStage — notes are the assignee's own work-log, not the owner's to write
   // on their behalf, so the owner doesn't get a pass here the way they do for starting/completing.
   const canWriteNotesOnStage = (stageData) => isSuperAdmin || (!!stageData.assigneeId && stageData.assigneeId === user?.id);
-  const canManageAssignments = isOwnerOrSuper && track.status !== 'cancelled' && track.status !== 'live'
-    && track.stages.some((s) => s.status !== 'complete');
+  // Same rule the old "Assign the work" rail enforced, just checked per stage now instead of
+  // gating the whole card: only the owner (or a super-admin) may assign, a dead/delivered track
+  // (cancelled/live) has nothing left to assign, and a completed stage keeps whoever did it.
+  const canAssignStage = (stageData) => isOwnerOrSuper && track.status !== 'cancelled' && track.status !== 'live'
+    && stageData.status !== 'complete';
 
   const patchStage = async (stage, payload, successMessage) => {
     setSubmitting(true);
@@ -487,18 +421,6 @@ export default function ApplicationTrackingDetailPage() {
     }
   };
 
-  const handlePriorityChange = async (priority) => {
-    await applicationTrackingApi.update(id, { priority });
-    showSuccess('Priority updated');
-    await reload();
-  };
-
-  const handleHold = async (reason) => {
-    await applicationTrackingApi.hold(id, { reason });
-    showSuccess('Track put on hold');
-    await reload();
-  };
-
   const handleResume = async () => {
     setSubmitting(true);
     try {
@@ -510,12 +432,6 @@ export default function ApplicationTrackingDetailPage() {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const handleCancel = async (reason) => {
-    await applicationTrackingApi.cancel(id, { reason });
-    showSuccess('Track cancelled');
-    await reload();
   };
 
   const handleGoLive = async () => {
@@ -531,17 +447,16 @@ export default function ApplicationTrackingDetailPage() {
     }
   };
 
-  const handleBulkAssign = async (payload) => {
-    if (Object.keys(payload).length === 0) return;
-    setSubmitting(true);
+  // `payload` carries assigneeId and, when the owner is naming someone rather than clearing the
+  // assignment, whatever dates were in the draft at the moment "Assignee" was clicked — see
+  // StageSection#confirmAssign.
+  const handleAssignStage = async (stage, payload) => {
     try {
-      await applicationTrackingApi.assignStages(id, payload);
-      showSuccess('Assignments updated');
+      await applicationTrackingApi.updateStage(id, stage, payload);
+      showSuccess('Assignee updated');
       await reload();
     } catch (err) {
-      showError(err.response?.data?.message || 'Failed to update assignments');
-    } finally {
-      setSubmitting(false);
+      showError(err.response?.data?.message || 'Failed to update assignee');
     }
   };
 
@@ -596,34 +511,18 @@ export default function ApplicationTrackingDetailPage() {
         </Typography>
       </Stack>
 
-      <Paper variant="outlined" sx={{ p: 2, mt: 1, mb: 2 }}>
+      <Box sx={{ mt: 1, mb: 2 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" useFlexGap rowGap={1}>
           <Stack direction="row" alignItems="center" spacing={1}>
             <Typography variant="h5" fontWeight={700}>{track.name}</Typography>
-            <PriorityChip priority={track.priority} />
           </Stack>
           <Stack direction="row" alignItems="center" spacing={1}>
             <StatusBadge color={chip.color} label={chip.label} />
-            {isOwnerOrSuper && (
-              <Stack direction="row" spacing={1}>
-                {isActive && <Button size="small" variant="outlined" onClick={() => setPriorityOpen(true)}>Change priority</Button>}
-                {isActive && <Button size="small" variant="outlined" onClick={() => setHoldOpen(true)}>Put on hold</Button>}
-                {track.status === 'on_hold' && <Button size="small" variant="outlined" onClick={handleResume} disabled={submitting}>Resume</Button>}
-                {(isActive || track.status === 'on_hold') && (
-                  <Button size="small" variant="outlined" color="error" onClick={() => setCancelOpen(true)}>Cancel</Button>
-                )}
-              </Stack>
+            {isOwnerOrSuper && track.status === 'on_hold' && (
+              <Button size="small" variant="outlined" onClick={handleResume} disabled={submitting}>Resume</Button>
             )}
           </Stack>
         </Stack>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-          {track.idea && (
-            <Link component={RouterLink} to={`/ideas/${track.idea.id}`} color="text.secondary" sx={{ '&:hover': { textDecoration: 'underline' } }}>
-              From Idea #{track.idea.ideaNumber}
-            </Link>
-          )}
-          {track.targetGoLive ? `${track.idea ? ' · ' : ''}Target go-live ${formatDate(track.targetGoLive)}` : ''}
-        </Typography>
         {track.status === 'on_hold' && track.closureReason && (
           <Alert severity="warning" sx={{ mt: 1.5 }}>On hold: {track.closureReason}</Alert>
         )}
@@ -635,87 +534,82 @@ export default function ApplicationTrackingDetailPage() {
             The application it produced has since been removed.
           </Typography>
         )}
-      </Paper>
-
-      <Box sx={{ display: 'grid', gridTemplateColumns: canManageAssignments ? { xs: '1fr', md: '1fr 296px' } : '1fr', gap: 2, alignItems: 'start' }}>
-        <Box sx={{ order: { xs: 2, md: 1 } }}>
-          <Stack spacing={1.5}>
-            {readyToGoLive && isOwnerOrSuper && (
-              <Alert
-                severity="success"
-                action={(
-                  <Button color="inherit" size="small" variant="outlined" disabled={submitting} onClick={handleGoLive}>
-                    Move to Application
-                  </Button>
-                )}
-              >
-                All stages of <strong>{track.name}</strong> are complete. Move it to the Applications
-                catalogue to close this track as Live.
-              </Alert>
-            )}
-            {readyToGoLive && !isOwnerOrSuper && (
-              <Alert severity="info">
-                All stages of <strong>{track.name}</strong> are complete — waiting on {track.owner?.name || 'the owner'} to
-                move it to the Applications catalogue.
-              </Alert>
-            )}
-            {banner && <Alert severity={banner.severity}>{banner.text}</Alert>}
-            {track.stages?.map((stageData, index) => {
-              const stage = stageData.stage;
-              const predecessor = index > 0 ? track.stages[index - 1] : null;
-              const isBlockedByPredecessor = index > 0 && predecessor.status !== 'complete';
-              const isDeployment = stage === 'deployment';
-              return (
-                <Box key={stageData.id}>
-                  {isDeployment && showGoLivePanel && (
-                    <Alert severity="info" sx={{ mb: 1.5 }}>
-                      Marking Deployment complete notifies {track.owner?.name || 'the owner'} that
-                      <strong> {track.name}</strong> is ready — they'll then move it to the Applications
-                      catalogue to close this track as Live.
-                    </Alert>
-                  )}
-                  <StageSection
-                    stage={stage}
-                    stageData={stageData}
-                    canAct={canActOnStage(stageData)}
-                    canWriteNotes={canWriteNotesOnStage(stageData)}
-                    isViewerStage={index === viewerStageIndex}
-                    isRequestReady={isActive}
-                    trackStatus={track.status}
-                    isBlockedByPredecessor={isBlockedByPredecessor}
-                    predecessorLabel={predecessor ? STAGE_LABELS[predecessor.stage] : null}
-                    predecessorAssigneeName={predecessor?.assignee?.name}
-                    submitting={submitting}
-                    onStart={() => patchStage(stage, { status: 'in_progress' }, `${STAGE_LABELS[stage]} started`)}
-                    onSaveDates={(payload) => patchStage(stage, payload, 'Dates saved')}
-                    onOpenComplete={() => setCompletingStage(stage)}
-                  />
-                </Box>
-              );
-            })}
-          </Stack>
-        </Box>
-        {canManageAssignments && (
-          <Box sx={{ order: { xs: 1, md: 2 }, position: 'sticky', top: 16 }}>
-            <AssignCard stages={track.stages} candidates={candidates} onSave={handleBulkAssign} submitting={submitting} />
-          </Box>
+        {(track.startDate || track.targetGoLive) && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+            Track window: {formatDate(track.startDate)} – {formatDate(track.targetGoLive)}
+          </Typography>
         )}
       </Box>
 
-      <PriorityDialog
-        open={priorityOpen} currentPriority={track.priority}
-        onClose={() => setPriorityOpen(false)} onSubmit={handlePriorityChange}
-      />
-      <ReasonDialog
-        open={holdOpen} title="Put this track on hold" submitLabel="Put on hold"
-        copy="Stages can't be progressed while a track is on hold — anyone assigned to it will be notified."
-        onClose={() => setHoldOpen(false)} onSubmit={handleHold}
-      />
-      <ReasonDialog
-        open={cancelOpen} title="Cancel this track" submitLabel="Cancel track" danger
-        copy="This closes the track permanently — it stays as a record, but can never be resumed."
-        onClose={() => setCancelOpen(false)} onSubmit={handleCancel}
-      />
+      {track.idea && (
+        <Box sx={{ mb: 2 }}>
+          <IdeaFieldAccordion label="Problem Statement" value={track.idea.description} />
+          <IdeaFieldAccordion label="Solution" value={track.idea.proposedSolution} />
+          <IdeaFieldAccordion label="Technologies and Efficiency" value={track.idea.technologiesAndEfficiency} />
+        </Box>
+      )}
+
+      <Stack spacing={1.5}>
+        {readyToGoLive && isOwnerOrSuper && (
+          <Alert
+            severity="success"
+            action={(
+              <Button color="inherit" size="small" variant="outlined" disabled={submitting} onClick={handleGoLive}>
+                Move to Application
+              </Button>
+            )}
+          >
+            All stages of <strong>{track.name}</strong> are complete. Move it to the Applications
+            catalogue to close this track as Live.
+          </Alert>
+        )}
+        {readyToGoLive && !isOwnerOrSuper && (
+          <Alert severity="info">
+            All stages of <strong>{track.name}</strong> are complete — waiting on {track.owner?.name || 'the owner'} to
+            move it to the Applications catalogue.
+          </Alert>
+        )}
+        {banner && <Alert severity={banner.severity}>{banner.text}</Alert>}
+        {track.stages?.map((stageData, index) => {
+          const stage = stageData.stage;
+          const predecessor = index > 0 ? track.stages[index - 1] : null;
+          const isBlockedByPredecessor = index > 0 && predecessor.status !== 'complete';
+          const isDeployment = stage === 'deployment';
+          return (
+            <Box key={stageData.id}>
+              {isDeployment && showGoLivePanel && (
+                <Alert severity="info" sx={{ mb: 1.5 }}>
+                  Marking Deployment complete notifies {track.owner?.name || 'the owner'} that
+                  <strong> {track.name}</strong> is ready — they'll then move it to the Applications
+                  catalogue to close this track as Live.
+                </Alert>
+              )}
+              <StageSection
+                stage={stage}
+                stageData={stageData}
+                canAct={canActOnStage(stageData)}
+                canAssign={canAssignStage(stageData)}
+                candidates={candidates}
+                canWriteNotes={canWriteNotesOnStage(stageData)}
+                trackStartDate={track.startDate}
+                trackTargetGoLive={track.targetGoLive}
+                isViewerStage={index === viewerStageIndex}
+                isRequestReady={isActive}
+                trackStatus={track.status}
+                isBlockedByPredecessor={isBlockedByPredecessor}
+                predecessorLabel={predecessor ? STAGE_LABELS[predecessor.stage] : null}
+                predecessorAssigneeName={predecessor?.assignee?.name}
+                submitting={submitting}
+                onStart={() => patchStage(stage, { status: 'in_progress' }, `${STAGE_LABELS[stage]} started`)}
+                onSaveDates={(payload) => patchStage(stage, payload, 'Dates saved')}
+                onAssign={(payload) => handleAssignStage(stage, payload)}
+                onOpenComplete={() => setCompletingStage(stage)}
+              />
+            </Box>
+          );
+        })}
+      </Stack>
+
       <MarkCompleteDialog
         open={!!completingStage}
         stage={completingStage}

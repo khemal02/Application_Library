@@ -415,7 +415,9 @@ async function panelCandidates(id, kind, req) {
  * No super-admin override and no asRole for a normal vote (R10) — panel membership is the
  * authorization; you can only ever record your own row.
  */
-async function submitReview(id, { decision, note, ownerId }, req) {
+async function submitReview(id, {
+  decision, note, ownerId, startDate, targetGoLive,
+}, req) {
   const idea = await Idea.findByPk(id, { include });
   if (!idea) throw ApiError.notFound('Idea not found');
 
@@ -424,7 +426,7 @@ async function submitReview(id, { decision, note, ownerId }, req) {
   }
 
   const myRow = await IdeaReview.findOne({ where: { ideaId: idea.id, userId: req.user.id } });
-  if (!myRow) return submitTieBreak(idea, { decision, note, ownerId }, req);
+  if (!myRow) return submitTieBreak(idea, { decision, note, ownerId, startDate, targetGoLive }, req);
 
   if (myRow.kind === 'reviewer') {
     if (decision === 'request_changes' && !note?.trim()) {
@@ -465,7 +467,7 @@ async function submitReview(id, { decision, note, ownerId }, req) {
 
   const outcome = approveCount > rejectCount ? 'approve' : 'reject';
   return finalizeIdea(idea, {
-    actingRow: myRow, actingRowIsNew: false, actingDecision: decision, note, ownerId, outcome, reasonRows: allRows,
+    actingRow: myRow, actingRowIsNew: false, actingDecision: decision, note, ownerId, startDate, targetGoLive, outcome, reasonRows: allRows,
   }, req);
 }
 
@@ -479,7 +481,9 @@ async function submitReview(id, { decision, note, ownerId }, req) {
  * finalizeIdea() already does. Only cares whether the APPROVERS are tied — reviewers and
  * approvers act in parallel now, so reviewer completion has no bearing on whether a tie exists.
  */
-async function submitTieBreak(idea, { decision, note, ownerId }, req) {
+async function submitTieBreak(idea, {
+  decision, note, ownerId, startDate, targetGoLive,
+}, req) {
   if (idea.status !== 'under_review') {
     throw ApiError.badRequest('Reviews can only be submitted for an idea that is Under Review.');
   }
@@ -502,7 +506,7 @@ async function submitTieBreak(idea, { decision, note, ownerId }, req) {
   }
 
   return finalizeIdea(idea, {
-    actingRow: null, actingRowIsNew: true, actingDecision: decision, note, ownerId, outcome: decision, reasonRows: allRows,
+    actingRow: null, actingRowIsNew: true, actingDecision: decision, note, ownerId, startDate, targetGoLive, outcome: decision, reasonRows: allRows,
   }, req);
 }
 
@@ -516,7 +520,9 @@ async function submitTieBreak(idea, { decision, note, ownerId }, req) {
  * missing ownerId) must never persist on its own; that's exactly what a naive write-then-validate
  * ordering would produce.
  */
-async function finalizeIdea(idea, { actingRow, actingRowIsNew, actingDecision, note, ownerId, outcome, reasonRows }, req) {
+async function finalizeIdea(idea, {
+  actingRow, actingRowIsNew, actingDecision, note, ownerId, startDate, targetGoLive, outcome, reasonRows,
+}, req) {
   const toStatus = outcome === 'approve' ? 'approved' : 'rejected';
   // Same trigger condition as before Application Tracking existed, unchanged (per explicit
   // instruction A3) — a new_idea is the only category this module handles post-split, and the
@@ -592,6 +598,8 @@ async function finalizeIdea(idea, { actingRow, actingRowIsNew, actingDecision, n
           status: 'active',
           name: null,
           description: null,
+          startDate: startDate || null,
+          targetGoLive: targetGoLive || null,
         }, { transaction: t });
         await ApplicationTrackStage.bulkCreate(
           ['development', 'testing', 'deployment'].map((stage) => ({ applicationTrackId: track.id, stage })),

@@ -100,6 +100,7 @@ export default function IdeaPanelCard({
   idea, panel,
   voteDecision, onVoteDecisionChange, voteNote, onVoteNoteChange,
   ownerId, onOwnerIdChange, ownerCandidates,
+  startDate, onStartDateChange, targetGoLive, onTargetGoLiveChange,
   submitting, onSubmitReview,
   onPanelChanged,
 }) {
@@ -224,10 +225,7 @@ export default function IdeaPanelCard({
       return { severity: 'warning', text: `You are the last of ${panel.approversTotal} approvers. Right now this would tie ${approveTally}–${rejectTally} — the CEO would need to break it.` };
     }
     if (completingOutcome === 'approve') {
-      return {
-        severity: 'info',
-        text: `You are the last of ${panel.approversTotal} approvers. Approving registers a tracked Application and freezes this idea — no further comments or edits.`,
-      };
+      return null;
     }
     return { severity: 'warning', text: `You are the last of ${panel.approversTotal} approvers. Rejecting ends this idea immediately — no further comments or edits.` };
   }
@@ -293,7 +291,7 @@ export default function IdeaPanelCard({
             </Box>
 
             <RadioGroup
-              row={isBinaryVote} value={voteDecision} aria-label="Decision"
+              row value={voteDecision} aria-label="Decision"
               onChange={(e) => onVoteDecisionChange(e.target.value)}
               sx={{ flexWrap: 'nowrap', gap: 1.5, width: '100%' }}
             >
@@ -302,8 +300,8 @@ export default function IdeaPanelCard({
                   key={opt.value}
                   value={opt.value}
                   control={<Radio size="small" sx={{ pt: '2px', alignSelf: 'flex-start' }} />}
-                  label={<Typography variant="body2" fontWeight={700}>{opt.title}</Typography>}
-                  sx={{ ...(isBinaryVote ? { flex: 1 } : { width: '100%' }), m: 0, alignItems: 'flex-start' }}
+                  label={<Typography variant="body2" fontWeight={700} sx={{ overflowWrap: 'break-word' }}>{opt.title}</Typography>}
+                  sx={{ flex: 1, minWidth: 0, m: 0, alignItems: 'flex-start' }}
                 />
               ))}
             </RadioGroup>
@@ -334,6 +332,18 @@ export default function IdeaPanelCard({
                   <MenuItem value="">Select…</MenuItem>
                   {ownerCandidates.map((u) => <MenuItem key={u.id} value={u.id}>{u.name}</MenuItem>)}
                 </TextField>
+                <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
+                  <TextField
+                    fullWidth size="small" type="date" label="Start Date"
+                    InputLabelProps={{ shrink: true }}
+                    value={startDate} onChange={(e) => onStartDateChange(e.target.value)}
+                  />
+                  <TextField
+                    fullWidth size="small" type="date" label="Expected Deployment Date"
+                    InputLabelProps={{ shrink: true }}
+                    value={targetGoLive} onChange={(e) => onTargetGoLiveChange(e.target.value)}
+                  />
+                </Stack>
               </Box>
             )}
 
