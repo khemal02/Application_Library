@@ -358,16 +358,16 @@ async function updateStage(id, stage, payload, req) {
   }
   // Narrower than the general gate above, same reasoning comments.service.js's note-writing rule
   // already applies to this stage's Notes — the document link is the assignee's own deliverable to
-  // attach, not the owner's to set on their behalf, even though the owner can otherwise start/
-  // complete the stage.
+  // attach, not the owner's to set on their behalf.
   if (payload.documentUrl !== undefined && !isAssignee && !isSuper) {
     throw ApiError.forbidden('Only this stage\'s assignee (or a super-admin) may set its document link.');
   }
-  // Starting the stage is the assignee's own call to make (or a super-admin's) — not the owner's,
-  // unless the owner is themselves the assignee. The owner still names who's assigned and plans
-  // the dates; only actually starting the work belongs to whoever's doing it.
-  if (payload.status === 'in_progress' && !isAssignee && !isSuper) {
-    throw ApiError.forbidden('Only this stage\'s assignee (or a super-admin) may start it.');
+  // Starting and completing the stage are the assignee's own calls to make (or a super-admin's) —
+  // not the owner's, unless the owner is themselves the assignee. The owner still names who's
+  // assigned and plans the dates; only actually doing (and finishing) the work belongs to whoever's
+  // doing it.
+  if ((payload.status === 'in_progress' || payload.status === 'complete') && !isAssignee && !isSuper) {
+    throw ApiError.forbidden(`Only this stage's assignee (or a super-admin) may ${payload.status === 'in_progress' ? 'start' : 'complete'} it.`);
   }
 
   // Keeps a planned timeline internally consistent — the owner can now set Started/Expected finish
@@ -555,7 +555,6 @@ async function goLive(id, req) {
   const idea = await Idea.findByPk(record.ideaId, {
     attributes: ['id', 'title', 'description', 'departmentId', 'industry', 'functionalArea', 'submittedBy'],
   });
-  const deploymentStage = record.stages.find((s) => s.stage === 'deployment');
   let app;
 
   await sequelize.transaction(async (t) => {
@@ -571,9 +570,14 @@ async function goLive(id, req) {
       ownerId: record.ownerId,
       // B1: explicit, honest, never the 'development' default — see the discovery report's D13.
       status: 'deployment',
-      // B2: derived from whenever Deployment itself was actually completed, not invented — and
-      // not today(), which would misreport a track that sat waiting on the owner for a while.
-      releaseDate: deploymentStage.endDate,
+      // The approver's own overall Start Date for the track (set at idea approval) — carried
+      // straight through so the Application catalogue keeps showing when the work began, not a
+      // blank field just because the track itself is gone once it's live.
+      startDate: record.startDate,
+      // The actual date this track went live in the catalogue, not the Deployment stage's
+      // originally-planned finish date — those two can differ (a track that sat waiting on the
+      // owner after Deployment finished shouldn't misreport an earlier date as when it "released").
+      releaseDate: today(),
       // Whoever clicks this registers it — the owner (or a super-admin) making the call, not
       // whoever happened to complete Deployment.
       createdBy: req.user.id,

@@ -17,6 +17,9 @@ import { LoadingBlock, ErrorBlock } from '../../components/common/AsyncState';
 import BackButton from '../../components/common/BackButton';
 import StatusBadge from '../../components/common/StatusBadge';
 import { STAGE_ORDER, STAGE_LABELS, STAGE_STATUS_LABELS } from '../../utils/applicationTrackStatus';
+import AttachmentGallery from '../../components/common/AttachmentGallery';
+
+const NOTE_ATTACHMENT_ENTITY = 'comment';
 
 const formatDate = (value) => (value ? dayjs(value).format('MMM D, YYYY') : '—');
 
@@ -75,6 +78,32 @@ function StageCard({ stage, stageData }) {
           />
         </Grid>
       </Grid>
+
+      {/* The same work-log the stage's own card showed back in Idea Prioritization — carried
+          through here so the origin history isn't just dates, the actual notes survive go-live
+          too. Plain display only, same as everything else on this page: no author/date, no
+          add/edit — this is a frozen record, not an open thread. */}
+      {stageData.notes?.length > 0 && (
+        <Box sx={{ mt: 2 }}>
+          <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>Notes</Typography>
+          {stageData.notes.map((note, idx) => (
+            <Box
+              key={note.id}
+              sx={{
+                mb: idx < stageData.notes.length - 1 ? 2 : 0,
+                pb: idx < stageData.notes.length - 1 ? 2 : 0,
+                borderBottom: idx < stageData.notes.length - 1 ? 1 : 0,
+                borderColor: 'divider',
+              }}
+            >
+              {note.body && (
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{note.body}</Typography>
+              )}
+              <AttachmentGallery entityType={NOTE_ATTACHMENT_ENTITY} entityId={note.id} />
+            </Box>
+          ))}
+        </Box>
+      )}
     </Paper>
   );
 }

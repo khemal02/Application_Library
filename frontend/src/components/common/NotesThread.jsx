@@ -29,7 +29,7 @@ function wordCount(text) {
 }
 
 function NoteCard({
-  note, hideAuthor, hideDate, plain,
+  note, hideAuthor, hideDate, plain, onEdit,
 }) {
   const content = (
     <Stack direction="row" spacing={1.5} alignItems="flex-start">
@@ -54,7 +54,21 @@ function NoteCard({
         {note.body && (
           <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', mt: 0.5 }}>{note.body}</Typography>
         )}
-        <AttachmentGallery entityType={NOTE_ATTACHMENT_ENTITY} entityId={note.id} />
+        {/* Edit sits inline on the same row as this note's own attachments, pinned to the right,
+            rather than as a separate control below the whole thread — it belongs to THIS note, so
+            it reads better next to what it's editing. The Box always holds its flex space even when
+            AttachmentGallery renders nothing (no screenshots), so Edit stays right-aligned either
+            way instead of collapsing to the left. */}
+        <Stack direction="row" alignItems="flex-end">
+          <Box sx={{ flex: 1 }}>
+            <AttachmentGallery entityType={NOTE_ATTACHMENT_ENTITY} entityId={note.id} />
+          </Box>
+          {onEdit && (
+            <Button size="small" variant="outlined" startIcon={<EditOutlinedIcon />} onClick={onEdit}>
+              Edit
+            </Button>
+          )}
+        </Stack>
       </Box>
     </Stack>
   );
@@ -188,8 +202,17 @@ export default function NotesThread({
         <Typography variant="body2" color="text.secondary">Nothing was added while this was open.</Typography>
       )}
 
-      {notes.map((note) => (
-        <NoteCard key={note.id} note={note} hideAuthor={hideAuthor} hideDate={hideDate} plain={plain} />
+      {/* The note being edited is hidden while its composer is open below — otherwise the same
+          note would show twice at once (the read-only card above, the edit box below it). */}
+      {notes.filter((note) => note.id !== editingNoteId).map((note) => (
+        <NoteCard
+          key={note.id}
+          note={note}
+          hideAuthor={hideAuthor}
+          hideDate={hideDate}
+          plain={plain}
+          onEdit={editableOwn && !disabled && note.id === ownNote?.id ? () => openEditor(note) : undefined}
+        />
       ))}
 
       {composing && !disabled && (
@@ -230,17 +253,14 @@ export default function NotesThread({
         </Paper>
       )}
 
-      {!composing && !disabled && (
+      {/* Only "Add" lives here now — once there's an own note, its "Edit" moved inline onto the
+          note card itself (next to its attachments), so there's nothing left to show here for
+          that case. */}
+      {!composing && !disabled && !ownNote && (
         <Stack direction="row" justifyContent={plain ? 'flex-start' : 'flex-end'} sx={{ mt: notes.length > 0 ? 2 : 1 }}>
-          {ownNote ? (
-            <Button variant="outlined" startIcon={<EditOutlinedIcon />} onClick={() => openEditor(ownNote)}>
-              Edit
-            </Button>
-          ) : (
-            <Button variant="outlined" startIcon={<AddIcon />} onClick={openComposer}>
-              Add
-            </Button>
-          )}
+          <Button variant="outlined" startIcon={<AddIcon />} onClick={openComposer}>
+            Add
+          </Button>
         </Stack>
       )}
 

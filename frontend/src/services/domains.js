@@ -69,6 +69,8 @@ export const changeRequestsApi = {
     .get(`/applications/${appId}/change-requests/${id}/assignee-candidates`).then((r) => r.data),
   bulkAssignStages: (appId, id, payload) => api
     .patch(`/applications/${appId}/change-requests/${id}/assignments`, payload).then((r) => r.data),
+  implement: (appId, id) => api
+    .patch(`/applications/${appId}/change-requests/${id}/implement`).then((r) => r.data),
   // Top-level, not nested under an application — backs the Dashboard's "My Development"/
   // "My Testing"/"My Deployment" tiles and the list page they link to.
   myAssignedStages: (stage) => api

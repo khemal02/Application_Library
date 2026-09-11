@@ -1,17 +1,11 @@
-import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
-import Button from '@mui/material/Button';
-import EditIcon from '@mui/icons-material/EditOutlined';
+import Typography from '@mui/material/Typography';
 import { applicationsApi } from '../../services/domains';
 import useResource from '../../hooks/useResource';
 import useBreadcrumbLabel from '../../hooks/useBreadcrumbLabel';
-import useToast from '../../hooks/useToast';
-import { useAppSelector } from '../../app/hooks';
 import { LoadingBlock, ErrorBlock } from '../../components/common/AsyncState';
-import usePermission from '../../routes/usePermission';
-import ApplicationFormDialog from './ApplicationFormDialog';
 import ProjectInfoBox from './ProjectInfoBox';
 import ChangeRequestsTab from './tabs/ChangeRequestsTab';
 import IssuesCard from './IssuesCard';
@@ -19,15 +13,6 @@ import BackButton from '../../components/common/BackButton';
 
 export default function ApplicationDetailPage() {
   const { id } = useParams();
-  const [editOpen, setEditOpen] = useState(false);
-  // Narrower than the raw `applications:update` grant (which also covers Team Lead/Manager/CEO
-  // generally) — editing an application's own catalog record is the owner's call, or a true
-  // super-admin's, and nobody else's, per explicit instruction. Matches
-  // applications.routes.js#ownApplicationOnly on the backend; this is only the UI half — a
-  // disabled control that would 403 anyway is worse than none.
-  const user = useAppSelector((s) => s.auth.user);
-  const isSuperAdmin = usePermission('*', 'manage');
-  const { showSuccess } = useToast();
 
   const { data: application, loading, error, reload } = useResource(() => applicationsApi.getById(id), [id]);
   useBreadcrumbLabel(application?.name);
@@ -36,16 +21,14 @@ export default function ApplicationDetailPage() {
   if (error) return <ErrorBlock message={error} onRetry={reload} />;
   if (!application) return null;
 
-  const canEditApplication = isSuperAdmin || application.ownerId === user?.id;
-
   return (
     <Box>
-      <BackButton />
-      {canEditApplication && (
-        <Stack direction="row" justifyContent="flex-end" sx={{ mb: 2 }}>
-          <Button startIcon={<EditIcon />} variant="outlined" onClick={() => setEditOpen(true)}>Edit</Button>
-        </Stack>
-      )}
+      <Stack direction="row" alignItems="center" spacing={1}>
+        <BackButton />
+        <Typography variant="body2" color="text.secondary">
+          Owner by, <Typography component="span" variant="body2" fontWeight={700} color="text.primary">{application.owner?.name || '—'}</Typography>
+        </Typography>
+      </Stack>
 
       <ProjectInfoBox application={application} />
 
@@ -56,13 +39,6 @@ export default function ApplicationDetailPage() {
       <Box sx={{ p: 2, mt: 2 }}>
         <IssuesCard applicationId={id} applicationOwnerId={application.ownerId} />
       </Box>
-
-      <ApplicationFormDialog
-        open={editOpen}
-        application={application}
-        onClose={() => setEditOpen(false)}
-        onSaved={() => { setEditOpen(false); showSuccess('Application updated'); reload(); }}
-      />
     </Box>
   );
 }

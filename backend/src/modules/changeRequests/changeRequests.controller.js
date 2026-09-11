@@ -6,10 +6,24 @@ const service = require('./changeRequests.service');
 module.exports = {
   ...createCrudController(service, { entityName: 'Change request' }),
 
+  // Overrides the factory's generated getById, which calls service.getById(req.params.id) with no
+  // req — this module's getById needs req to redact an unassigned stage's dates/document link for
+  // a viewer who isn't the application's owner/that stage's assignee/a super-admin.
+  getById: asyncHandler(async (req, res) => {
+    const record = await service.getById(req.params.id, req);
+    return ApiResponse.success(res, record);
+  }),
+
   updateStage: asyncHandler(async (req, res) => {
     const { applicationId, id, stage } = req.params;
     const record = await service.updateStage(applicationId, id, stage, req.body, req);
     return ApiResponse.success(res, record, 'Stage updated');
+  }),
+
+  implement: asyncHandler(async (req, res) => {
+    const { applicationId, id } = req.params;
+    const record = await service.implement(applicationId, id, req);
+    return ApiResponse.success(res, record, 'Change request marked implemented');
   }),
 
   assigneeCandidates: asyncHandler(async (req, res) => {

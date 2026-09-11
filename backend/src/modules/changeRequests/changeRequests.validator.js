@@ -44,7 +44,10 @@ const updateStageBody = Joi.object({
   // key. Notes no longer live here — see comments.service.js's 'change_request_stage' branch.
   startDate: Joi.date().iso().allow(null),
   endDate: Joi.date().iso().allow(null),
-  documentUrl: Joi.string().uri().max(500).allow(null),
+  // No longer a user-typed external link — the frontend always sends the app-relative URL a file
+  // upload returns (e.g. `/uploads/change_request_stage/<id>.pdf`), which plain `.uri()` would
+  // reject for having no scheme. `allowRelative` accepts that shape.
+  documentUrl: Joi.string().uri({ allowRelative: true }).max(500).allow(null),
 });
 
 // PATCH /applications/:applicationId/change-requests/:id/assignments — see
@@ -67,6 +70,13 @@ const myStagesQuery = Joi.object({
   stage: Joi.string().valid('development', 'testing', 'deployment').required(),
 });
 
+// PATCH /applications/:applicationId/change-requests/:id/implement — see
+// changeRequests.service.js#implement. No body; params only.
+const implementParams = Joi.object({
+  applicationId: Joi.string().uuid().required(),
+  id: Joi.string().uuid().required(),
+});
+
 module.exports = {
-  create, update, updateStageParams, updateStageBody, bulkAssignParams, bulkAssignBody, myStagesQuery,
+  create, update, updateStageParams, updateStageBody, bulkAssignParams, bulkAssignBody, myStagesQuery, implementParams,
 };

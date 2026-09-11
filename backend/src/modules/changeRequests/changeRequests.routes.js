@@ -5,7 +5,7 @@ const validate = require('../../middlewares/validate.middleware');
 const { ChangeRequest } = require('../../models');
 const controller = require('./changeRequests.controller');
 const {
-  create, update, updateStageParams, updateStageBody, bulkAssignParams, bulkAssignBody,
+  create, update, updateStageParams, updateStageBody, bulkAssignParams, bulkAssignBody, implementParams,
 } = require('./changeRequests.validator');
 
 // Create/read/update are open to every role regardless of application ownership/department — see
@@ -51,6 +51,17 @@ router.patch(
   authorize('change_requests', 'update'),
   validate({ params: bulkAssignParams, body: bulkAssignBody }),
   controller.bulkAssignStages,
+);
+
+// The deliberate, owner-only step that used to happen automatically the instant Deployment was
+// marked complete — same split applicationTracking.routes.js's own '/:id/go-live' already makes.
+// Route-level gate is the same coarse 'change_requests:update' every write here uses; the real
+// owner-or-super-admin-only gate lives in changeRequests.service.js#implement.
+router.patch(
+  '/:id/implement',
+  authorize('change_requests', 'update'),
+  validate({ params: implementParams }),
+  controller.implement,
 );
 
 module.exports = router;

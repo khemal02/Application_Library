@@ -22,7 +22,7 @@ import AccordionDetails from '@mui/material/AccordionDetails';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import dayjs from 'dayjs';
-import { applicationTrackingApi, commentsApi, attachmentsApi } from '../../services/domains';
+import { applicationTrackingApi, attachmentsApi } from '../../services/domains';
 import { useAppSelector } from '../../app/hooks';
 import useResource from '../../hooks/useResource';
 import useBreadcrumbLabel from '../../hooks/useBreadcrumbLabel';
@@ -48,7 +48,9 @@ function ReadField({ label, value }) {
   return (
     <Box>
       <Typography variant="caption" sx={CAPTION_SX}>{label}</Typography>
-      <Typography variant="body2" color={value ? 'text.primary' : 'text.disabled'} sx={{ mt: 0.25 }}>
+      {/* component="div" — `value` can be a block-level element (DocumentLinks' Stack), which is
+          invalid inside Typography's default <p>. */}
+      <Typography variant="body2" component="div" color={value ? 'text.primary' : 'text.disabled'} sx={{ mt: 0.25 }}>
         {value || '—'}
       </Typography>
     </Box>
@@ -85,30 +87,17 @@ function IdeaFieldAccordion({ label, value }) {
   );
 }
 
-/** Mark-complete confirmation — same shape as ChangeRequestDetailPage.jsx's MarkCompleteDialog. */
-function MarkCompleteDialog({
-  open, stage, isLastStage, onClose, onConfirm, submitting,
+/** A plain Yes/No confirmation prompt — reused for both "Mark {Stage} complete" and "Move to
+ * Application", the only difference being the question asked. */
+function ConfirmYesNoDialog({
+  open, title, onClose, onConfirm, submitting,
 }) {
-  const [note, setNote] = useState('');
-  useEffect(() => { if (open) setNote(''); }, [open]);
-
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Mark {stage && STAGE_LABELS[stage]} complete?</DialogTitle>
-      <DialogContent>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          {isLastStage
-            ? "This notifies the track's owner — they'll then move it to the Applications catalogue to close it as Live."
-            : `${stage && STAGE_LABELS[STAGE_ORDER[STAGE_ORDER.indexOf(stage) + 1]]} is next.`}
-        </Typography>
-        <TextField
-          fullWidth multiline minRows={3} label="Note (optional)"
-          value={note} onChange={(e) => setNote(e.target.value)}
-        />
-      </DialogContent>
+    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>{title}</DialogTitle>
       <DialogActions>
-        <Button onClick={onClose} disabled={submitting}>Cancel</Button>
-        <Button variant="contained" disabled={submitting} onClick={() => onConfirm(note.trim())}>Mark complete</Button>
+        <Button onClick={onClose} disabled={submitting}>No</Button>
+        <Button variant="contained" disabled={submitting} onClick={onConfirm}>Yes</Button>
       </DialogActions>
     </Dialog>
   );
@@ -234,10 +223,12 @@ function StageSection({
     }
   };
 
+  // "Your turn"/"Waiting on X" only apply BEFORE the assignee has actually started — once they
+  // click Start, their own view should read the same real status ("In progress") everyone else
+  // already sees, not stay stuck on the pre-start "Your turn" label forever.
   let chip;
-  if (isViewerStage && !isComplete) {
-    const actionableNow = isInProgress || !isBlockedByPredecessor;
-    chip = actionableNow
+  if (isViewerStage && !isComplete && !isInProgress) {
+    chip = !isBlockedByPredecessor
       ? { color: 'info', label: 'Your turn' }
       : { color: 'warning', label: `Waiting on ${predecessorAssigneeName || 'someone'}` };
   } else {
@@ -386,12 +377,13 @@ function StageSection({
                 </Tooltip>
               )}
             </Stack>
-            {/* Visible as soon as there's a Start button on the row (so the two sit together from
-                the start), just disabled until the stage is actually in_progress — same as every
-                other action on this card, never a hidden-then-appearing button. Once complete,
+            {/* Same assignee-or-super gate as "Start" above — the owner doesn't get a pass here
+                either, unless they're themselves the assignee. Visible as soon as there's a Start
+                button on the row (so the two sit together from the start), just disabled until the
+                stage is actually in_progress — never a hidden-then-appearing button. Once complete,
                 there's nothing left to mark, so it disappears entirely (matches a finished stage
-                showing no action buttons at all). */}
-            {!isComplete && (
+                showing no action buttons at all, just its status). */}
+            {canWriteNotes && !isComplete && (
               <Button variant="contained" disabled={submitting || !isInProgress} onClick={onOpenComplete}>
                 Mark {STAGE_LABELS[stage]} complete
               </Button>
@@ -411,6 +403,7 @@ export default function ApplicationTrackingDetailPage() {
   const { data: track, loading, error, reload } = useResource(() => applicationTrackingApi.getById(id), [id]);
   const [submitting, setSubmitting] = useState(false);
   const [completingStage, setCompletingStage] = useState(null);
+  const [confirmingGoLive, setConfirmingGoLive] = useState(false);
   const [candidates, setCandidates] = useState([]);
 
   useBreadcrumbLabel(track?.name);
@@ -453,13 +446,9 @@ export default function ApplicationTrackingDetailPage() {
     }
   };
 
-  const handleMarkComplete = async (stage, note) => {
+  const handleMarkComplete = async (stage) => {
     setSubmitting(true);
     try {
-      if (note) {
-        const stageData = track.stages.find((s) => s.stage === stage);
-        await commentsApi.create({ entityType: 'application_track_stage', entityId: stageData.id, body: note });
-      }
       await applicationTrackingApi.updateStage(id, stage, { status: 'complete' });
       showSuccess(`${STAGE_LABELS[stage]} complete`);
       setCompletingStage(null);
@@ -489,6 +478,7 @@ export default function ApplicationTrackingDetailPage() {
     try {
       await applicationTrackingApi.goLive(id);
       showSuccess('Application registered — this track is now live');
+      setConfirmingGoLive(false);
       await reload();
     } catch (err) {
       showError(err.response?.data?.message || 'Failed to move this track live');
@@ -604,7 +594,7 @@ export default function ApplicationTrackingDetailPage() {
           <Alert
             severity="success"
             action={(
-              <Button size="small" variant="contained" disabled={submitting} onClick={handleGoLive}>
+              <Button size="small" variant="contained" disabled={submitting} onClick={() => setConfirmingGoLive(true)}>
                 Move to Application
               </Button>
             )}
@@ -660,13 +650,19 @@ export default function ApplicationTrackingDetailPage() {
         })}
       </Stack>
 
-      <MarkCompleteDialog
+      <ConfirmYesNoDialog
         open={!!completingStage}
-        stage={completingStage}
-        isLastStage={completingStage === STAGE_ORDER[STAGE_ORDER.length - 1]}
+        title="Are you sure Mark as Complete?"
         submitting={submitting}
         onClose={() => setCompletingStage(null)}
-        onConfirm={(note) => handleMarkComplete(completingStage, note)}
+        onConfirm={() => handleMarkComplete(completingStage)}
+      />
+      <ConfirmYesNoDialog
+        open={confirmingGoLive}
+        title="Are you sure you want to move to application?"
+        submitting={submitting}
+        onClose={() => setConfirmingGoLive(false)}
+        onConfirm={handleGoLive}
       />
     </Box>
   );

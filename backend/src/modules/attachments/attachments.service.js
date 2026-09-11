@@ -23,13 +23,15 @@ const FEATURE_REQUEST_ENTITY_TYPES = ['feature_request'];
 // and JPEGs, per an explicit product decision. Checked here, not in the shared multer middleware,
 // so this restriction applies only to this one entityType and nothing else on the platform gets
 // narrowed by accident.
+const STAGE_DOCUMENT_MIME_ALLOWLIST = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'image/jpeg',
+]);
 const ENTITY_TYPE_MIME_ALLOWLIST = {
-  application_track_stage: new Set([
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'image/jpeg',
-  ]),
+  application_track_stage: STAGE_DOCUMENT_MIME_ALLOWLIST,
+  change_request_stage: STAGE_DOCUMENT_MIME_ALLOWLIST,
 };
 
 // GIF is intentionally excluded — sharp would flatten an animated GIF to its first frame.

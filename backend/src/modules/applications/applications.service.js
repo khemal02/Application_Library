@@ -1,6 +1,6 @@
 const { createCrudService } = require('../../utils/crudFactory');
 const {
-  Application, User, Role, RolePermission, Department, ApplicationTrack, ApplicationTrackStage, Idea, sequelize,
+  Application, User, Role, RolePermission, Department, ApplicationTrack, ApplicationTrackStage, Idea, Comment, sequelize,
 } = require('../../models');
 const ApiError = require('../../utils/ApiError');
 const logger = require('../../config/logger');
@@ -62,6 +62,27 @@ async function getOrigin(id) {
   if (!track) return null;
 
   const stages = [...track.stages].sort((a, b) => STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage));
+
+  // Same notes shown on each stage's own card back in Idea Prioritization (entityType
+  // 'application_track_stage', entityId the stage's own id) — carried through here so the
+  // origin history isn't just dates/assignee, the actual work-log survives go-live too.
+  const stageIds = stages.map((s) => s.id);
+  const comments = await Comment.findAll({
+    where: { entityType: 'application_track_stage', entityId: stageIds },
+    include: [{ model: User, as: 'author', attributes: ['id', 'name'] }],
+    order: [['createdAt', 'ASC']],
+  });
+  const notesByStage = new Map(stageIds.map((sid) => [sid, []]));
+  comments.forEach((c) => {
+    notesByStage.get(c.entityId)?.push({
+      id: c.id,
+      body: c.body,
+      author: c.author ? { id: c.author.id, name: c.author.name } : null,
+      createdAt: c.createdAt,
+    });
+  });
+  stages.forEach((s) => s.setDataValue('notes', notesByStage.get(s.id) || []));
+
   return { idea: track.idea, stages };
 }
 

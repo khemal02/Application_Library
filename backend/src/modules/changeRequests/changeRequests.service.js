@@ -110,6 +110,27 @@ function resolveSourceMany(records) {
   return records;
 }
 
+// Mirrors applicationTracking.service.js's own isOwnerOrSuper/redactUnassignedStages — a stage
+// with no assignee yet is just the owner's private plan, not real in-motion data, so nobody but
+// the application's owner (or a super-admin) should see its Started/Finished/Document link. Needs
+// `record.application.ownerId` (from detailInclude), not a column on the change request itself —
+// there's no per-record "owner" here, the owner is the application's.
+function isOwnerOrSuper(record, req) {
+  return (!!record.application?.ownerId && record.application.ownerId === req.user.id) || isSuperAdmin(req.user.permissions);
+}
+
+function redactUnassignedStages(record, req) {
+  if (!record || !Array.isArray(record.stages) || isOwnerOrSuper(record, req)) return record;
+  record.stages.forEach((stage) => {
+    if (!stage.assigneeId) {
+      stage.setDataValue('startDate', null);
+      stage.setDataValue('endDate', null);
+      stage.setDataValue('documentUrl', null);
+    }
+  });
+  return record;
+}
+
 // Bulk insert / eager-load order isn't a reliable read order — always sort explicitly to
 // development/testing/deployment rather than trust the DB's natural row order. Goes through
 // setDataValue rather than a plain property assignment — a Sequelize instance's own .toJSON()
@@ -248,11 +269,12 @@ async function list(query) {
   return result;
 }
 
-async function getById(id) {
+async function getById(id, req) {
   const record = await base.getById(id);
   sortStages(record);
   await attachStageNotes(record);
   resolveSource(record);
+  redactUnassignedStages(record, req);
   return record;
 }
 
@@ -307,7 +329,7 @@ async function update(id, payload, req) {
     }
   });
 
-  return getById(id);
+  return getById(id, req);
 }
 
 /**
@@ -377,6 +399,34 @@ async function updateStage(applicationId, id, stage, payload, req) {
   if (payload.assigneeId !== undefined && !isOwner && !isSuper) {
     throw ApiError.forbidden('Only the application\'s owner (or a super-admin) may assign or reassign this stage.');
   }
+  // Same rule Idea Prioritization's own stages already enforce: Started only ever commits together
+  // with an assignee, there's no standalone way to just save a date — the frontend's confirm
+  // button always sends both in the same call (assigneeId may still be `null`, e.g. reassigning
+  // dates for a stage while clearing it in the same call — just not omitted entirely).
+  if (payload.startDate !== undefined && payload.assigneeId === undefined) {
+    throw ApiError.badRequest(`${STAGE_LABELS[stage]}'s Started date can only be set together with its Assignee.`);
+  }
+  // No one gets named to a stage with no start date planned — an assignment with nothing to plan
+  // around is exactly what this pairing exists to prevent. Only checked when actually naming
+  // someone (a truthy assigneeId); clearing an assignment never needs a date.
+  if (payload.assigneeId) {
+    const effectiveStart = payload.startDate !== undefined ? payload.startDate : stageRow.startDate;
+    if (!effectiveStart) {
+      throw ApiError.badRequest(`Set ${STAGE_LABELS[stage]}'s Started date before assigning someone to it.`);
+    }
+  }
+  // Narrower than the general gate — the document link is the assignee's own deliverable to
+  // attach, not the owner's to set on their behalf.
+  if (payload.documentUrl !== undefined && !isAssignee && !isSuper) {
+    throw ApiError.forbidden('Only this stage\'s assignee (or a super-admin) may set its document link.');
+  }
+  // Starting and completing the stage are the assignee's own calls to make (or a super-admin's) —
+  // not the owner's, unless the owner is themselves the assignee. The owner still names who's
+  // assigned and plans the date; only actually doing (and finishing) the work belongs to whoever's
+  // doing it.
+  if ((payload.status === 'in_progress' || payload.status === 'complete') && !isAssignee && !isSuper) {
+    throw ApiError.forbidden(`Only this stage's assignee (or a super-admin) may ${payload.status === 'in_progress' ? 'start' : 'complete'} it.`);
+  }
 
   const updates = {};
   let nextStatus = stageRow.status;
@@ -405,10 +455,6 @@ async function updateStage(applicationId, id, stage, payload, req) {
     updates.endDate = today;
   }
 
-  // Set inside the transaction below (only when this change request is issue-sourced AND
-  // deployment just completed) — carried out to the notification block after commit.
-  let resolvedIssue = null;
-
   await sequelize.transaction(async (t) => {
     const fromStageStatus = stageRow.status;
     await stageRow.update(updates, { transaction: t });
@@ -422,28 +468,6 @@ async function updateStage(applicationId, id, stage, payload, req) {
         changedBy: req.user.id,
         note: null,
       }, { transaction: t });
-    }
-
-    if (stage === 'deployment' && updates.status === 'complete') {
-      const fromRequestStatus = record.status;
-      await record.update({ status: 'implemented' }, { transaction: t });
-      await StatusHistory.create({
-        entityType: 'change_request',
-        entityId: record.id,
-        fromStatus: fromRequestStatus,
-        toStatus: 'implemented',
-        changedBy: req.user.id,
-        note: 'Deployment stage completed',
-      }, { transaction: t });
-
-      // Stage 3 of the Issues RICC prompt: an issue-sourced change request reaching `implemented`
-      // resolves its issue automatically, in the SAME transaction — see
-      // issues.service.js#resolveViaChangeRequest. record.title can be NULL for a linked row (this
-      // never actually fires for a feature-request-sourced one, since only issue-sourced rows set
-      // issueId — using effectiveTitle() anyway rather than the raw column, on principle).
-      if (record.issueId) {
-        resolvedIssue = await issuesService.resolveViaChangeRequest(record.issueId, effectiveTitle(record), { transaction: t });
-      }
     }
   });
 
@@ -477,23 +501,6 @@ async function updateStage(applicationId, id, stage, payload, req) {
       });
     }
   }
-  // Notification #4 — delivered. Both the person who originally raised it and the application
-  // owner who governed it through the pipeline get told; whoever completed Deployment doesn't
-  // notify themselves, and if the same person is both requester and owner they're still only ever
-  // one entry (userId de-duped below).
-  if (stage === 'deployment' && updates.status === 'complete') {
-    const implementedRecipients = [...new Set([record.requestedBy, application?.ownerId].filter(Boolean))]
-      .filter((uid) => uid !== req.user.id);
-    implementedRecipients.forEach((uid) => {
-      recipients.push({
-        userId: uid,
-        type: 'change_request_implemented',
-        title: 'A change request was implemented',
-        message: `"${title}" has been fully delivered.`,
-        link,
-      });
-    });
-  }
   if (recipients.length > 0) {
     try {
       await notificationsService.createMany(recipients);
@@ -504,15 +511,83 @@ async function updateStage(applicationId, id, stage, payload, req) {
     }
   }
 
-  // "The resolution notification fires as normal" — literally issues.service.js's own
-  // notifyResolved(), not a re-implementation. Fired after this transaction commits, same
-  // fire-after-commit rule as every notification above; whoever completed Deployment doesn't
-  // notify themselves.
+  return getById(id, req);
+}
+
+/**
+ * PATCH .../:id/implement — the deliberate, owner-only step that used to happen automatically the
+ * instant Deployment was marked complete (mirrors applicationTracking.service.js#goLive's own
+ * split from stage completion). Splitting it out means whoever is assigned Deployment can finish
+ * their own work without unilaterally closing out the whole change request on the requester's
+ * behalf — the owner (or a super-admin) reviews it and clicks "Implemented" separately, once every
+ * stage is actually complete.
+ */
+async function implement(applicationId, id, req) {
+  const record = await ChangeRequest.findOne({
+    where: { id, applicationId },
+    include: [{ model: ChangeRequestStage, as: 'stages' }, ...sourceTitleInclude],
+  });
+  if (!record) throw ApiError.notFound('Change request not found');
+
+  const application = await Application.findByPk(applicationId, { attributes: ['id', 'ownerId'] });
+  const isOwner = !!application && application.ownerId === req.user.id;
+  if (!isOwner && !isSuperAdmin(req.user.permissions)) {
+    throw ApiError.forbidden('Only the application\'s owner (or a super-admin) may mark this change request implemented.');
+  }
+  if (record.status !== 'approved') {
+    throw ApiError.conflict(`Only an approved change request can be marked implemented — this one is ${record.status}.`);
+  }
+  const incomplete = STAGE_ORDER.filter((stage) => record.stages.find((s) => s.stage === stage)?.status !== 'complete');
+  if (incomplete.length > 0) {
+    throw ApiError.conflict(`${incomplete.map((s) => STAGE_LABELS[s]).join(', ')} must be complete before this can be marked implemented.`);
+  }
+
+  let resolvedIssue = null;
+  await sequelize.transaction(async (t) => {
+    const fromStatus = record.status;
+    await record.update({ status: 'implemented' }, { transaction: t });
+    await StatusHistory.create({
+      entityType: 'change_request', entityId: record.id, fromStatus, toStatus: 'implemented', changedBy: req.user.id, note: null,
+    }, { transaction: t });
+
+    // Stage 3 of the Issues RICC prompt: an issue-sourced change request reaching `implemented`
+    // resolves its issue automatically, in the SAME transaction — see
+    // issues.service.js#resolveViaChangeRequest. Never fires for a feature-request-sourced row
+    // (only issue-sourced rows set issueId).
+    if (record.issueId) {
+      resolvedIssue = await issuesService.resolveViaChangeRequest(record.issueId, effectiveTitle(record), { transaction: t });
+    }
+  });
+
+  // Both the person who originally raised it (a feature request's own submitter, carried through
+  // as requestedBy — see createFromFeatureRequest) and the application owner who governed it
+  // through the pipeline get told; whoever clicked this doesn't notify themselves, and if the same
+  // person is both requester and owner they're still only ever one entry (de-duped below).
+  const title = effectiveTitle(record);
+  const link = `/applications/${applicationId}/change-requests/${id}`;
+  const recipients = [...new Set([record.requestedBy, application?.ownerId].filter(Boolean))]
+    .filter((uid) => uid !== req.user.id)
+    .map((uid) => ({
+      userId: uid,
+      type: 'change_request_implemented',
+      title: 'A change request was implemented',
+      message: `"${title}" has been fully delivered.`,
+      link,
+    }));
+  if (recipients.length > 0) {
+    try {
+      await notificationsService.createMany(recipients);
+    } catch (err) {
+      logger.error('Failed to create change-request-implemented notifications', {
+        changeRequestId: id, error: { message: err.message, stack: err.stack },
+      });
+    }
+  }
   if (resolvedIssue) {
     await issuesService.notifyResolved(resolvedIssue, applicationId, { excludeUserId: req.user.id });
   }
 
-  return getById(id);
+  return getById(id, req);
 }
 
 /**
@@ -587,7 +662,7 @@ async function bulkAssignStages(applicationId, id, payload, req) {
     }
   }
 
-  return { record: await getById(id), changes };
+  return { record: await getById(id, req), changes };
 }
 
 /**
@@ -743,6 +818,7 @@ module.exports = {
   getById,
   update,
   updateStage,
+  implement,
   bulkAssignStages,
   remove,
   assigneeCandidates,

@@ -74,7 +74,7 @@ function PanelRow({ entry, isMe, onRemove }) {
         )}
       </Stack>
       {entry.note && (
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, ml: '44px', whiteSpace: 'pre-wrap' }}>{entry.note}</Typography>
+        <Typography variant="body2" color="text.primary" sx={{ mt: 0.5, ml: '44px', whiteSpace: 'pre-wrap' }}>{entry.note}</Typography>
       )}
     </Box>
   );
