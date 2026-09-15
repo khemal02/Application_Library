@@ -6,11 +6,6 @@
     "auditLog": "C:\\Users\\hkill\\OneDrive\\Desktop\\Application_Library\\backend\\logs\\.a77fc1b77c8f099e1fffa3082a5728aa4626b925-audit.json",
     "files": [
         {
-            "date": 1788153820098,
-            "name": "C:\\Users\\hkill\\OneDrive\\Desktop\\Application_Library\\backend\\logs\\aams-2026-08-31.log",
-            "hash": "94cac23c4f44ae658f7a655a9f78350f76c9abe22da5d2b73d99c9210aa7235c"
-        },
-        {
             "date": 1788240239094,
             "name": "C:\\Users\\hkill\\OneDrive\\Desktop\\Application_Library\\backend\\logs\\aams-2026-09-01.log",
             "hash": "3af229334d2d863910d7193ebadfdf32e63744aa07b569630b7685e5df4de59b"
@@ -49,6 +44,11 @@
             "date": 1789104083862,
             "name": "C:\\Users\\hkill\\OneDrive\\Desktop\\Application_Library\\backend\\logs\\aams-2026-09-11.log",
             "hash": "73549bcf0ecf7c83f30c324ff83c4c5c077dc451268ff3ecdc856caf508780c5"
+        },
+        {
+            "date": 1789449431468,
+            "name": "C:\\Users\\hkill\\OneDrive\\Desktop\\Application_Library\\backend\\logs\\aams-2026-09-15.log",
+            "hash": "d02d7a3da4628e55ecdddaa5f5563256e71a292f9d0d10969948f79409150cef"
         }
     ],
     "hashType": "sha256"
