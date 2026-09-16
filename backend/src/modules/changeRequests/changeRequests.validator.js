@@ -77,6 +77,26 @@ const implementParams = Joi.object({
   id: Joi.string().uuid().required(),
 });
 
+// PATCH .../:id/stages/:stage/advance — same params shape as the plain stage PATCH (the service
+// is what actually rejects 'deployment', which has no next stage — see
+// changeRequests.service.js#advanceStage). Body is optional and narrower than updateStageBody: the
+// only thing worth overriding is the completing stage's own end date, same default-unless-given
+// rule updateStage already applies elsewhere.
+const advanceStageParams = updateStageParams;
+const advanceStageBody = Joi.object({
+  endDate: Joi.date().iso().allow(null),
+});
+
+// PATCH .../:id/stages/:stage/send-back — same params shape as the plain stage PATCH ('development'
+// is rejected by the service, which has no previous stage). `reason` validated the same way this
+// module's other required free-text fields are (see `title` above) — required, capped, not merely
+// optional like `description`, since a silent/empty reason defeats the entire point of this action.
+const sendBackStageParams = updateStageParams;
+const sendBackStageBody = Joi.object({
+  reason: Joi.string().max(2000).required(),
+});
+
 module.exports = {
   create, update, updateStageParams, updateStageBody, bulkAssignParams, bulkAssignBody, myStagesQuery, implementParams,
+  advanceStageParams, advanceStageBody, sendBackStageParams, sendBackStageBody,
 };
