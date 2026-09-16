@@ -12,15 +12,17 @@ const navConfig = [
     label: 'Idea Prioritization', path: '/application-tracking', icon: TrackChangesIcon,
     resource: 'application_tracks', action: 'read',
   },
+  // New Ideas and Modify Current Application were merged into one list screen — one nav entry
+  // now, same as every other single-page module. Gated on 'ideas:read' (the route it points to,
+  // /ideas, carries that same guard) — 'feature_requests' is still its own separate RBAC resource
+  // underneath, but no role seeded today holds one without the other, and the page itself further
+  // narrows what it shows per-viewer via its own real per-resource checks (see
+  // IdeasAndFeatureRequestsListPage.jsx).
   {
-    label: 'Ideas', icon: LightbulbIcon,
-    // No resource/action on the group itself — New Ideas and Modify Current Application are
-    // separate RBAC resources ('ideas'/'feature_requests') now, gated per-child below, since the
-    // split into fully independent modules.
-    children: [
-      { label: 'New Ideas', path: '/ideas', resource: 'ideas', action: 'read' },
-      { label: 'Modify Current Application', path: '/feature-requests', resource: 'feature_requests', action: 'read' },
-    ],
+    label: 'Ideas', path: '/ideas', icon: LightbulbIcon, resource: 'ideas', action: 'read',
+    // Rendered at /feature-requests too (the old "Modify Current Application" route, kept for
+    // backward compatibility) — activePaths keeps the sidebar highlighted on either.
+    activePaths: ['/ideas', '/feature-requests'],
   },
   {
     label: 'Administration', icon: AdminIcon, resource: 'users', action: 'read',

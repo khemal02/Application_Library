@@ -5,7 +5,9 @@ import { useAppSelector } from '../../app/hooks';
 
 const LABELS = {
   applications: 'Applications', ideas: 'Ideas',
-  'feature-requests': 'Modify Current Application',
+  // Both routes render the same merged Ideas/Feature-Requests list page now — same breadcrumb
+  // label for either entry point, so it matches whichever one the viewer actually landed on.
+  'feature-requests': 'Ideas',
   admin: 'Administration', users: 'Users', roles: 'Roles & Permissions',
   departments: 'Departments', profile: 'Profile',
   new: 'New', settings: 'Settings', stages: 'Stages', 'change-requests': 'Change Requests',
