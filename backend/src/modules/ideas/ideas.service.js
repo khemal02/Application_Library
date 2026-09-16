@@ -39,7 +39,10 @@ const include = [
   {
     model: ApplicationTrack,
     as: 'track',
-    attributes: ['id'],
+    // ownerId exposed so the Build column/dialog knows whether an owner still needs picking (see
+    // applicationTracking.service.js#moveToBuild) — no longer guaranteed set just because a track
+    // exists.
+    attributes: ['id', 'ownerId'],
     include: [{
       model: ApplicationTrackStage,
       as: 'stages',
@@ -549,13 +552,17 @@ async function finalizeIdea(idea, {
   // instruction A3) — a new_idea is the only category this module handles post-split, and the
   // "raise a change request instead" path (existing-application feature requests) lives entirely
   // in featureRequests.service.js. Approving used to register an Application directly; now it
-  // creates a track instead (Stage 2a) — but the "this needs an owner-to-be" requirement the
-  // guard below enforces is exactly as real for a track as it was for an Application, so the
-  // guard, its trigger, and its message all carry across unchanged.
+  // creates a track instead (Stage 2a).
+  //
+  // ownerId is deliberately NOT required here any more — approving is meant to stay a plain
+  // approve/reject decision, nothing else. Picking who owns the resulting track (and its overall
+  // window) moved to a separate, later, narrower action: applicationTracking.service.js#moveToBuild
+  // (CEO/Manager/Admin only). A track is still created here with `ownerId: null` until then — see
+  // that function's own docstring for how it fills this in and what stays locked (isOwnerOrSuper)
+  // until it does. `ownerId`/`startDate`/`targetGoLive` stay accepted here (not removed from the
+  // signature or the validator) purely so a caller who already has this data can still supply it
+  // up front if they want to — nothing requires it any more.
   const needsTrack = toStatus === 'approved' && !idea.applicationId;
-  if (needsTrack && !ownerId) {
-    throw ApiError.badRequest('An Application owner (ownerId) is required to approve this idea.');
-  }
   if (needsTrack && startDate) {
     // Joi's `.date()` coerces this into a real Date object; the DB-side comparisons elsewhere in
     // this codebase compare against DATEONLY strings, but here we're only comparing against
@@ -611,20 +618,25 @@ async function finalizeIdea(idea, {
       // instead of erroring on a duplicate-key violation.
       const existingTrack = await ApplicationTrack.findOne({ where: { ideaId: idea.id }, transaction: t });
       if (!existingTrack) {
-        const ownerUser = await User.findByPk(ownerId, {
-          include: [{ model: Role, as: 'role', include: [{ model: RolePermission, as: 'permissions' }] }],
-          transaction: t,
-        });
-        if (!ownerUser || ownerUser.status !== 'active') {
-          throw ApiError.badRequest('Application owner must be an existing, active user');
-        }
-        if (!isEligibleOwner(ownerUser)) {
-          throw ApiError.badRequest('Application owner must have edit access to applications');
+        // Only validated when actually supplied — no longer required (see this function's own
+        // top comment). A caller who does still pass one up front gets the same real checks as
+        // ever; ownerId simply stays null on the track otherwise, until moveToBuild fills it in.
+        if (ownerId) {
+          const ownerUser = await User.findByPk(ownerId, {
+            include: [{ model: Role, as: 'role', include: [{ model: RolePermission, as: 'permissions' }] }],
+            transaction: t,
+          });
+          if (!ownerUser || ownerUser.status !== 'active') {
+            throw ApiError.badRequest('Application owner must be an existing, active user');
+          }
+          if (!isEligibleOwner(ownerUser)) {
+            throw ApiError.badRequest('Application owner must have edit access to applications');
+          }
         }
 
         const track = await ApplicationTrack.create({
           ideaId: idea.id,
-          ownerId,
+          ownerId: ownerId || null,
           priority: 'medium',
           status: 'active',
           name: null,
@@ -664,9 +676,11 @@ async function finalizeIdea(idea, {
     });
   });
   // 2c: "a track is created" -> the track owner. Only on an actual creation (not the idempotent
-  // no-op branch, not on reject) — and, per the house pattern, never notifying the actor about
-  // their own action, so this is skipped if the completing approver named themselves owner.
-  if (trackCreated && ownerId !== req.user.id) {
+  // no-op branch, not on reject), only when an owner actually got named here (ownerId is null on
+  // the normal path now — moveToBuild names one later and sends its own notification then) — and,
+  // per the house pattern, never notifying the actor about their own action, so this is skipped if
+  // the completing approver named themselves owner.
+  if (trackCreated && ownerId && ownerId !== req.user.id) {
     recipients.push({
       userId: ownerId, type: 'application_track_created', title: 'You are the owner of a new track',
       message: `"${idea.title}" was approved. Development can start.`, link: `/application-tracking/${trackId}`,
@@ -832,17 +846,40 @@ async function analytics() {
  * assignee and starting it) lives on the track itself — see
  * applicationTracking.service.js#moveToBuild, reused here rather than duplicated.
  */
-async function moveToBuild(id, { assigneeId }, req) {
+async function moveToBuild(id, {
+  assigneeId, ownerId, startDate, targetGoLive,
+}, req) {
   const idea = await Idea.findByPk(id, { attributes: ['id', 'title', 'status'] });
   if (!idea) throw ApiError.notFound('Idea not found');
   if (idea.status !== 'approved') {
     throw ApiError.conflict(`Only an approved idea can be moved to build — this one is ${idea.status}.`);
   }
 
-  const track = await ApplicationTrack.findOne({ where: { ideaId: id }, attributes: ['id'] });
+  const track = await ApplicationTrack.findOne({ where: { ideaId: id }, attributes: ['id', 'ownerId'] });
   if (!track) throw ApiError.conflict('No application track exists for this idea yet.');
 
-  return applicationTrackingService.moveToBuild(track.id, assigneeId, req);
+  // Approving an idea no longer picks the track's owner (see finalizeIdea's own comment) — this is
+  // now where that decision happens instead, made by whoever holds ideas:moveToBuild, not
+  // necessarily the person who'll actually own it. Same eligibility rule finalizeIdea used to
+  // enforce at approval time, just moved here: an existing, active user with applications:update.
+  // Only required/validated when the track genuinely has no owner yet — a legacy track approved
+  // before this change already has one and isn't re-asked.
+  if (!track.ownerId) {
+    if (!ownerId) throw ApiError.badRequest('An Application owner is required before this can be moved to build.');
+    const ownerUser = await User.findByPk(ownerId, {
+      include: [{ model: Role, as: 'role', include: [{ model: RolePermission, as: 'permissions' }] }],
+    });
+    if (!ownerUser || ownerUser.status !== 'active') {
+      throw ApiError.badRequest('Application owner must be an existing, active user');
+    }
+    if (!isEligibleOwner(ownerUser)) {
+      throw ApiError.badRequest('Application owner must have edit access to applications');
+    }
+  }
+
+  return applicationTrackingService.moveToBuild(track.id, {
+    assigneeId, ownerId: !track.ownerId ? ownerId : undefined, startDate, targetGoLive,
+  }, req);
 }
 
 module.exports = {

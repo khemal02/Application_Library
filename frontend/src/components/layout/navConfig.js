@@ -7,11 +7,6 @@ import AdminIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
 
 const navConfig = [
   { label: 'Dashboard', path: '/dashboard', icon: DashboardIcon },
-  { label: 'Applications', path: '/applications', icon: AppsIcon },
-  {
-    label: 'Idea Prioritization', path: '/application-tracking', icon: TrackChangesIcon,
-    resource: 'application_tracks', action: 'read',
-  },
   // New Ideas and Modify Current Application were merged into one list screen — one nav entry
   // now, same as every other single-page module. Gated on 'ideas:read' (the route it points to,
   // /ideas, carries that same guard) — 'feature_requests' is still its own separate RBAC resource
@@ -24,6 +19,11 @@ const navConfig = [
     // backward compatibility) — activePaths keeps the sidebar highlighted on either.
     activePaths: ['/ideas', '/feature-requests'],
   },
+  {
+    label: 'Idea Prioritization', path: '/application-tracking', icon: TrackChangesIcon,
+    resource: 'application_tracks', action: 'read',
+  },
+  { label: 'Applications', path: '/applications', icon: AppsIcon },
   {
     label: 'Administration', icon: AdminIcon, resource: 'users', action: 'read',
     children: [

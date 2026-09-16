@@ -81,10 +81,16 @@ const panelCandidatesQuery = Joi.object({
   kind: Joi.string().valid('reviewer', 'approver').required(),
 });
 
-// PATCH /:id/move-to-build — see ideas.service.js#moveToBuild. Who may reach this at all is the
-// route's own `ideas:moveToBuild` permission gate; Joi only owns the body shape.
+// PATCH /:id/move-to-build — see ideas.service.js#moveToBuild. ownerId/startDate/targetGoLive are
+// only actually required (enforced in the service, which knows whether the track already has an
+// owner) the first time this is called for a given idea's track — Joi can't see that state, so
+// they stay optional here. Who may reach this at all is the route's own `ideas:moveToBuild`
+// permission gate; Joi only owns the body shape.
 const moveToBuild = Joi.object({
   assigneeId: Joi.string().uuid().required(),
+  ownerId: Joi.string().uuid(),
+  startDate: Joi.date().iso().allow(null),
+  targetGoLive: Joi.date().iso().allow(null),
 });
 
 module.exports = {

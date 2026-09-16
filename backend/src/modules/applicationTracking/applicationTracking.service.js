@@ -699,12 +699,23 @@ async function statusHistory(id) {
 
 /**
  * Called by ideas.service.js#moveToBuild — names the Development stage's assignee and starts it
- * in one call, right after approval. Authorization is entirely the route's own `ideas:moveToBuild`
- * permission check; nothing to re-check here, since this function is never itself exposed as a
- * route (only ever reached through ideas.service.js). Reuses updateStage's own stage-start shape
- * (rule 3: in_progress defaults startDate to today if unset) rather than duplicating it.
+ * in one call, right after approval. Also fills in the track's own owner (and, optionally, its
+ * overall Start/Expected Deployment window) the FIRST time this is called, since approving an idea
+ * no longer picks one (see ideas.service.js#finalizeIdea) — every idea-sourced track is born with
+ * `ownerId: null` now, so this is genuinely the earliest point one exists, not a redundant
+ * re-ask. `ownerId` eligibility is already validated by the caller (ideas.service.js, which owns
+ * `isEligibleOwner`) before this is reached — trusted here, not re-checked, same as this function
+ * already isn't itself exposed as a route. A track that already has an owner (legacy data from
+ * before this change, or a second call after the first already set one) is left alone; `ownerId`
+ * is simply ignored if given again.
+ *
+ * Authorization is entirely the route's own `ideas:moveToBuild` permission check; nothing to
+ * re-check here. Reuses updateStage's own stage-start shape (rule 3: in_progress defaults
+ * startDate to today if unset) rather than duplicating it.
  */
-async function moveToBuild(id, assigneeId, req) {
+async function moveToBuild(id, {
+  assigneeId, ownerId, startDate, targetGoLive,
+}, req) {
   const record = await ApplicationTrack.findByPk(id, { include: stageAndIdeaInclude });
   if (!record) throw ApiError.notFound('Application track not found');
   if (record.status !== 'active') {
@@ -722,7 +733,16 @@ async function moveToBuild(id, assigneeId, req) {
     throw ApiError.badRequest('Assignee must be an existing, active user.');
   }
 
+  const settingOwner = !record.ownerId && !!ownerId;
+
   await sequelize.transaction(async (t) => {
+    if (settingOwner) {
+      await record.update({
+        ownerId,
+        startDate: record.startDate || startDate || null,
+        targetGoLive: record.targetGoLive || targetGoLive || null,
+      }, { transaction: t });
+    }
     await stageRow.update({
       assigneeId, status: 'in_progress', startDate: stageRow.startDate || today(),
     }, { transaction: t });
@@ -731,8 +751,23 @@ async function moveToBuild(id, assigneeId, req) {
     }, { transaction: t });
   });
 
+  const name = record.name || record.idea?.title;
+  if (settingOwner && ownerId !== req.user.id) {
+    try {
+      await notificationsService.createMany([{
+        userId: ownerId,
+        type: 'application_track_created',
+        title: 'You are the owner of a new track',
+        message: `"${name}" was moved to build — you're now its owner.`,
+        link: `/application-tracking/${id}`,
+      }]);
+    } catch (err) {
+      logger.error('Failed to create move-to-build owner notification', {
+        applicationTrackId: id, error: { message: err.message, stack: err.stack },
+      });
+    }
+  }
   if (assigneeId !== req.user.id) {
-    const name = record.name || record.idea?.title;
     try {
       await notificationsService.createMany([{
         userId: assigneeId,

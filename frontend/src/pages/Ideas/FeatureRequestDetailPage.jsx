@@ -120,7 +120,7 @@ export default function FeatureRequestDetailPage() {
   // convenience, not the actual rule.
   const isDecided = featureRequest.status === 'approved' || featureRequest.status === 'rejected';
   // Same rule as IdeaDetailPage.jsx: the submitter only gets edit access once someone on the
-  // panel has actually flagged a problem ("Partially supported" / "Don't Supported") — not just
+  // panel has actually flagged a problem ("Partially support" / "Don't Support") — not just
   // because the request is still open.
   const hasRequestedChangesOrReject = [...(featureRequest.panel?.reviewers || []), ...(featureRequest.panel?.approvers || [])]
     .some((entry) => entry.decision === 'request_changes' || entry.decision === 'reject');

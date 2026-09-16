@@ -39,10 +39,6 @@ export default function IdeaDetailPage() {
   const [editingTech, setEditingTech] = useState(false);
   const [techDraft, setTechDraft] = useState('');
   const [savingTech, setSavingTech] = useState(false);
-  const [ownerId, setOwnerId] = useState('');
-  const [ownerCandidates, setOwnerCandidates] = useState([]);
-  const [startDate, setStartDate] = useState('');
-  const [targetGoLive, setTargetGoLive] = useState('');
   // Deliberately unset, not defaulted to 'approve' — a viewer who has never responded must see
   // NO pre-selected decision (see IdeaPanelCard's Change 1); resetting to '' on every idea change
   // below stops a stale choice from one idea silently carrying over to the next.
@@ -57,33 +53,12 @@ export default function IdeaDetailPage() {
   const { data: history } = useResource(() => ideasApi.statusHistory(id), [id]);
   useBreadcrumbLabel(idea?.title);
 
-  // Only an approver (or a CEO breaking a tie — they aren't a panel member at all) with no
-  // Application yet ever needs this. Fetched eagerly for any approver (not just the one whose
-  // vote would actually decide it) so there's no loading flicker the moment it IS needed —
-  // IdeaPanelCard decides whether to actually show the picker. Gated so a plain reviewer or
-  // non-participant never fires this fetch at all. "Modify Current Application" (feature
-  // requests) has its own module now and never needs this — see FeatureRequestDetailPage.jsx.
-  const needsOwnerPicker = (idea?.panel?.myRow?.kind === 'approver' || idea?.panel?.canTieBreak)
-    && !idea?.applicationId;
-
-  useEffect(() => {
-    if (!needsOwnerPicker) return;
-    ideasApi.eligibleOwners().then((res) => setOwnerCandidates(res.data)).catch((err) => {
-      setOwnerCandidates([]);
-      showError(err.response?.data?.message || 'Failed to load eligible application owners');
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [needsOwnerPicker, id]);
-
   // Reset the whole vote form whenever the idea itself changes — React Router doesn't remount
   // this component just because :id changed, so without this a decision picked on one idea could
   // silently survive into the next idea's (empty) form.
   useEffect(() => {
     setVoteDecision('');
     setVoteNote('');
-    setOwnerId('');
-    setStartDate('');
-    setTargetGoLive('');
   }, [id]);
 
   // Pre-fill the vote form with whatever the viewer already recorded, rather than resetting to
@@ -107,14 +82,8 @@ export default function IdeaDetailPage() {
       await ideasApi.submitReview(id, {
         decision: voteDecision,
         note: voteNote || undefined,
-        ...(ownerId ? { ownerId } : {}),
-        ...(startDate ? { startDate } : {}),
-        ...(targetGoLive ? { targetGoLive } : {}),
       });
       showSuccess('Review submitted');
-      setOwnerId('');
-      setStartDate('');
-      setTargetGoLive('');
       await reload();
       return true;
     } catch (err) {
@@ -194,8 +163,8 @@ export default function IdeaDetailPage() {
   const isDecided = idea.status === 'approved' || idea.status === 'rejected';
   // The submitter can't just tinker with a cleanly-progressing idea — edit only opens up once
   // someone on the panel (reviewer or approver) has actually flagged a problem with it
-  // ("Partially supported" / "Don't Supported"). No such vote yet (or everyone's "Fully
-  // supported" so far) means nothing to fix, so no edit access.
+  // ("Partially support" / "Don't Support"). No such vote yet (or everyone's "Fully
+  // support" so far) means nothing to fix, so no edit access.
   const hasRequestedChangesOrReject = [...(idea.panel?.reviewers || []), ...(idea.panel?.approvers || [])]
     .some((entry) => entry.decision === 'request_changes' || entry.decision === 'reject');
   const canEditIdeaFields = canUpdateIdeas && idea.submittedBy === user?.id && !isDecided && hasRequestedChangesOrReject;
@@ -372,9 +341,6 @@ export default function IdeaDetailPage() {
             idea={idea} panel={idea.panel}
             voteDecision={voteDecision} onVoteDecisionChange={setVoteDecision}
             voteNote={voteNote} onVoteNoteChange={setVoteNote}
-            ownerId={ownerId} onOwnerIdChange={setOwnerId} ownerCandidates={ownerCandidates}
-            startDate={startDate} onStartDateChange={setStartDate}
-            targetGoLive={targetGoLive} onTargetGoLiveChange={setTargetGoLive}
             submitting={submitting} onSubmitReview={handleSubmitReview}
             onPanelChanged={reload}
           />

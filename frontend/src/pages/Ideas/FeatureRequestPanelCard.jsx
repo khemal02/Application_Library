@@ -26,7 +26,7 @@ import FeatureRequestPanelPickerDialog from './FeatureRequestPanelPickerDialog';
 
 // A reviewer's advisory verdict has three tiers; an approver's (or the CEO tie-break's) binding
 // vote stays strictly binary — see featureRequests.validator.js#submitReview for why.
-const REVIEWER_LABELS = { approve: 'Fully supported', request_changes: 'Partially supported', reject: "Don't Supported" };
+const REVIEWER_LABELS = { approve: 'Fully support', request_changes: 'Partially support', reject: "Don't Support" };
 const APPROVER_LABELS = { approve: 'Approved', reject: 'Rejected' };
 
 /**

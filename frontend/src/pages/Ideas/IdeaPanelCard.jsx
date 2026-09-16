@@ -8,7 +8,6 @@ import Divider from '@mui/material/Divider';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import TextField from '@mui/material/TextField';
-import MenuItem from '@mui/material/MenuItem';
 import Alert from '@mui/material/Alert';
 import Avatar from '@mui/material/Avatar';
 import Tooltip from '@mui/material/Tooltip';
@@ -27,7 +26,7 @@ import PanelPickerDialog from './PanelPickerDialog';
 
 // A reviewer's advisory verdict has three tiers; an approver's (or the CEO tie-break's) binding
 // vote stays strictly binary — see ideas.validator.js#submitReview for why.
-const REVIEWER_LABELS = { approve: 'Fully supported', request_changes: 'Partially supported', reject: "Don't Supported" };
+const REVIEWER_LABELS = { approve: 'Fully support', request_changes: 'Partially support', reject: "Don't Support" };
 const APPROVER_LABELS = { approve: 'Approved', reject: 'Rejected' };
 
 /**
@@ -99,8 +98,6 @@ function PanelRow({ entry, isMe, onRemove }) {
 export default function IdeaPanelCard({
   idea, panel,
   voteDecision, onVoteDecisionChange, voteNote, onVoteNoteChange,
-  ownerId, onOwnerIdChange, ownerCandidates,
-  startDate, onStartDateChange, targetGoLive, onTargetGoLiveChange,
   submitting, onSubmitReview,
   onPanelChanged,
 }) {
@@ -111,7 +108,6 @@ export default function IdeaPanelCard({
   const [removing, setRemoving] = useState(false);
   const [editingMyResponse, setEditingMyResponse] = useState(false);
   const [confirmReject, setConfirmReject] = useState(false);
-  const todayStr = dayjs().format('YYYY-MM-DD');
 
   if (!panel) return null;
 
@@ -135,12 +131,13 @@ export default function IdeaPanelCard({
   const rejectTally = otherApprovers.filter((a) => a.decision === 'reject').length + (voteDecision === 'reject' ? 1 : 0);
   const wouldTie = isApproverRow && isCompletingVote && approveTally === rejectTally;
   const completingOutcome = isCompletingVote ? (wouldTie ? 'tie' : (approveTally > rejectTally ? 'approve' : 'reject')) : null;
-  const wouldDecideApprove = isTieBreak ? voteDecision === 'approve' : (completingOutcome === 'approve');
 
   // Every idea here is a new_idea post-split (see FeatureRequestPanelCard.jsx for the
-  // already-has-an-application lane) — unregistered iff it has no applicationId yet.
+  // already-has-an-application lane) — unregistered iff it has no applicationId yet. Still used
+  // for the tie-break consequence text below (approving either registers a new track or attaches
+  // to the existing application) — picking who OWNS that track/application moved to a later,
+  // separate action (Move to Build, CEO/Manager/Admin only), not asked here any more.
   const isNewIdeaUnregistered = !idea.applicationId;
-  const requiresOwner = wouldDecideApprove && isNewIdeaUnregistered;
   const applicationName = idea.application?.name || 'the existing application';
 
   // Only the vote that will ACTUALLY finalize the idea as Rejected gets the "cannot be undone"
@@ -317,39 +314,9 @@ export default function IdeaPanelCard({
               helperText={noteRequired ? 'Explain what changes are needed before this can be submitted.' : ''}
             />
 
-            {requiresOwner && (
-              <Box>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                  Submitted by <strong>{idea.submitter?.name || '—'}</strong>
-                </Typography>
-                <TextField
-                  select fullWidth size="small" label="Application Owner"
-                  value={ownerId} onChange={(e) => onOwnerIdChange(e.target.value)}
-                  helperText="Required — approving this will register a tracked Application."
-                >
-                  <MenuItem value="">Select…</MenuItem>
-                  {ownerCandidates.map((u) => <MenuItem key={u.id} value={u.id}>{u.name}</MenuItem>)}
-                </TextField>
-                <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
-                  <TextField
-                    fullWidth size="small" type="date" label="Start Date"
-                    InputLabelProps={{ shrink: true }}
-                    inputProps={{ min: todayStr }}
-                    value={startDate} onChange={(e) => onStartDateChange(e.target.value)}
-                  />
-                  <TextField
-                    fullWidth size="small" type="date" label="Expected Deployment Date"
-                    InputLabelProps={{ shrink: true }}
-                    inputProps={{ min: [todayStr, startDate].filter(Boolean).sort().slice(-1)[0] }}
-                    value={targetGoLive} onChange={(e) => onTargetGoLiveChange(e.target.value)}
-                  />
-                </Stack>
-              </Box>
-            )}
-
             <Stack direction="row" spacing={1}>
               <Button
-                variant="contained" disabled={submitting || !voteDecision || noteMissing || (requiresOwner && !ownerId)}
+                variant="contained" disabled={submitting || !voteDecision || noteMissing}
                 onClick={handleSubmitClick}
               >
                 {isTieBreak ? 'Break the Tie' : (isApproverRow ? (myRosterEntry?.decision ? 'Update decision' : 'Submit decision') : (myRosterEntry?.decision ? 'Update review' : 'Submit review'))}

@@ -66,10 +66,10 @@ function developmentStage(row) {
  * The "Build" column's cell — visible at all only when the viewer holds the new, narrow
  * `moveToBuild` permission for THIS row's type (checked per row, not just once for the whole
  * column, since a viewer could in principle hold it for ideas but not feature requests). Approving
- * already picks an idea's track OWNER (see ideas.service.js#finalizeIdea) but never who actually
- * does the Development work — that's this column's real job, and it's the same gap on both sides
- * once a change request exists (Discovery D1/D2: the two modules turned out to be more symmetric
- * here than expected, not less).
+ * is now a plain approve/reject decision on both sides — it no longer picks an idea's track owner
+ * either (that moved here too, see ideas.service.js#finalizeIdea's own comment) — so Move to Build
+ * is where BOTH "who owns this" (ideas only — a feature request's Application already has one) and
+ * "who's actually doing the Development work" get decided, in one step.
  */
 function BuildCell({ row, canAct, onOpen }) {
   if (!canAct || row.status !== 'approved') {
@@ -77,27 +77,31 @@ function BuildCell({ row, canAct, onOpen }) {
   }
   const stage = developmentStage(row);
   if (!stage) return <Typography variant="body2" color="text.disabled">—</Typography>;
-  if (stage.status === 'not_started') {
-    return (
-      <Button size="small" variant="outlined" onClick={(e) => { e.stopPropagation(); onOpen(row); }}>
-        Move to Build
-      </Button>
-    );
-  }
+  // Always the same "Move to Build" button — it just disables itself once Development is no
+  // longer not_started, deliberately never swapping to a status readout or a name.
   return (
-    <Chip
-      size="small"
-      color={stage.status === 'complete' ? 'success' : 'info'}
-      label={stage.assignee?.name || (stage.status === 'complete' ? 'Complete' : 'In progress')}
-    />
+    <Button
+      size="small" variant="contained" color="info"
+      disabled={stage.status !== 'not_started'}
+      onClick={(e) => { e.stopPropagation(); onOpen(row); }}
+    >
+      Move to Build
+    </Button>
   );
 }
 
 /**
  * Picks who's actually building an approved idea/feature request and starts Development in one
- * call — see ideas.service.js#moveToBuild / featureRequests.service.js#moveToBuild. Candidates are
- * fetched fresh each time the dialog opens for a given row, from whichever module's own
- * (identical, "any active user") assignee-candidates endpoint that row's type already has.
+ * call — see ideas.service.js#moveToBuild / featureRequests.service.js#moveToBuild. Assignee
+ * candidates are fetched fresh each time the dialog opens for a given row, from whichever module's
+ * own (identical, "any active user") assignee-candidates endpoint that row's type already has.
+ *
+ * An idea's track is born with no owner any more (approving no longer picks one — see
+ * ideas.service.js#finalizeIdea) — so for an idea row whose track has no owner yet, this dialog
+ * ALSO asks for the Application Owner (+ optional Start/Expected Deployment dates), same fields
+ * that used to live on the approve form, same eligible-owner candidate list
+ * (ideasApi.eligibleOwners). A feature request never needs this — its Application already has a
+ * permanent owner — and neither does an idea whose track already has one (legacy data).
  */
 function MoveToBuildDialog({
   row, onClose, onMoved,
@@ -105,22 +109,37 @@ function MoveToBuildDialog({
   const { showSuccess, showError } = useToast();
   const [candidates, setCandidates] = useState([]);
   const [assigneeId, setAssigneeId] = useState('');
+  const [ownerCandidates, setOwnerCandidates] = useState([]);
+  const [ownerId, setOwnerId] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [targetGoLive, setTargetGoLive] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  const needsOwner = row?._type === 'idea' && !row?.track?.ownerId;
 
   useEffect(() => {
     if (!row) return;
     setAssigneeId('');
+    setOwnerId('');
+    setStartDate('');
+    setTargetGoLive('');
     const fetchCandidates = row._type === 'idea'
       ? applicationTrackingApi.assigneeCandidates(row.track.id)
       : changeRequestsApi.assigneeCandidates(row.application.id, row.changeRequest.id);
     fetchCandidates.then((res) => setCandidates(res.data)).catch(() => setCandidates([]));
+    if (row._type === 'idea' && !row.track?.ownerId) {
+      ideasApi.eligibleOwners().then((res) => setOwnerCandidates(res.data)).catch(() => setOwnerCandidates([]));
+    }
   }, [row]);
 
   const handleConfirm = async () => {
     setSubmitting(true);
     try {
       if (row._type === 'idea') {
-        await ideasApi.moveToBuild(row.id, { assigneeId });
+        await ideasApi.moveToBuild(row.id, {
+          assigneeId,
+          ...(needsOwner ? { ownerId, ...(startDate ? { startDate } : {}), ...(targetGoLive ? { targetGoLive } : {}) } : {}),
+        });
       } else {
         await featureRequestsApi.moveToBuild(row.id, { assigneeId });
       }
@@ -137,19 +156,49 @@ function MoveToBuildDialog({
     <Dialog open={!!row} onClose={onClose} maxWidth="xs" fullWidth>
       <DialogTitle>Move &ldquo;{row?.title}&rdquo; to build</DialogTitle>
       <DialogContent>
-        <TextField
-          select fullWidth size="small" label="Who's building this?" sx={{ mt: 1 }}
-          value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}
-          disabled={submitting}
-        >
-          {candidates.map((c) => (
-            <MenuItem key={c.id} value={c.id}>{c.name}{c.roleLabel ? ` — ${c.roleLabel}` : ''}</MenuItem>
-          ))}
-        </TextField>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          {needsOwner && (
+            <>
+              <TextField
+                select fullWidth size="small" label="Application Owner"
+                value={ownerId} onChange={(e) => setOwnerId(e.target.value)}
+                disabled={submitting}
+                helperText="Required — this idea's track has no owner yet."
+              >
+                <MenuItem value="">Select…</MenuItem>
+                {ownerCandidates.map((u) => <MenuItem key={u.id} value={u.id}>{u.name}</MenuItem>)}
+              </TextField>
+              <Stack direction="row" spacing={1.5}>
+                <TextField
+                  fullWidth size="small" type="date" label="Start Date"
+                  InputLabelProps={{ shrink: true }}
+                  value={startDate} onChange={(e) => setStartDate(e.target.value)}
+                  disabled={submitting}
+                />
+                <TextField
+                  fullWidth size="small" type="date" label="Expected Deployment Date"
+                  InputLabelProps={{ shrink: true }}
+                  inputProps={{ min: startDate || undefined }}
+                  value={targetGoLive} onChange={(e) => setTargetGoLive(e.target.value)}
+                  disabled={submitting}
+                />
+              </Stack>
+            </>
+          )}
+          <TextField
+            select fullWidth size="small" label="Who's building this?"
+            value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}
+            disabled={submitting}
+          >
+            {candidates.map((c) => (
+              <MenuItem key={c.id} value={c.id}>{c.name}{c.roleLabel ? ` — ${c.roleLabel}` : ''}</MenuItem>
+            ))}
+          </TextField>
+        </Stack>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={submitting}>Cancel</Button>
-        <Button variant="contained" disabled={submitting || !assigneeId} onClick={handleConfirm}>
+        <Button variant="contained" disabled={submitting || !assigneeId || (needsOwner && !ownerId)} onClick={handleConfirm}>
           Move to Build
         </Button>
       </DialogActions>
