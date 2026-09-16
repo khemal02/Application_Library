@@ -341,13 +341,18 @@ async function update(id, payload, req) {
  *   3. A stage's own status only moves forward: not_started -> in_progress -> complete.
  *   4. Moving to in_progress defaults start_date to today if unset; moving to complete defaults
  *      end_date to today if unset. An explicitly supplied date always wins.
- *   5. Completing `deployment` sets the change request's status to `implemented`, in the same
- *      transaction — the only place that ever happens.
- *   6. Authorization: the application's owner, this stage's assignee, or a super-admin. Nobody
- *      else, regardless of role.
+ *   5. Completing `deployment` no longer sets the change request's status to `implemented` by
+ *      itself — see implement() below, the deliberate, separate, owner-only step that does.
+ *   6. Authorization: the application's owner, this stage's assignee, or a super-admin may touch a
+ *      stage at all — but starting/completing it specifically is narrower still (assignee or
+ *      super-admin only, see the gate a few lines down). Nobody else, regardless of role.
  *   7. Two notification points: whoever is newly assigned to a stage, and the NEXT stage's
  *      assignee (if one is already set) the moment the stage ahead of them completes — so someone
  *      idle on Testing finds out Development just finished without having to keep checking back.
+ *
+ * advanceStage() and sendBackStage() below are the two deliberate, narrow exceptions to rule 3 —
+ * see their own doc comments for why they're separate functions rather than new payload shapes
+ * accepted here.
  */
 async function updateStage(applicationId, id, stage, payload, req) {
   const record = await ChangeRequest.findOne({
@@ -506,6 +511,229 @@ async function updateStage(applicationId, id, stage, payload, req) {
       await notificationsService.createMany(recipients);
     } catch (err) {
       logger.error('Failed to create change-request stage notifications', {
+        changeRequestId: id, stage, error: { message: err.message, stack: err.stack },
+      });
+    }
+  }
+
+  return getById(id, req);
+}
+
+/**
+ * PATCH .../:id/stages/:stage/advance — completes the given stage AND starts the next one, in one
+ * call, instead of the two separate manual steps (Mark complete, then the next stage's own Start)
+ * updateStage() already supports individually. This is a narrow, explicit exception to rule 3
+ * (stage status is otherwise forward-only one step at a time) — not a new payload shape on
+ * updateStage() itself, which keeps rejecting a caller-supplied `not_started -> in_progress ->
+ * complete` skip exactly as it does today.
+ *
+ * Authorization is checked ONLY against the CURRENT (completing) stage — its own assignee, or a
+ * super-admin. Deliberately NOT the application owner (unlike the general updateStage() gate,
+ * rule 6) — this matches the narrower assignee-or-super rule updateStage() already enforces for
+ * actually starting/completing a stage (the owner can't click a plain "Mark complete" on a stage
+ * they're not assigned to either, so advance doesn't hand them a new way to do the same thing).
+ * The next stage's own assignee never has to approve anything here: finishing your own stage is
+ * what hands the request to the next person, so advancing only ever flips THEIR stage from
+ * not_started to in_progress — it never touches who they are or anything else about their stage.
+ */
+async function advanceStage(applicationId, id, stage, payload, req) {
+  const record = await ChangeRequest.findOne({
+    where: { id, applicationId },
+    include: [{ model: ChangeRequestStage, as: 'stages' }, ...sourceTitleInclude],
+  });
+  if (!record) throw ApiError.notFound('Change request not found');
+
+  if (record.status !== 'approved') {
+    if (record.status === 'implemented') {
+      throw ApiError.conflict('This change request is complete and can no longer be changed.');
+    }
+    if (record.status === 'rejected') {
+      throw ApiError.conflict('This change request was rejected.');
+    }
+    throw ApiError.conflict('This change request has not been approved yet.');
+  }
+
+  const stageIndex = STAGE_ORDER.indexOf(stage);
+  const nextStage = STAGE_ORDER[stageIndex + 1];
+  if (!nextStage) {
+    throw ApiError.conflict(`${STAGE_LABELS[stage]} has no next stage to advance to.`);
+  }
+
+  const stageRow = record.stages.find((s) => s.stage === stage);
+  const nextStageRow = record.stages.find((s) => s.stage === nextStage);
+  if (!stageRow || !nextStageRow) throw ApiError.notFound('Stage not found');
+
+  if (stageRow.status !== 'in_progress') {
+    throw ApiError.conflict(`${STAGE_LABELS[stage]} must be in progress before it can move to ${STAGE_LABELS[nextStage]}.`);
+  }
+
+  const isAssignee = !!stageRow.assigneeId && stageRow.assigneeId === req.user.id;
+  const isSuper = isSuperAdmin(req.user.permissions);
+  if (!isAssignee && !isSuper) {
+    throw ApiError.forbidden(`Only ${STAGE_LABELS[stage]}'s assignee (or a super-admin) may move it to ${STAGE_LABELS[nextStage]}.`);
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const stageUpdates = { status: 'complete', endDate: payload?.endDate !== undefined ? payload.endDate : (stageRow.endDate || today) };
+  // The next stage's own assigneeId is deliberately untouched — advancing hands them in-progress
+  // work, it never assigns or reassigns anyone.
+  const nextStageUpdates = { status: 'in_progress', startDate: nextStageRow.startDate || today };
+
+  await sequelize.transaction(async (t) => {
+    await stageRow.update(stageUpdates, { transaction: t });
+    await nextStageRow.update(nextStageUpdates, { transaction: t });
+
+    await StatusHistory.create({
+      entityType: 'change_request',
+      entityId: record.id,
+      fromStatus: `${stage}: in_progress`,
+      toStatus: `${stage}: complete`,
+      changedBy: req.user.id,
+      note: null,
+    }, { transaction: t });
+    await StatusHistory.create({
+      entityType: 'change_request',
+      entityId: record.id,
+      fromStatus: `${nextStage}: not_started`,
+      toStatus: `${nextStage}: in_progress`,
+      changedBy: req.user.id,
+      note: null,
+    }, { transaction: t });
+  });
+
+  // Same recipient (the next stage's own assignee, if already named) and same notification type
+  // rule 7's "stage ready" notification already uses — the practical outcome for them is
+  // identical (there's now actionable work waiting), just reworded since advance already started
+  // it for them rather than leaving them to click Start themselves.
+  const title = effectiveTitle(record);
+  const link = `/applications/${applicationId}/change-requests/${id}`;
+  if (nextStageRow.assigneeId && nextStageRow.assigneeId !== req.user.id) {
+    try {
+      await notificationsService.create({
+        userId: nextStageRow.assigneeId,
+        type: 'change_request_stage_ready',
+        title: 'A change request stage is ready for you',
+        message: `${STAGE_LABELS[stage]} is complete — ${STAGE_LABELS[nextStage]} is now in progress on "${title}".`,
+        link,
+      });
+    } catch (err) {
+      logger.error('Failed to create change-request stage-advanced notification', {
+        changeRequestId: id, stage, error: { message: err.message, stack: err.stack },
+      });
+    }
+  }
+
+  return getById(id, req);
+}
+
+/**
+ * PATCH .../:id/stages/:stage/send-back — reopens the previous stage (which must currently be
+ * complete) and resets the current stage back to not_started, with a required reason recorded in
+ * status_history. This is the ONLY place a stage is ever allowed to move backward — updateStage()
+ * keeps rejecting any caller-supplied backward status change exactly as it does today (rule 3);
+ * this is a separate, explicit, audited exception to that rule, not a loosening of it.
+ *
+ * Preconditions, all checked before anything is written: the given stage has a previous stage
+ * (development has none); the stage is currently in_progress; the previous stage is currently
+ * complete; the change request's own governance status is approved (the same gate updateStage()
+ * already enforces — since only implement() ever sets 'implemented', and nothing here or anywhere
+ * else can move an approved request to 'rejected'/'pending', this naturally also means a request
+ * that's already been marked Implemented can never have a stage sent back on it — there's no
+ * separate check needed for that, the approved-only gate already covers it).
+ *
+ * Authorization matches advanceStage()'s own reasoning exactly — the CURRENT (sending-back)
+ * stage's own assignee, or a super-admin. Not the owner alone, for the same reason: reporting a
+ * problem with your own stage's work is still an action ON that stage, same as starting or
+ * completing it.
+ *
+ * Stage notes (the polymorphic Notes/comments thread on each stage, entityType
+ * 'change_request_stage') are keyed off the stage row's own immutable id, not its status or
+ * dates — resetting/reopening a stage here never touches or loses them.
+ */
+async function sendBackStage(applicationId, id, stage, reason, req) {
+  const record = await ChangeRequest.findOne({
+    where: { id, applicationId },
+    include: [{ model: ChangeRequestStage, as: 'stages' }, ...sourceTitleInclude],
+  });
+  if (!record) throw ApiError.notFound('Change request not found');
+
+  if (record.status !== 'approved') {
+    if (record.status === 'implemented') {
+      throw ApiError.conflict('This change request is complete and can no longer be changed.');
+    }
+    if (record.status === 'rejected') {
+      throw ApiError.conflict('This change request was rejected.');
+    }
+    throw ApiError.conflict('This change request has not been approved yet.');
+  }
+
+  const stageIndex = STAGE_ORDER.indexOf(stage);
+  const previousStage = STAGE_ORDER[stageIndex - 1];
+  if (!previousStage) {
+    throw ApiError.conflict(`${STAGE_LABELS[stage]} has no previous stage to send back to.`);
+  }
+
+  const stageRow = record.stages.find((s) => s.stage === stage);
+  const previousRow = record.stages.find((s) => s.stage === previousStage);
+  if (!stageRow || !previousRow) throw ApiError.notFound('Stage not found');
+
+  if (stageRow.status !== 'in_progress') {
+    throw ApiError.conflict(`${STAGE_LABELS[stage]} must be in progress before it can be sent back.`);
+  }
+  if (previousRow.status !== 'complete') {
+    throw ApiError.conflict(`${STAGE_LABELS[previousStage]} isn't complete, so ${STAGE_LABELS[stage]} can't be sent back to it.`);
+  }
+
+  const isAssignee = !!stageRow.assigneeId && stageRow.assigneeId === req.user.id;
+  const isSuper = isSuperAdmin(req.user.permissions);
+  if (!isAssignee && !isSuper) {
+    throw ApiError.forbidden(`Only ${STAGE_LABELS[stage]}'s assignee (or a super-admin) may send it back to ${STAGE_LABELS[previousStage]}.`);
+  }
+
+  await sequelize.transaction(async (t) => {
+    // Current stage resets fully — it hasn't actually been (re)done yet. assigneeId is
+    // deliberately left as-is: sending back doesn't unassign whoever was working it.
+    await stageRow.update({ status: 'not_started', startDate: null, endDate: null }, { transaction: t });
+    // Previous stage only clears its end date — its start_date stays exactly what it was, since
+    // that's genuinely when work on it first began and hasn't changed just because it's being
+    // reopened.
+    await previousRow.update({ status: 'in_progress', endDate: null }, { transaction: t });
+
+    // The reason goes on both entries — whichever one a viewer's eye lands on first in a shared
+    // timeline, the story reads completely without needing to find its pair.
+    await StatusHistory.create({
+      entityType: 'change_request',
+      entityId: record.id,
+      fromStatus: `${stage}: in_progress`,
+      toStatus: `${stage}: not_started`,
+      changedBy: req.user.id,
+      note: reason,
+    }, { transaction: t });
+    await StatusHistory.create({
+      entityType: 'change_request',
+      entityId: record.id,
+      fromStatus: `${previousStage}: complete`,
+      toStatus: `${previousStage}: in_progress`,
+      changedBy: req.user.id,
+      note: reason,
+    }, { transaction: t });
+  });
+
+  // Not a silent undo — whoever's assigned to the reopened (previous) stage is told, with the
+  // reason, same as every other meaningful transition in this module notifies someone.
+  const title = effectiveTitle(record);
+  const link = `/applications/${applicationId}/change-requests/${id}`;
+  if (previousRow.assigneeId && previousRow.assigneeId !== req.user.id) {
+    try {
+      await notificationsService.create({
+        userId: previousRow.assigneeId,
+        type: 'change_request_stage_sent_back',
+        title: 'A change request stage was sent back to you',
+        message: `${STAGE_LABELS[stage]} was sent back to ${STAGE_LABELS[previousStage]} on "${title}": ${reason}`,
+        link,
+      });
+    } catch (err) {
+      logger.error('Failed to create change-request stage-sent-back notification', {
         changeRequestId: id, stage, error: { message: err.message, stack: err.stack },
       });
     }
@@ -729,6 +957,23 @@ async function remove(id) {
 }
 
 /**
+ * GET .../:id/status-history — added alongside advanceStage()/sendBackStage() (see Stage 2's B4)
+ * so a send-back's reason is actually visible somewhere; this module had no equivalent read
+ * endpoint before (ideas.service.js#statusHistory / featureRequests.service.js#statusHistory
+ * already have one each — same shape, mirrored here). `entityType` is always 'change_request'
+ * even for a per-stage transition (see updateStage()/advanceStage()/sendBackStage() — the stage
+ * name is folded into fromStatus/toStatus, not a separate column), so one query covers both the
+ * change request's own governance transitions and every stage's.
+ */
+async function statusHistory(id) {
+  return StatusHistory.findAll({
+    where: { entityType: 'change_request', entityId: id },
+    include: [{ model: User, as: 'changedByUser', attributes: ['id', 'name'] }],
+    order: [['createdAt', 'ASC']],
+  });
+}
+
+/**
  * GET .../:id/assignee-candidates — any active user, not scoped to this application or narrowed
  * any other way (unlike ideas.service.js#panelCandidates, which excludes the submitter and
  * existing panel members — there's no equivalent exclusion here; anyone could reasonably be
@@ -818,6 +1063,9 @@ module.exports = {
   getById,
   update,
   updateStage,
+  advanceStage,
+  sendBackStage,
+  statusHistory,
   implement,
   bulkAssignStages,
   remove,

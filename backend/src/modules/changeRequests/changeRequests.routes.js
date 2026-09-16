@@ -6,6 +6,7 @@ const { ChangeRequest } = require('../../models');
 const controller = require('./changeRequests.controller');
 const {
   create, update, updateStageParams, updateStageBody, bulkAssignParams, bulkAssignBody, implementParams,
+  advanceStageParams, advanceStageBody, sendBackStageParams, sendBackStageBody,
 } = require('./changeRequests.validator');
 
 // Create/read/update are open to every role regardless of application ownership/department — see
@@ -34,12 +35,43 @@ router.patch(
   controller.updateStage,
 );
 
+// Completes the given stage and starts the next one in one call — the narrow, explicit exception
+// to "stage status is forward-only one step at a time" described in
+// changeRequests.service.js#advanceStage. Same coarse route-level gate as every write here; the
+// real (assignee-or-super-admin-only, narrower than the plain PATCH's owner-inclusive gate) check
+// lives in the service.
+router.patch(
+  '/:id/stages/:stage/advance',
+  authorize('change_requests', 'update'),
+  validate({ params: advanceStageParams, body: advanceStageBody }),
+  controller.advanceStage,
+);
+
+// The only place a stage is ever allowed to move backward — see
+// changeRequests.service.js#sendBackStage for the preconditions and why this doesn't loosen the
+// plain PATCH's own forward-only rule.
+router.patch(
+  '/:id/stages/:stage/send-back',
+  authorize('change_requests', 'update'),
+  validate({ params: sendBackStageParams, body: sendBackStageBody }),
+  controller.sendBackStage,
+);
+
 // Any active user is a valid assignee (see changeRequests.service.js#assigneeCandidates) — gated
 // at 'read', not 'update', since this only powers a dropdown, not a mutation.
 router.get(
   '/:id/assignee-candidates',
   authorize('change_requests', 'read'),
   controller.assigneeCandidates,
+);
+
+// Mirrors ideas.routes.js's / featureRequests.routes.js's own '/:id/status-history' — added so
+// Stage 2's activity/timeline list (and a send-back's reason specifically) has something real to
+// render; see changeRequests.service.js#statusHistory.
+router.get(
+  '/:id/status-history',
+  authorize('change_requests', 'read'),
+  controller.statusHistory,
 );
 
 // Bulk assign/reassign/clear any of the three stages in one call — route-level gate is the same
