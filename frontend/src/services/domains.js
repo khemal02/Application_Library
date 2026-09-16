@@ -33,6 +33,7 @@ export const ideasApi = {
   panelCandidates: (id, kind) => api.get(`/ideas/${id}/panel-candidates`, { params: { kind } }).then((r) => r.data),
   addParticipants: (id, payload) => api.post(`/ideas/${id}/panel`, payload).then((r) => r.data),
   removeParticipant: (id, userId) => api.delete(`/ideas/${id}/panel/${userId}`).then((r) => r.data),
+  moveToBuild: (id, payload) => api.patch(`/ideas/${id}/move-to-build`, payload).then((r) => r.data),
 };
 // "Modify Current Application" — split out of ideasApi into its own module/table/resource, see
 // 20260130000035-split-feature-requests-from-ideas.js. No eligibleOwners — a feature request
@@ -45,6 +46,7 @@ export const featureRequestsApi = {
   panelCandidates: (id, kind) => api.get(`/feature-requests/${id}/panel-candidates`, { params: { kind } }).then((r) => r.data),
   addParticipants: (id, payload) => api.post(`/feature-requests/${id}/panel`, payload).then((r) => r.data),
   removeParticipant: (id, userId) => api.delete(`/feature-requests/${id}/panel/${userId}`).then((r) => r.data),
+  moveToBuild: (id, payload) => api.patch(`/feature-requests/${id}/move-to-build`, payload).then((r) => r.data),
 };
 
 // Not built on createNestedResourceApi — issues has no generic PUT/DELETE surface (see

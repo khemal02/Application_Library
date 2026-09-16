@@ -7,10 +7,18 @@ import Stack from '@mui/material/Stack';
 import Chip from '@mui/material/Chip';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Switch from '@mui/material/Switch';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import TextField from '@mui/material/TextField';
+import MenuItem from '@mui/material/MenuItem';
 import AddIcon from '@mui/icons-material/Add';
 import useToast from '../../hooks/useToast';
 import usePermission from '../../routes/usePermission';
-import { ideasApi, featureRequestsApi, departmentsApi } from '../../services/domains';
+import {
+  ideasApi, featureRequestsApi, applicationTrackingApi, changeRequestsApi, departmentsApi,
+} from '../../services/domains';
 import DataTable from '../../components/common/DataTable';
 import FilterBar from '../../components/common/FilterBar';
 import StatusBadge from '../../components/common/StatusBadge';
@@ -45,6 +53,110 @@ async function fetchAllPages(listFn, params) {
   return rows;
 }
 
+// A row's own Development-stage data, wherever it actually lives — an idea's `track.stages[0]`
+// (filtered server-side to 'development', see ideas.service.js's `include`) or a feature
+// request's `changeRequest.stages[0]` (same filter, changeRequests side). Both are `undefined`
+// until the idea/feature request is actually approved (the nested association is only ever
+// non-null once a track/change request exists).
+function developmentStage(row) {
+  return row._type === 'idea' ? row.track?.stages?.[0] : row.changeRequest?.stages?.[0];
+}
+
+/**
+ * The "Build" column's cell — visible at all only when the viewer holds the new, narrow
+ * `moveToBuild` permission for THIS row's type (checked per row, not just once for the whole
+ * column, since a viewer could in principle hold it for ideas but not feature requests). Approving
+ * already picks an idea's track OWNER (see ideas.service.js#finalizeIdea) but never who actually
+ * does the Development work — that's this column's real job, and it's the same gap on both sides
+ * once a change request exists (Discovery D1/D2: the two modules turned out to be more symmetric
+ * here than expected, not less).
+ */
+function BuildCell({ row, canAct, onOpen }) {
+  if (!canAct || row.status !== 'approved') {
+    return <Typography variant="body2" color="text.disabled">—</Typography>;
+  }
+  const stage = developmentStage(row);
+  if (!stage) return <Typography variant="body2" color="text.disabled">—</Typography>;
+  if (stage.status === 'not_started') {
+    return (
+      <Button size="small" variant="outlined" onClick={(e) => { e.stopPropagation(); onOpen(row); }}>
+        Move to Build
+      </Button>
+    );
+  }
+  return (
+    <Chip
+      size="small"
+      color={stage.status === 'complete' ? 'success' : 'info'}
+      label={stage.assignee?.name || (stage.status === 'complete' ? 'Complete' : 'In progress')}
+    />
+  );
+}
+
+/**
+ * Picks who's actually building an approved idea/feature request and starts Development in one
+ * call — see ideas.service.js#moveToBuild / featureRequests.service.js#moveToBuild. Candidates are
+ * fetched fresh each time the dialog opens for a given row, from whichever module's own
+ * (identical, "any active user") assignee-candidates endpoint that row's type already has.
+ */
+function MoveToBuildDialog({
+  row, onClose, onMoved,
+}) {
+  const { showSuccess, showError } = useToast();
+  const [candidates, setCandidates] = useState([]);
+  const [assigneeId, setAssigneeId] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!row) return;
+    setAssigneeId('');
+    const fetchCandidates = row._type === 'idea'
+      ? applicationTrackingApi.assigneeCandidates(row.track.id)
+      : changeRequestsApi.assigneeCandidates(row.application.id, row.changeRequest.id);
+    fetchCandidates.then((res) => setCandidates(res.data)).catch(() => setCandidates([]));
+  }, [row]);
+
+  const handleConfirm = async () => {
+    setSubmitting(true);
+    try {
+      if (row._type === 'idea') {
+        await ideasApi.moveToBuild(row.id, { assigneeId });
+      } else {
+        await featureRequestsApi.moveToBuild(row.id, { assigneeId });
+      }
+      showSuccess('Moved to build — Development is now in progress');
+      onMoved();
+    } catch (err) {
+      showError(err.response?.data?.message || 'Failed to move this to build');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={!!row} onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>Move &ldquo;{row?.title}&rdquo; to build</DialogTitle>
+      <DialogContent>
+        <TextField
+          select fullWidth size="small" label="Who's building this?" sx={{ mt: 1 }}
+          value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}
+          disabled={submitting}
+        >
+          {candidates.map((c) => (
+            <MenuItem key={c.id} value={c.id}>{c.name}{c.roleLabel ? ` — ${c.roleLabel}` : ''}</MenuItem>
+          ))}
+        </TextField>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={submitting}>Cancel</Button>
+        <Button variant="contained" disabled={submitting || !assigneeId} onClick={handleConfirm}>
+          Move to Build
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 /**
  * Merges the two previously-separate "New Ideas" and "Modify Current Application" list screens
  * into one. Both source endpoints (ideasApi.list / featureRequestsApi.list) are called exactly as
@@ -61,6 +173,11 @@ export default function IdeasAndFeatureRequestsListPage() {
   // to hold both. A viewer who only has one sees only that one's button and rows.
   const canSeeIdeas = usePermission('ideas', 'read');
   const canSeeFeatureRequests = usePermission('feature_requests', 'read');
+  // Narrower than the above (D3) — held today by CEO/Manager/Admin via their existing
+  // resource-level `manage` grant, nobody else. Checked per row's own type, not just once, since
+  // the two are independent permissions even though every role holding one happens to hold both.
+  const canMoveIdeasToBuild = usePermission('ideas', 'moveToBuild');
+  const canMoveFeatureRequestsToBuild = usePermission('feature_requests', 'moveToBuild');
 
   // A Dashboard stat tile links here with ?status=... or ?awaitingMyReview=true&kind=reviewer|
   // approver (for either "...for New Idea" or "...for Feature Request") — read once at mount, same
@@ -81,6 +198,11 @@ export default function IdeasAndFeatureRequestsListPage() {
   const [departments, setDepartments] = useState([]);
   const [ideaFormOpen, setIdeaFormOpen] = useState(false);
   const [featureRequestFormOpen, setFeatureRequestFormOpen] = useState(false);
+  const [buildTarget, setBuildTarget] = useState(null);
+  // Bumped after a successful move-to-build to re-run the fetch effect below — "never patch local
+  // state, always refetch and re-render from the response" (same rule every stage-action page in
+  // this app follows), rather than reaching into `allRows` to hand-patch one row's nested stage.
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     departmentsApi.list({ limit: 100 }).then((res) => setDepartments(res.data)).catch(() => setDepartments([]));
@@ -119,7 +241,7 @@ export default function IdeasAndFeatureRequestsListPage() {
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sharedParams, canSeeIdeas, canSeeFeatureRequests]);
+  }, [sharedParams, canSeeIdeas, canSeeFeatureRequests, reloadToken]);
 
   useEffect(() => { setPage(1); }, [search, filters, sort]);
 
@@ -169,6 +291,21 @@ export default function IdeasAndFeatureRequestsListPage() {
     { key: 'functionalArea', label: 'Functional Area', render: (r) => (r.functionalArea ? humanize(r.functionalArea) : '—') },
     { key: 'status', label: 'Status', sortable: true, render: (r) => <StatusBadge value={r.status} label={ideaStatusLabel(r.status)} /> },
   ];
+  // Whole column omitted, not just its buttons, when the viewer holds neither moveToBuild
+  // permission — a plain reviewer shouldn't see a column of dashes on every row.
+  if (canMoveIdeasToBuild || canMoveFeatureRequestsToBuild) {
+    columns.push({
+      key: 'build',
+      label: 'Build',
+      render: (r) => (
+        <BuildCell
+          row={r}
+          canAct={r._type === 'idea' ? canMoveIdeasToBuild : canMoveFeatureRequestsToBuild}
+          onOpen={setBuildTarget}
+        />
+      ),
+    });
+  }
 
   const filterDefs = [
     { key: 'type', label: 'Type', options: TYPE_OPTIONS },
@@ -243,6 +380,14 @@ export default function IdeasAndFeatureRequestsListPage() {
           open={featureRequestFormOpen}
           onClose={() => setFeatureRequestFormOpen(false)}
           onCreated={(featureRequest) => { setFeatureRequestFormOpen(false); showSuccess('Feature request submitted'); navigate(`/feature-requests/${featureRequest.id}`); }}
+        />
+      )}
+
+      {buildTarget && (
+        <MoveToBuildDialog
+          row={buildTarget}
+          onClose={() => setBuildTarget(null)}
+          onMoved={() => { setBuildTarget(null); setReloadToken((t) => t + 1); }}
         />
       )}
     </Box>

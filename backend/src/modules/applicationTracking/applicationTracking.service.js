@@ -531,6 +531,60 @@ async function updateStage(id, stage, payload, req) {
 }
 
 /**
+ * Called by ideas.service.js#moveToBuild — names the Development stage's assignee and starts it
+ * in one call, right after approval. Authorization is entirely the route's own `ideas:moveToBuild`
+ * permission check; nothing to re-check here, since this function is never itself exposed as a
+ * route (only ever reached through ideas.service.js). Reuses updateStage's own stage-start shape
+ * (rule 3: in_progress defaults startDate to today if unset) rather than duplicating it.
+ */
+async function moveToBuild(id, assigneeId, req) {
+  const record = await ApplicationTrack.findByPk(id, { include: stageAndIdeaInclude });
+  if (!record) throw ApiError.notFound('Application track not found');
+  if (record.status !== 'active') {
+    throw ApiError.conflict(`This track is ${STATUS_LABELS[record.status]} and can no longer be moved to build.`);
+  }
+
+  const stageRow = record.stages.find((s) => s.stage === 'development');
+  if (!stageRow) throw ApiError.notFound('Development stage not found');
+  if (stageRow.status !== 'not_started') {
+    throw ApiError.conflict('Development has already started — this has already been moved to build.');
+  }
+
+  const assignee = await User.findByPk(assigneeId, { attributes: ['id', 'status'] });
+  if (!assignee || assignee.status !== 'active') {
+    throw ApiError.badRequest('Assignee must be an existing, active user.');
+  }
+
+  await sequelize.transaction(async (t) => {
+    await stageRow.update({
+      assigneeId, status: 'in_progress', startDate: stageRow.startDate || today(),
+    }, { transaction: t });
+    await StatusHistory.create({
+      entityType: 'application_track', entityId: record.id, fromStatus: 'development: not_started', toStatus: 'development: in_progress', changedBy: req.user.id, note: null,
+    }, { transaction: t });
+  });
+
+  if (assigneeId !== req.user.id) {
+    const name = record.name || record.idea?.title;
+    try {
+      await notificationsService.createMany([{
+        userId: assigneeId,
+        type: 'application_track_stage_assigned',
+        title: 'You were assigned to a track stage',
+        message: `You're on the Development stage of "${name}" — it's now in progress.`,
+        link: `/application-tracking/${id}`,
+      }]);
+    } catch (err) {
+      logger.error('Failed to create move-to-build notification', {
+        applicationTrackId: id, error: { message: err.message, stack: err.stack },
+      });
+    }
+  }
+
+  return getById(id, req);
+}
+
+/**
  * PATCH /:id/go-live — the deliberate, owner-only step that used to happen automatically the
  * instant Deployment was marked complete. Splitting it out means whoever is assigned Deployment
  * can finish their own work without unilaterally registering the Application on the owner's
@@ -787,6 +841,7 @@ module.exports = {
   getById,
   update,
   updateStage,
+  moveToBuild,
   goLive,
   assignStages,
   hold,
