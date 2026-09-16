@@ -175,7 +175,7 @@ function ActivityTimeline({ history }) {
 }
 
 /**
- * One of the three stacked stage cards — same shape as Idea Prioritization's own StageSection
+ * One of the three stacked stage cards — same shape as Application Tracking's own StageSection
  * (ApplicationTrackingDetailPage.jsx), minus a separate "Expected finish" field: this module only
  * ever tracked Started (planned/actual start) and Finished (the real completion date, set only by
  * the server on complete) — there's no distinct target date to plan against.

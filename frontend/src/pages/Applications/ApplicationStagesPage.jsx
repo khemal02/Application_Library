@@ -79,7 +79,7 @@ function StageCard({ stage, stageData }) {
         </Grid>
       </Grid>
 
-      {/* The same work-log the stage's own card showed back in Idea Prioritization — carried
+      {/* The same work-log the stage's own card showed back in Application Tracking — carried
           through here so the origin history isn't just dates, the actual notes survive go-live
           too. Plain display only, same as everything else on this page: no author/date, no
           add/edit — this is a frozen record, not an open thread. */}
@@ -111,7 +111,7 @@ function StageCard({ stage, stageData }) {
 /**
  * The record of how this application came to be — reached by clicking the title card on its
  * detail page (ProjectInfoBox.jsx). Only ever has content for an application registered through
- * Idea Prioritization's go-live step (see applications.service.js#getOrigin); one created directly
+ * Application Tracking's go-live step (see applications.service.js#getOrigin); one created directly
  * in the catalogue has no idea/track to show, and that's the common case, not an error state.
  */
 export default function ApplicationStagesPage() {
@@ -139,7 +139,7 @@ export default function ApplicationStagesPage() {
         <Paper variant="outlined" sx={{ p: 3, textAlign: 'center' }}>
           <Typography variant="body2" fontWeight={600}>No idea or stage history for this application</Typography>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-            It was registered directly in the catalogue, not through Idea Prioritization.
+            It was registered directly in the catalogue, not through Application Tracking.
           </Typography>
         </Paper>
       ) : (

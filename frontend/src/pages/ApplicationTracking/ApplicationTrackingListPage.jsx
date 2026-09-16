@@ -45,9 +45,10 @@ function ApplicationCell({ track }) {
 }
 
 /**
- * Idea Prioritization (displayed name; module/route/API still say "Application Tracking" — see
- * the file/route names throughout this module) — sits between an approved idea and the
- * Applications catalogue. No create button (a track is only ever born from an idea being approved)
+ * Application Tracking — the displayed name now matches the module/route/API name throughout
+ * this module (it used to display as "Idea Prioritization", by explicit request). Sits between an
+ * approved idea and the Applications catalogue. No create button (a track is only ever born from
+ * an idea being approved)
  * and no search box (the backend list has none to back it — see applicationTracking.service.js#list,
  * which owns the order: priority-then-target-date normally, or start-date-first the moment either
  * "mine" toggle below is on — not a user-sortable column-header kind of order). `useServerList`
@@ -57,7 +58,7 @@ function ApplicationCell({ track }) {
 export default function ApplicationTrackingListPage() {
   const navigate = useNavigate();
   const user = useAppSelector((s) => s.auth.user);
-  useBreadcrumbLabel('Idea Prioritization');
+  useBreadcrumbLabel('Application Tracking');
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
@@ -129,7 +130,7 @@ export default function ApplicationTrackingListPage() {
     <Box>
       <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" useFlexGap rowGap={1} sx={{ mb: 2 }}>
         <Stack direction="row" alignItems="baseline" spacing={1}>
-          <Typography variant="h5" fontWeight={700}>Idea Prioritization</Typography>
+          <Typography variant="h5" fontWeight={700}>Application Tracking</Typography>
         </Stack>
 
         <Stack direction="row" spacing={2} alignItems="center">

@@ -20,7 +20,7 @@ const navConfig = [
     activePaths: ['/ideas', '/feature-requests'],
   },
   {
-    label: 'Idea Prioritization', path: '/application-tracking', icon: TrackChangesIcon,
+    label: 'Application Tracking', path: '/application-tracking', icon: TrackChangesIcon,
     resource: 'application_tracks', action: 'read',
   },
   { label: 'Applications', path: '/applications', icon: AppsIcon },

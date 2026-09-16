@@ -11,7 +11,7 @@ const LABELS = {
   admin: 'Administration', users: 'Users', roles: 'Roles & Permissions',
   departments: 'Departments', profile: 'Profile',
   new: 'New', settings: 'Settings', stages: 'Stages', 'change-requests': 'Change Requests',
-  'my-stages': 'My Stages', 'application-tracking': 'Idea Prioritization',
+  'my-stages': 'My Stages', 'application-tracking': 'Application Tracking',
 };
 
 export default function Breadcrumb() {
