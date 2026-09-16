@@ -163,7 +163,6 @@ export default function IdeasAndFeatureRequestsListPage() {
         ? <Chip size="small" variant="outlined" color="primary" label="New Idea" />
         : <Chip size="small" variant="outlined" color="secondary" label="Feature Request" />),
     },
-    { key: 'application', label: 'Application', render: (r) => r.application?.name || '—' },
     { key: 'submitter', label: 'Submitted By', render: (r) => r.submitter?.name || '—' },
     { key: 'department', label: 'Department', render: (r) => r.department?.name || '—' },
     { key: 'industry', label: 'Industry', render: (r) => (r.industry ? humanize(r.industry) : '—') },
