@@ -743,6 +743,63 @@ async function sendBackStage(applicationId, id, stage, reason, req) {
 }
 
 /**
+ * Called by featureRequests.service.js#moveToBuild — names the Development stage's assignee and
+ * starts it in one call, right after approval creates this change request with every stage still
+ * not_started. Authorization is entirely the route's own `feature_requests:moveToBuild` permission
+ * check; nothing to re-check here, since this function is never itself exposed as a route (only
+ * ever reached through featureRequests.service.js). Reuses updateStage's own stage-start shape
+ * (rule 4) rather than duplicating it.
+ */
+async function moveToBuild(id, assigneeId, req) {
+  const record = await ChangeRequest.findByPk(id, {
+    include: [{ model: ChangeRequestStage, as: 'stages' }, ...sourceTitleInclude],
+  });
+  if (!record) throw ApiError.notFound('Change request not found');
+  if (record.status !== 'approved') {
+    throw ApiError.conflict(`Only an approved change request can be moved to build — this one is ${record.status}.`);
+  }
+
+  const stageRow = record.stages.find((s) => s.stage === 'development');
+  if (stageRow.status !== 'not_started') {
+    throw ApiError.conflict('Development has already started — this has already been moved to build.');
+  }
+
+  const assignee = await User.findByPk(assigneeId, { attributes: ['id', 'status'] });
+  if (!assignee || assignee.status !== 'active') {
+    throw ApiError.badRequest('Assignee must be an existing, active user.');
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  await sequelize.transaction(async (t) => {
+    await stageRow.update({
+      assigneeId, status: 'in_progress', startDate: stageRow.startDate || today,
+    }, { transaction: t });
+    await StatusHistory.create({
+      entityType: 'change_request', entityId: record.id, fromStatus: 'development: not_started', toStatus: 'development: in_progress', changedBy: req.user.id, note: null,
+    }, { transaction: t });
+  });
+
+  if (assigneeId !== req.user.id) {
+    const title = effectiveTitle(record);
+    try {
+      await notificationsService.createMany([{
+        userId: assigneeId,
+        type: 'change_request_stage_assigned',
+        title: 'You were assigned to a change request stage',
+        message: `You're now assigned to the Development stage of "${title}" — it's now in progress.`,
+        link: `/applications/${record.applicationId}/change-requests/${id}`,
+      }]);
+    } catch (err) {
+      logger.error('Failed to create move-to-build notification', {
+        changeRequestId: id, error: { message: err.message, stack: err.stack },
+      });
+    }
+  }
+
+  return getById(id, req);
+}
+
+/**
  * PATCH .../:id/implement — the deliberate, owner-only step that used to happen automatically the
  * instant Deployment was marked complete (mirrors applicationTracking.service.js#goLive's own
  * split from stage completion). Splitting it out means whoever is assigned Deployment can finish
@@ -1066,6 +1123,7 @@ module.exports = {
   advanceStage,
   sendBackStage,
   statusHistory,
+  moveToBuild,
   implement,
   bulkAssignStages,
   remove,

@@ -13,6 +13,10 @@ const notificationsService = require('../notifications/notifications.service');
 const tagsService = require('../tags/tags.service');
 const { cleanupEntityRefs, mergeCounts } = require('../../utils/entityCleanup');
 const { getStorageDriver } = require('../attachments/storage');
+// Reused, not duplicated — moveToBuild()'s actual stage-start mutation lives on the track itself
+// (applicationTracking.service.js#moveToBuild), same "call the owning module's own public API"
+// pattern applicationTracking.service.js already uses for changeRequestsService.assigneeCandidates.
+const applicationTrackingService = require('../applicationTracking/applicationTracking.service');
 
 // As of the Ideas/Feature-Requests split (20260130000035), this module only ever handles
 // category: 'new_idea' — "Modify Current Application" moved to its own table/module
@@ -28,6 +32,23 @@ const include = [
   { model: User, as: 'reviewer', attributes: ['id', 'name', 'avatarUrl'] },
   { model: Department, as: 'department', attributes: ['id', 'name'] },
   { model: Application, as: 'application', attributes: ['id', 'name'] },
+  // Powers the Ideas/Feature Requests list page's "Build" column — needs to know, per row, whether
+  // an approved idea's track has already been moved to build (its Development stage's status/
+  // assignee) without a second round trip per row. `required: false` keeps this a LEFT JOIN — an
+  // idea with no track yet (not yet approved) still returns normally, just with `track: null`.
+  {
+    model: ApplicationTrack,
+    as: 'track',
+    attributes: ['id'],
+    include: [{
+      model: ApplicationTrackStage,
+      as: 'stages',
+      where: { stage: 'development' },
+      required: false,
+      attributes: ['id', 'status', 'assigneeId'],
+      include: [{ model: User, as: 'assignee', attributes: ['id', 'name'] }],
+    }],
+  },
 ];
 
 const base = createCrudService(Idea, {
@@ -801,7 +822,30 @@ async function analytics() {
   };
 }
 
+/**
+ * PATCH /:id/move-to-build — narrowly permissioned (`ideas:moveToBuild`, held today by CEO/
+ * Manager/Admin via their existing resource-level `manage` grant — see hasPermission()'s wildcard
+ * rule, no separate grant migration needed). Approving an idea already requires picking the
+ * track's OWNER (finalizeIdea's needsTrack guard above) — that's a different decision from this
+ * one: who actually does the Development work, made by whoever holds this permission, not
+ * necessarily the track owner themselves. The real mutation (naming the Development stage's
+ * assignee and starting it) lives on the track itself — see
+ * applicationTracking.service.js#moveToBuild, reused here rather than duplicated.
+ */
+async function moveToBuild(id, { assigneeId }, req) {
+  const idea = await Idea.findByPk(id, { attributes: ['id', 'title', 'status'] });
+  if (!idea) throw ApiError.notFound('Idea not found');
+  if (idea.status !== 'approved') {
+    throw ApiError.conflict(`Only an approved idea can be moved to build — this one is ${idea.status}.`);
+  }
+
+  const track = await ApplicationTrack.findOne({ where: { ideaId: id }, attributes: ['id'] });
+  if (!track) throw ApiError.conflict('No application track exists for this idea yet.');
+
+  return applicationTrackingService.moveToBuild(track.id, assigneeId, req);
+}
+
 module.exports = {
   ...base, create, update, remove, statusHistory, analytics, getById, list, eligibleOwners,
-  submitReview, addParticipants, removeParticipant, panelCandidates, myPendingCounts,
+  submitReview, addParticipants, removeParticipant, panelCandidates, myPendingCounts, moveToBuild,
 };

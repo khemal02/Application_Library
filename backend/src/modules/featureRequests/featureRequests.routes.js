@@ -6,7 +6,7 @@ const validate = require('../../middlewares/validate.middleware');
 const { FeatureRequest } = require('../../models');
 const controller = require('./featureRequests.controller');
 const {
-  create, update, submitReview, addParticipants, panelCandidatesQuery,
+  create, update, submitReview, addParticipants, panelCandidatesQuery, moveToBuild,
 } = require('./featureRequests.validator');
 
 const router = express.Router();
@@ -28,6 +28,13 @@ router.post('/:id/reviews', authorize('feature_requests', 'read'), validate(subm
 router.get('/:id/panel-candidates', authorize('feature_requests', 'update'), validate({ query: panelCandidatesQuery }), controller.panelCandidates);
 router.post('/:id/panel', authorize('feature_requests', 'update'), validate(addParticipants), controller.addParticipants);
 router.delete('/:id/panel/:userId', authorize('feature_requests', 'update'), controller.removeParticipant);
+// Narrow, separately-permissioned action (D3/1a): names the Development stage's assignee and
+// starts it — the real gap here, since approving a feature request never picks anyone (unlike an
+// idea, which already requires a track owner). Not `feature_requests:update` — CEO/Manager/Admin
+// get this automatically via their existing resource-level `manage` grant (hasPermission's
+// wildcard rule); nobody else does unless explicitly granted later. See
+// featureRequests.service.js#moveToBuild.
+router.patch('/:id/move-to-build', authorize('feature_requests', 'moveToBuild'), validate(moveToBuild), controller.moveToBuild);
 router.delete('/:id', authorize('feature_requests', 'delete'), ownFeatureRequestOnly, controller.remove);
 
 module.exports = router;

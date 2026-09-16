@@ -65,4 +65,9 @@ controller.eligibleOwners = asyncHandler(async (req, res) => {
   return ApiResponse.success(res, users);
 });
 
+controller.moveToBuild = asyncHandler(async (req, res) => {
+  const record = await service.moveToBuild(req.params.id, req.body, req);
+  return ApiResponse.success(res, record, 'Moved to build');
+});
+
 module.exports = controller;

@@ -2,8 +2,8 @@ const { Op } = require('sequelize');
 const { createCrudService } = require('../../utils/crudFactory');
 const { buildQueryOptions, buildPaginationMeta } = require('../../utils/paginate');
 const {
-  FeatureRequest, User, Role, RolePermission, Department, Application, ChangeRequest, StatusHistory,
-  Vote, Comment, FeatureRequestReview, sequelize,
+  FeatureRequest, User, Role, RolePermission, Department, Application, ChangeRequest, ChangeRequestStage,
+  StatusHistory, Vote, Comment, FeatureRequestReview, sequelize,
 } = require('../../models');
 const ApiError = require('../../utils/ApiError');
 const logger = require('../../config/logger');
@@ -23,8 +23,23 @@ const include = [
   { model: Department, as: 'department', attributes: ['id', 'name'] },
   { model: Application, as: 'application', attributes: ['id', 'name'] },
   // Set only once approved — see finalizeFeatureRequest() below and
-  // changeRequests.service.js#createFromFeatureRequest.
-  { model: ChangeRequest, as: 'changeRequest', attributes: ['id', 'applicationId'] },
+  // changeRequests.service.js#createFromFeatureRequest. The nested Development-stage include
+  // powers the Ideas/Feature Requests list page's "Build" column — same reasoning as
+  // ideas.service.js's own `track` include; `required: false` keeps an unapproved row (no change
+  // request yet) returning normally, just with `changeRequest: null`.
+  {
+    model: ChangeRequest,
+    as: 'changeRequest',
+    attributes: ['id', 'applicationId'],
+    include: [{
+      model: ChangeRequestStage,
+      as: 'stages',
+      where: { stage: 'development' },
+      required: false,
+      attributes: ['id', 'status', 'assigneeId'],
+      include: [{ model: User, as: 'assignee', attributes: ['id', 'name'] }],
+    }],
+  },
 ];
 
 const base = createCrudService(FeatureRequest, {
@@ -618,7 +633,27 @@ async function analytics() {
   };
 }
 
+/**
+ * PATCH /:id/move-to-build — narrowly permissioned (`feature_requests:moveToBuild`, held today by
+ * CEO/Manager/Admin via their existing resource-level `manage` grant, no separate grant migration
+ * needed — same shape as ideas.service.js#moveToBuild). Approving a feature request creates a
+ * change request with every stage `not_started` and no assignee at all (unlike an idea, which
+ * already requires picking a track OWNER at approval) — this fills that real gap: who actually
+ * does the Development work. The real mutation lives on the change request itself — see
+ * changeRequests.service.js#moveToBuild, reused here rather than duplicated.
+ */
+async function moveToBuild(id, { assigneeId }, req) {
+  const featureRequest = await FeatureRequest.findByPk(id, {
+    attributes: ['id'],
+    include: [{ model: ChangeRequest, as: 'changeRequest', attributes: ['id'] }],
+  });
+  if (!featureRequest) throw ApiError.notFound('Feature request not found');
+  if (!featureRequest.changeRequest) throw ApiError.conflict('No change request exists for this feature request yet.');
+
+  return changeRequestsService.moveToBuild(featureRequest.changeRequest.id, assigneeId, req);
+}
+
 module.exports = {
   ...base, create, update, remove, statusHistory, analytics, getById, list,
-  submitReview, addParticipants, removeParticipant, panelCandidates, myPendingCounts,
+  submitReview, addParticipants, removeParticipant, panelCandidates, myPendingCounts, moveToBuild,
 };

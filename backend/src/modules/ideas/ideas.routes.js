@@ -6,7 +6,7 @@ const validate = require('../../middlewares/validate.middleware');
 const { Idea } = require('../../models');
 const controller = require('./ideas.controller');
 const {
-  create, update, submitReview, addParticipants, panelCandidatesQuery,
+  create, update, submitReview, addParticipants, panelCandidatesQuery, moveToBuild,
 } = require('./ideas.validator');
 
 const router = express.Router();
@@ -40,6 +40,12 @@ router.post('/:id/reviews', authorize('ideas', 'read'), validate(submitReview), 
 router.get('/:id/panel-candidates', authorize('ideas', 'update'), validate({ query: panelCandidatesQuery }), controller.panelCandidates);
 router.post('/:id/panel', authorize('ideas', 'update'), validate(addParticipants), controller.addParticipants);
 router.delete('/:id/panel/:userId', authorize('ideas', 'update'), controller.removeParticipant);
+// Narrow, separately-permissioned action (D3/1a): names the Development stage's assignee and
+// starts it — distinct from approving, which already requires a track OWNER but never touches who
+// actually builds it. Not `ideas:update` — CEO/Manager/Admin get this automatically via their
+// existing resource-level `manage` grant (hasPermission's wildcard rule); nobody else does unless
+// explicitly granted later. See ideas.service.js#moveToBuild.
+router.patch('/:id/move-to-build', authorize('ideas', 'moveToBuild'), validate(moveToBuild), controller.moveToBuild);
 router.delete('/:id', authorize('ideas', 'delete'), ownIdeaOnly, controller.remove);
 
 module.exports = router;

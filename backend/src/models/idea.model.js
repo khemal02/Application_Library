@@ -73,6 +73,11 @@ module.exports = (sequelize, DataTypes) => {
     Idea.belongsTo(db.User, { foreignKey: 'submittedBy', as: 'submitter' });
     Idea.belongsTo(db.User, { foreignKey: 'reviewerId', as: 'reviewer' });
     Idea.hasMany(db.IdeaReview, { foreignKey: 'ideaId', as: 'reviews' });
+    // Mirrors FeatureRequest.hasOne(ChangeRequest, { as: 'changeRequest' }) — an approved idea gets
+    // exactly one track (finalizeIdea's own idempotency check), so the reverse side is a hasOne too.
+    // Added for the Move-to-Build list column, which needs to know each row's Development-stage
+    // status without a second round trip per row.
+    Idea.hasOne(db.ApplicationTrack, { foreignKey: 'ideaId', as: 'track' });
   };
 
   return Idea;

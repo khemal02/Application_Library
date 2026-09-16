@@ -81,6 +81,12 @@ const panelCandidatesQuery = Joi.object({
   kind: Joi.string().valid('reviewer', 'approver').required(),
 });
 
+// PATCH /:id/move-to-build — see ideas.service.js#moveToBuild. Who may reach this at all is the
+// route's own `ideas:moveToBuild` permission gate; Joi only owns the body shape.
+const moveToBuild = Joi.object({
+  assigneeId: Joi.string().uuid().required(),
+});
+
 module.exports = {
-  create, update, submitReview, addParticipants, panelCandidatesQuery,
+  create, update, submitReview, addParticipants, panelCandidatesQuery, moveToBuild,
 };
