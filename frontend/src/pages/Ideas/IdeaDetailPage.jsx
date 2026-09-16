@@ -231,13 +231,6 @@ export default function IdeaDetailPage() {
       <Box sx={{ mb: 2 }}>
         <Typography variant="h5" fontWeight={700}>{idea.title}</Typography>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
-          {idea.applicationId && idea.application?.name && (
-            <Chip
-              size="small" color="success" variant="outlined" clickable
-              label={`Registered as: ${idea.application.name}`}
-              onClick={() => navigate(`/applications/${idea.applicationId}`)}
-            />
-          )}
           {idea.changeRequest && (
             <Chip
               size="small" color="success" variant="outlined" clickable

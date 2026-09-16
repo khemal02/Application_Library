@@ -10,9 +10,8 @@ import ApplicationStagesPage from '../pages/Applications/ApplicationStagesPage';
 import ChangeRequestDetailPage from '../pages/Applications/ChangeRequestDetailPage';
 import ApplicationTrackingListPage from '../pages/ApplicationTracking/ApplicationTrackingListPage';
 import ApplicationTrackingDetailPage from '../pages/ApplicationTracking/ApplicationTrackingDetailPage';
-import IdeasListPage from '../pages/Ideas/IdeasListPage';
+import IdeasAndFeatureRequestsListPage from '../pages/Ideas/IdeasAndFeatureRequestsListPage';
 import IdeaDetailPage from '../pages/Ideas/IdeaDetailPage';
-import FeatureRequestsListPage from '../pages/Ideas/FeatureRequestsListPage';
 import FeatureRequestDetailPage from '../pages/Ideas/FeatureRequestDetailPage';
 import UsersPage from '../pages/Admin/UsersPage';
 import RolesPage from '../pages/Admin/RolesPage';
@@ -43,10 +42,15 @@ export default function AppRoutes() {
       <Route path="/applications/:id/stages" element={<Protected><ApplicationStagesPage /></Protected>} />
       <Route path="/applications/:applicationId/change-requests/:changeRequestId" element={<Protected><ChangeRequestDetailPage /></Protected>} />
 
-      <Route path="/ideas" element={<Protected resource="ideas" action="read"><IdeasListPage /></Protected>} />
+      {/* New Ideas and Modify Current Application were merged into one list screen
+          (IdeasAndFeatureRequestsListPage) — rendered at BOTH original routes, each still under
+          its own original guard, so neither existing link/bookmark/dashboard-tile breaks and
+          nobody gains access they didn't already have. The page itself further narrows what it
+          shows per-viewer via its own real ideas:read/feature_requests:read checks. */}
+      <Route path="/ideas" element={<Protected resource="ideas" action="read"><IdeasAndFeatureRequestsListPage /></Protected>} />
       <Route path="/ideas/:id" element={<Protected resource="ideas" action="read"><IdeaDetailPage /></Protected>} />
 
-      <Route path="/feature-requests" element={<Protected resource="feature_requests" action="read"><FeatureRequestsListPage /></Protected>} />
+      <Route path="/feature-requests" element={<Protected resource="feature_requests" action="read"><IdeasAndFeatureRequestsListPage /></Protected>} />
       <Route path="/feature-requests/:id" element={<Protected resource="feature_requests" action="read"><FeatureRequestDetailPage /></Protected>} />
 
       <Route path="/application-tracking" element={<Protected resource="application_tracks" action="read"><ApplicationTrackingListPage /></Protected>} />

@@ -100,7 +100,10 @@ function NavEntry({ item, sidebarOpen, onExpandSidebar, hasAccess }) {
     );
   }
 
-  const isActive = location.pathname === item.path;
+  // Most items match their own path exactly; the merged Ideas page also renders at
+  // /feature-requests (its other original route, kept for old links/bookmarks — see
+  // AppRoutes.jsx) via `item.activePaths`, so the sidebar still highlights "Ideas" there too.
+  const isActive = item.activePaths ? item.activePaths.includes(location.pathname) : location.pathname === item.path;
   const button = (
     <ListItemButton
       selected={isActive}
