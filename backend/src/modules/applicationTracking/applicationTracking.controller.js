@@ -27,6 +27,23 @@ module.exports = {
     return ApiResponse.success(res, record, 'Stage updated');
   }),
 
+  advanceStage: asyncHandler(async (req, res) => {
+    const { id, stage } = req.params;
+    const record = await service.advanceStage(id, stage, req.body, req);
+    return ApiResponse.success(res, record, 'Moved to the next stage');
+  }),
+
+  sendBackStage: asyncHandler(async (req, res) => {
+    const { id, stage } = req.params;
+    const record = await service.sendBackStage(id, stage, req.body.reason, req);
+    return ApiResponse.success(res, record, 'Sent back to the previous stage');
+  }),
+
+  statusHistory: asyncHandler(async (req, res) => {
+    const history = await service.statusHistory(req.params.id);
+    return ApiResponse.success(res, history);
+  }),
+
   goLive: asyncHandler(async (req, res) => {
     const record = await service.goLive(req.params.id, req);
     return ApiResponse.success(res, record, 'Application registered — this track is now live');

@@ -5,6 +5,7 @@ const validate = require('../../middlewares/validate.middleware');
 const controller = require('./applicationTracking.controller');
 const {
   listQuery, idParam, update, stageParams, stageBody, assignBody, holdBody, cancelBody,
+  advanceStageParams, advanceStageBody, sendBackStageParams, sendBackStageBody,
 } = require('./applicationTracking.validator');
 
 // Top-level, not nested under an application — a track precedes one (see myStages.routes.js for
@@ -38,6 +39,35 @@ router.get(
   authorize('application_tracks', 'read'),
   validate({ params: idParam }),
   controller.assigneeCandidates,
+);
+
+// Completes the given stage and starts the next one in one call — the narrow, explicit exception
+// to "stage status is forward-only one step at a time" described in
+// applicationTracking.service.js#advanceStage. Same coarse route-level gate as every write here;
+// the real (assignee-or-super-admin-only) check lives in the service.
+router.patch(
+  '/:id/stages/:stage/advance',
+  authorize('application_tracks', 'update'),
+  validate({ params: advanceStageParams, body: advanceStageBody }),
+  controller.advanceStage,
+);
+
+// The only place a stage is ever allowed to move backward — see
+// applicationTracking.service.js#sendBackStage for the preconditions.
+router.patch(
+  '/:id/stages/:stage/send-back',
+  authorize('application_tracks', 'update'),
+  validate({ params: sendBackStageParams, body: sendBackStageBody }),
+  controller.sendBackStage,
+);
+
+// Mirrors changeRequests.routes.js's own '/:id/status-history' — backs the activity/timeline list
+// beneath the three stage sections; see applicationTracking.service.js#statusHistory.
+router.get(
+  '/:id/status-history',
+  authorize('application_tracks', 'read'),
+  validate({ params: idParam }),
+  controller.statusHistory,
 );
 
 router.patch('/:id/go-live', authorize('application_tracks', 'update'), validate({ params: idParam }), controller.goLive);

@@ -272,7 +272,10 @@ async function update(id, payload, req) {
 /**
  * PATCH /:id/stages/:stage — the work. Rules numbered to match the discovery report's D6/1e:
  *   1. Stages run in order — not_started can't be left until the predecessor is complete (409).
- *   2. Stage status is forward-only (400 backwards).
+ *   2. Stage status is forward-only (400 backwards) — advanceStage() and sendBackStage() below are
+ *      the two narrow, explicit, separately-authorized exceptions to this: advanceStage() completes
+ *      one stage and starts the next in a single call, and sendBackStage() is the ONLY place a
+ *      stage is ever allowed to move backward. Neither loosens this function's own rule.
  *   3. in_progress defaults start_date to today if unset; complete defaults end_date. Explicit
  *      always wins.
  *   4. Completing `deployment` does NOT register the Application by itself — it just notifies the
@@ -528,6 +531,170 @@ async function updateStage(id, stage, payload, req) {
   }
 
   return getById(id, req);
+}
+
+// Same gate updateStage's own rule 7 enforces for progressing a stage's status — reused verbatim
+// here since both advanceStage() and sendBackStage() progress stage status too, just two-at-once
+// or backward instead of one-at-a-time forward.
+function assertTrackActive(record) {
+  if (record.status === 'active') return;
+  if (record.status === 'on_hold') {
+    throw ApiError.conflict(`This track is on hold: ${record.closureReason || 'no reason given'} — resume it before continuing this stage.`);
+  }
+  if (record.status === 'cancelled') {
+    throw ApiError.conflict('This track was cancelled — its stages can no longer be worked.');
+  }
+  throw ApiError.conflict('This track is already live — its stages are complete and can no longer be changed.');
+}
+
+/**
+ * PATCH /:id/stages/:stage/advance — completes `stage` and starts the next one in a single call,
+ * replacing the old two-step "Mark complete" then separately "Start" flow. Mirrors
+ * changeRequests.service.js#advanceStage exactly, adjusted for this module's own two-date shape:
+ * `finishedDate` (the actual completion date, auto-filled here same as updateStage's rule 3) is
+ * what advances, never `endDate` ("Expected finish" — the owner's own planned target, untouched by
+ * either stage actually finishing on time or not). Authorization is assignee-or-super-admin only,
+ * same narrow rule updateStage's own rule 5 already applies to actually starting/completing a
+ * stage (the frontend's `canWriteNotesOnStage`, despite the owner-inclusive `canActOnStage` merely
+ * gating whether the action row renders at all).
+ */
+async function advanceStage(id, stage, payload, req) {
+  const record = await ApplicationTrack.findByPk(id, { include: stageAndIdeaInclude });
+  if (!record) throw ApiError.notFound('Application track not found');
+  assertTrackActive(record);
+
+  const stageIndex = STAGE_ORDER.indexOf(stage);
+  const nextStage = STAGE_ORDER[stageIndex + 1];
+  if (!nextStage) throw ApiError.conflict(`${STAGE_LABELS[stage]} has no next stage to advance to.`);
+
+  const stageRow = record.stages.find((s) => s.stage === stage);
+  const nextStageRow = record.stages.find((s) => s.stage === nextStage);
+  if (!stageRow || !nextStageRow) throw ApiError.notFound('Stage not found');
+  if (stageRow.status !== 'in_progress') {
+    throw ApiError.conflict(`${STAGE_LABELS[stage]} must be in progress before it can be moved forward.`);
+  }
+
+  const isAssignee = !!stageRow.assigneeId && stageRow.assigneeId === req.user.id;
+  const isSuper = isSuperAdmin(req.user.permissions);
+  if (!isAssignee && !isSuper) {
+    throw ApiError.forbidden(`Only ${STAGE_LABELS[stage]}'s assignee (or a super-admin) may move it to ${STAGE_LABELS[nextStage]}.`);
+  }
+
+  const now = today();
+  await sequelize.transaction(async (t) => {
+    await stageRow.update({
+      status: 'complete',
+      finishedDate: payload?.finishedDate !== undefined ? payload.finishedDate : (stageRow.finishedDate || now),
+    }, { transaction: t });
+    await nextStageRow.update({
+      status: 'in_progress',
+      startDate: nextStageRow.startDate || now,
+    }, { transaction: t });
+
+    await StatusHistory.create({
+      entityType: 'application_track', entityId: record.id, fromStatus: `${stage}: in_progress`, toStatus: `${stage}: complete`, changedBy: req.user.id, note: null,
+    }, { transaction: t });
+    await StatusHistory.create({
+      entityType: 'application_track', entityId: record.id, fromStatus: `${nextStage}: not_started`, toStatus: `${nextStage}: in_progress`, changedBy: req.user.id, note: null,
+    }, { transaction: t });
+  });
+
+  if (nextStageRow.assigneeId && nextStageRow.assigneeId !== req.user.id) {
+    const name = record.name || record.idea?.title;
+    try {
+      await notificationsService.createMany([{
+        userId: nextStageRow.assigneeId,
+        type: 'application_track_stage_ready',
+        title: 'A track stage is ready for you',
+        message: `${STAGE_LABELS[stage]} is complete — ${STAGE_LABELS[nextStage]} is now in progress on "${name}".`,
+        link: `/application-tracking/${id}`,
+      }]);
+    } catch (err) {
+      logger.error('Failed to create track stage-advanced notification', {
+        applicationTrackId: id, stage, error: { message: err.message, stack: err.stack },
+      });
+    }
+  }
+
+  return getById(id, req);
+}
+
+/**
+ * PATCH /:id/stages/:stage/send-back — the ONE place a stage is ever allowed to move backward.
+ * Resets `stage` to not_started and reopens the previous stage to in_progress; requires a reason,
+ * recorded on both status_history rows it writes. Mirrors changeRequests.service.js#sendBackStage:
+ * `finishedDate` (this module's "actually complete" marker) clears on the reopened previous stage,
+ * same as changeRequests clears its own `endDate` there — but `endDate` ("Expected finish", the
+ * owner's plan) is left untouched on both stages, since sending work back doesn't erase what was
+ * planned, only what actually happened. Notes live in the polymorphic `comments` table keyed by the
+ * stage's own immutable id (see attachStageNotes) — completely unaffected by either stage's status/
+ * dates resetting here, same reasoning changeRequests.service.js's D6 finding already established.
+ */
+async function sendBackStage(id, stage, reason, req) {
+  const record = await ApplicationTrack.findByPk(id, { include: stageAndIdeaInclude });
+  if (!record) throw ApiError.notFound('Application track not found');
+  assertTrackActive(record);
+
+  const stageIndex = STAGE_ORDER.indexOf(stage);
+  const previousStage = STAGE_ORDER[stageIndex - 1];
+  if (!previousStage) throw ApiError.conflict(`${STAGE_LABELS[stage]} has no previous stage to send back to.`);
+
+  const stageRow = record.stages.find((s) => s.stage === stage);
+  const previousRow = record.stages.find((s) => s.stage === previousStage);
+  if (!stageRow || !previousRow) throw ApiError.notFound('Stage not found');
+  if (stageRow.status !== 'in_progress') {
+    throw ApiError.conflict(`${STAGE_LABELS[stage]} must be in progress before it can be sent back.`);
+  }
+  if (previousRow.status !== 'complete') {
+    throw ApiError.conflict(`${STAGE_LABELS[previousStage]} is not complete, so ${STAGE_LABELS[stage]} cannot be sent back to it.`);
+  }
+
+  const isAssignee = !!stageRow.assigneeId && stageRow.assigneeId === req.user.id;
+  const isSuper = isSuperAdmin(req.user.permissions);
+  if (!isAssignee && !isSuper) {
+    throw ApiError.forbidden(`Only ${STAGE_LABELS[stage]}'s assignee (or a super-admin) may send it back to ${STAGE_LABELS[previousStage]}.`);
+  }
+
+  await sequelize.transaction(async (t) => {
+    await stageRow.update({ status: 'not_started', startDate: null, finishedDate: null }, { transaction: t });
+    await previousRow.update({ status: 'in_progress', finishedDate: null }, { transaction: t });
+
+    await StatusHistory.create({
+      entityType: 'application_track', entityId: record.id, fromStatus: `${stage}: in_progress`, toStatus: `${stage}: not_started`, changedBy: req.user.id, note: reason,
+    }, { transaction: t });
+    await StatusHistory.create({
+      entityType: 'application_track', entityId: record.id, fromStatus: `${previousStage}: complete`, toStatus: `${previousStage}: in_progress`, changedBy: req.user.id, note: reason,
+    }, { transaction: t });
+  });
+
+  if (previousRow.assigneeId && previousRow.assigneeId !== req.user.id) {
+    const name = record.name || record.idea?.title;
+    try {
+      await notificationsService.createMany([{
+        userId: previousRow.assigneeId,
+        type: 'application_track_stage_sent_back',
+        title: `${STAGE_LABELS[previousStage]} was sent back to you`,
+        message: `${STAGE_LABELS[stage]} was sent back to ${STAGE_LABELS[previousStage]} on "${name}": ${reason}`,
+        link: `/application-tracking/${id}`,
+      }]);
+    } catch (err) {
+      logger.error('Failed to create track stage-sent-back notification', {
+        applicationTrackId: id, stage, error: { message: err.message, stack: err.stack },
+      });
+    }
+  }
+
+  return getById(id, req);
+}
+
+// Mirrors changeRequests.service.js#statusHistory / ideas.service.js#statusHistory exactly — backs
+// the activity/timeline list beneath the three stage sections.
+async function statusHistory(id) {
+  return StatusHistory.findAll({
+    where: { entityType: 'application_track', entityId: id },
+    include: [{ model: User, as: 'changedByUser', attributes: ['id', 'name'] }],
+    order: [['createdAt', 'ASC']],
+  });
 }
 
 /**
@@ -787,6 +954,9 @@ module.exports = {
   getById,
   update,
   updateStage,
+  advanceStage,
+  sendBackStage,
+  statusHistory,
   goLive,
   assignStages,
   hold,

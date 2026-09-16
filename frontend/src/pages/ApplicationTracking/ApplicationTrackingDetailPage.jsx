@@ -21,6 +21,8 @@ import AccordionSummary from '@mui/material/AccordionSummary';
 import AccordionDetails from '@mui/material/AccordionDetails';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import { alpha } from '@mui/material/styles';
 import dayjs from 'dayjs';
 import { applicationTrackingApi, attachmentsApi } from '../../services/domains';
 import { useAppSelector } from '../../app/hooks';
@@ -32,8 +34,7 @@ import { LoadingBlock, ErrorBlock } from '../../components/common/AsyncState';
 import StatusBadge from '../../components/common/StatusBadge';
 import BackButton from '../../components/common/BackButton';
 import NotesThread from '../../components/common/NotesThread';
-import {
-  STAGE_ORDER, STAGE_LABELS, STAGE_STATUS_LABELS, deriveStatusChip,
+import { STAGE_ORDER, STAGE_LABELS, STAGE_STATUS_LABELS, deriveStatusChip,
 } from '../../utils/applicationTrackStatus';
 
 const formatDate = (value) => (value ? dayjs(value).format('MMM D, YYYY') : '—');
@@ -87,8 +88,8 @@ function IdeaFieldAccordion({ label, value }) {
   );
 }
 
-/** A plain Yes/No confirmation prompt — reused for both "Mark {Stage} complete" and "Move to
- * Application", the only difference being the question asked. */
+/** A plain Yes/No confirmation prompt — reused for "Mark {Stage} complete", "Move to Application",
+ * and "Move to {next stage}", the only difference being the question asked. */
 function ConfirmYesNoDialog({
   open, title, onClose, onConfirm, submitting,
 }) {
@@ -100,6 +101,97 @@ function ConfirmYesNoDialog({
         <Button variant="contained" disabled={submitting} onClick={onConfirm}>Yes</Button>
       </DialogActions>
     </Dialog>
+  );
+}
+
+/** "Send back to {previous stage}" — unlike the plain Yes/No dialogs above, this one requires a
+ * reason: the confirm button stays disabled until something is actually typed, same as
+ * ChangeRequestDetailPage.jsx's own SendBackDialog. */
+function SendBackDialog({
+  open, stage, onClose, onConfirm, submitting,
+}) {
+  const [reason, setReason] = useState('');
+  useEffect(() => { if (open) setReason(''); }, [open]);
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>What didn&apos;t work?</DialogTitle>
+      <DialogContent>
+        <TextField
+          autoFocus fullWidth multiline minRows={3} label="Reason (required)"
+          value={reason} onChange={(e) => setReason(e.target.value)}
+          sx={{ mt: 1 }}
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={submitting}>Cancel</Button>
+        <Button
+          variant="contained" color="warning" disabled={submitting || !reason.trim()}
+          onClick={() => onConfirm(reason.trim())}
+        >
+          Send back to {stage ? STAGE_LABELS[stage] : ''}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+/** Minimal activity/timeline list beneath the three stage sections — one line per status_history
+ * entry, its timestamp, and the actor. A send-back entry carries a `note` (the reason — the only
+ * thing that ever populates that column, see applicationTracking.service.js's sendBackStage), so
+ * its presence alone is what triggers the distinct warning styling; every other transition in this
+ * module always writes `note: null`. Mirrors ChangeRequestDetailPage.jsx's own ActivityTimeline. */
+function describeTransition(entry) {
+  const parseStagePart = (value) => {
+    const [stage, status] = (value || '').split(': ');
+    return STAGE_ORDER.includes(stage) ? { stage, status } : null;
+  };
+  const from = parseStagePart(entry.fromStatus);
+  const to = parseStagePart(entry.toStatus);
+  if (to && from && to.stage === from.stage) {
+    return `${STAGE_LABELS[to.stage]}: ${STAGE_STATUS_LABELS[from.status] || from.status} → ${STAGE_STATUS_LABELS[to.status] || to.status}`;
+  }
+  if (to) {
+    return `${STAGE_LABELS[to.stage]} started`;
+  }
+  // Not a per-stage transition — the track's own governance status changed instead (e.g. priority,
+  // or active -> on_hold/cancelled/live).
+  return `${entry.fromStatus || 'Created'} → ${entry.toStatus}`;
+}
+
+function ActivityTimeline({ history }) {
+  if (!history || history.length === 0) return null;
+  return (
+    <Paper variant="outlined" sx={{ p: 2 }}>
+      <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>Activity</Typography>
+      <Stack spacing={0}>
+        {history.map((entry, idx) => (
+          <Box
+            key={entry.id}
+            sx={{
+              py: 1,
+              ...(idx < history.length - 1 ? { borderBottom: 1, borderColor: 'divider' } : {}),
+              ...(entry.note ? { bgcolor: (theme) => alpha(theme.palette.warning.main, 0.08) } : {}),
+            }}
+          >
+            <Stack direction="row" spacing={1} alignItems="baseline" flexWrap="wrap" useFlexGap>
+              {entry.note && <RestartAltIcon fontSize="small" color="warning" />}
+              <Typography variant="body2" fontWeight={entry.note ? 700 : 400} color={entry.note ? 'warning.dark' : 'text.primary'}>
+                {describeTransition(entry)}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {entry.changedByUser?.name || 'Unknown'} · {dayjs(entry.createdAt).format('MMM D, YYYY, h:mm A')}
+              </Typography>
+            </Stack>
+            {entry.note && (
+              <Typography variant="body2" color="warning.dark" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>
+                &ldquo;{entry.note}&rdquo;
+              </Typography>
+            )}
+          </Box>
+        ))}
+      </Stack>
+    </Paper>
   );
 }
 
@@ -121,7 +213,9 @@ function ConfirmYesNoDialog({
  */
 function StageSection({
   stage, stageData, canAct, canAssign, candidates, canWriteNotes, isBlockedByPredecessor, predecessorLabel, predecessorAssigneeName,
-  trackStartDate, trackTargetGoLive, isViewerStage, isRequestReady, trackStatus, onStart, onSaveDates, onAssign, onOpenComplete, submitting,
+  hasPreviousStage, hasNextStage, nextStageLabel,
+  trackStartDate, trackTargetGoLive, isViewerStage, isRequestReady, trackStatus, onStart, onSaveDates, onAssign, onOpenComplete,
+  onOpenAdvance, onOpenSendBack, submitting,
 }) {
   const isComplete = stageData.status === 'complete';
   const isInProgress = stageData.status === 'in_progress';
@@ -347,18 +441,24 @@ function StageSection({
 
       {canAct && isRequestReady && (
         <Box sx={{ mt: 2 }}>
-          {stageData.status === 'not_started' && isBlockedByPredecessor && (
+          {/* A stage with a previous stage can no longer be started manually at all — see the
+              button logic below — so while it's not_started there's nothing to click here, only
+              this line. A stage with NO previous stage (development) never shows this: it has its
+              own Start button instead, unchanged. */}
+          {stageData.status === 'not_started' && hasPreviousStage && (
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-              Starts when {predecessorLabel} is complete.
+              Waiting on {predecessorLabel}.
             </Typography>
           )}
           <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" useFlexGap rowGap={1}>
             <Stack direction="row" spacing={1}>
               {/* Starting the stage is the assignee's own call (or a super-admin's), not the
                   owner's, unless the owner is themselves the assignee — same reasoning
-                  canWriteNotes already applies to Notes. Reused here rather than duplicating the
-                  assignee-or-super check. */}
-              {canWriteNotes && !isComplete && (
+                  canWriteNotes already applies to Notes. Only development (no previous stage) still
+                  has a manual Start — every other stage only ever starts as a side effect of the
+                  previous stage's own "Move to" action (see hasNextStage's Move-to button below on
+                  THAT stage's own card). */}
+              {!hasPreviousStage && canWriteNotes && !isComplete && (
                 <Button
                   variant="contained"
                   disabled={submitting || stageData.status !== 'not_started' || isBlockedByPredecessor}
@@ -376,17 +476,33 @@ function StageSection({
                   </span>
                 </Tooltip>
               )}
+              {/* Warning-toned, deliberately not primary — this is the one place a stage can move
+                  backward, and it must never be confusable with the forward Move/Mark-complete
+                  actions next to it. */}
+              {hasPreviousStage && isInProgress && canWriteNotes && (
+                <Button
+                  variant="outlined" color="warning" startIcon={<RestartAltIcon />}
+                  disabled={submitting}
+                  onClick={onOpenSendBack}
+                >
+                  Something didn&apos;t work — send back to {predecessorLabel}
+                </Button>
+              )}
             </Stack>
             {/* Same assignee-or-super gate as "Start" above — the owner doesn't get a pass here
-                either, unless they're themselves the assignee. Visible as soon as there's a Start
-                button on the row (so the two sit together from the start), just disabled until the
-                stage is actually in_progress — never a hidden-then-appearing button. Once complete,
-                there's nothing left to mark, so it disappears entirely (matches a finished stage
-                showing no action buttons at all, just its status). */}
+                either, unless they're themselves the assignee. Once complete, there's nothing left
+                to mark, so it disappears entirely (matches a finished stage showing no action
+                buttons at all, just its status). */}
             {canWriteNotes && !isComplete && (
-              <Button variant="contained" disabled={submitting || !isInProgress} onClick={onOpenComplete}>
-                Mark {STAGE_LABELS[stage]} complete
-              </Button>
+              hasNextStage ? (
+                <Button variant="contained" disabled={submitting || !isInProgress} onClick={onOpenAdvance}>
+                  Move to {nextStageLabel} →
+                </Button>
+              ) : (
+                <Button variant="contained" disabled={submitting || !isInProgress} onClick={onOpenComplete}>
+                  Mark {STAGE_LABELS[stage]} complete
+                </Button>
+              )
             )}
           </Stack>
         </Box>
@@ -403,8 +519,11 @@ export default function ApplicationTrackingDetailPage() {
   const { data: track, loading, error, reload } = useResource(() => applicationTrackingApi.getById(id), [id]);
   const [submitting, setSubmitting] = useState(false);
   const [completingStage, setCompletingStage] = useState(null);
+  const [advancingStage, setAdvancingStage] = useState(null);
+  const [sendingBackStage, setSendingBackStage] = useState(null);
   const [confirmingGoLive, setConfirmingGoLive] = useState(false);
   const [candidates, setCandidates] = useState([]);
+  const [history, setHistory] = useState([]);
 
   useBreadcrumbLabel(track?.name);
 
@@ -413,6 +532,16 @@ export default function ApplicationTrackingDetailPage() {
       .then((res) => setCandidates(res.data))
       .catch(() => setCandidates([]));
   }, [id]);
+
+  // Loaded once up front, then re-loaded alongside `reload()` after any action that can write a
+  // status_history row (start/complete/advance/send-back/go-live) — same "never patch local state,
+  // always refetch and re-render from the response" rule the track itself follows.
+  const loadHistory = () => {
+    applicationTrackingApi.statusHistory(id)
+      .then((res) => setHistory(res.data))
+      .catch(() => setHistory([]));
+  };
+  useEffect(loadHistory, [id]);
 
   if (loading) return <LoadingBlock />;
   if (error) return <ErrorBlock message={error} onRetry={reload} />;
@@ -439,6 +568,7 @@ export default function ApplicationTrackingDetailPage() {
       await applicationTrackingApi.updateStage(id, stage, payload);
       showSuccess(successMessage);
       await reload();
+      loadHistory();
     } catch (err) {
       showError(err.response?.data?.message || 'Failed to update stage');
     } finally {
@@ -453,8 +583,39 @@ export default function ApplicationTrackingDetailPage() {
       showSuccess(`${STAGE_LABELS[stage]} complete`);
       setCompletingStage(null);
       await reload();
+      loadHistory();
     } catch (err) {
       showError(err.response?.data?.message || 'Failed to complete the stage');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleAdvance = async (stage) => {
+    setSubmitting(true);
+    try {
+      await applicationTrackingApi.advanceStage(id, stage);
+      showSuccess(`Moved to ${STAGE_LABELS[STAGE_ORDER[STAGE_ORDER.indexOf(stage) + 1]]}`);
+      setAdvancingStage(null);
+      await reload();
+      loadHistory();
+    } catch (err) {
+      showError(err.response?.data?.message || 'Failed to move to the next stage');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSendBack = async (stage, reason) => {
+    setSubmitting(true);
+    try {
+      await applicationTrackingApi.sendBackStage(id, stage, reason);
+      showSuccess(`Sent back to ${STAGE_LABELS[STAGE_ORDER[STAGE_ORDER.indexOf(stage) - 1]]}`);
+      setSendingBackStage(null);
+      await reload();
+      loadHistory();
+    } catch (err) {
+      showError(err.response?.data?.message || 'Failed to send this back');
     } finally {
       setSubmitting(false);
     }
@@ -480,6 +641,7 @@ export default function ApplicationTrackingDetailPage() {
       showSuccess('Application registered — this track is now live');
       setConfirmingGoLive(false);
       await reload();
+      loadHistory();
     } catch (err) {
       showError(err.response?.data?.message || 'Failed to move this track live');
     } finally {
@@ -531,7 +693,7 @@ export default function ApplicationTrackingDetailPage() {
         severity: 'info',
         text: isLast
           ? `${STAGE_LABELS[stage]} is yours. Mark it complete when you're done — ${ownerName} can then move this track to the Applications catalogue.`
-          : `${STAGE_LABELS[stage]} is yours. Mark it complete when you're done and ${nextName || 'the next assignee'} picks up ${STAGE_LABELS[STAGE_ORDER[viewerStageIndex + 1]]}.`,
+          : `${STAGE_LABELS[stage]} is yours. When you're done, move it to ${STAGE_LABELS[STAGE_ORDER[viewerStageIndex + 1]]}${nextName ? ` for ${nextName}` : ''} to pick up.`,
       };
     } else {
       const predecessor = track.stages[viewerStageIndex - 1];
@@ -639,16 +801,27 @@ export default function ApplicationTrackingDetailPage() {
                 isBlockedByPredecessor={isBlockedByPredecessor}
                 predecessorLabel={predecessor ? STAGE_LABELS[predecessor.stage] : null}
                 predecessorAssigneeName={predecessor?.assignee?.name}
+                hasPreviousStage={index > 0}
+                hasNextStage={index < STAGE_ORDER.length - 1}
+                nextStageLabel={index < STAGE_ORDER.length - 1 ? STAGE_LABELS[STAGE_ORDER[index + 1]] : null}
                 submitting={submitting}
                 onStart={() => patchStage(stage, { status: 'in_progress' }, `${STAGE_LABELS[stage]} started`)}
                 onSaveDates={(payload) => patchStage(stage, payload, 'Saved')}
                 onAssign={(payload) => handleAssignStage(stage, payload)}
                 onOpenComplete={() => setCompletingStage(stage)}
+                onOpenAdvance={() => setAdvancingStage(stage)}
+                onOpenSendBack={() => setSendingBackStage(stage)}
               />
             </Box>
           );
         })}
       </Stack>
+
+      {history.length > 0 && (
+        <Box sx={{ mt: 1.5 }}>
+          <ActivityTimeline history={history} />
+        </Box>
+      )}
 
       <ConfirmYesNoDialog
         open={!!completingStage}
@@ -656,6 +829,22 @@ export default function ApplicationTrackingDetailPage() {
         submitting={submitting}
         onClose={() => setCompletingStage(null)}
         onConfirm={() => handleMarkComplete(completingStage)}
+      />
+      <ConfirmYesNoDialog
+        open={!!advancingStage}
+        title={advancingStage
+          ? `Are you sure you want to move to ${STAGE_LABELS[STAGE_ORDER[STAGE_ORDER.indexOf(advancingStage) + 1]]}?`
+          : ''}
+        submitting={submitting}
+        onClose={() => setAdvancingStage(null)}
+        onConfirm={() => handleAdvance(advancingStage)}
+      />
+      <SendBackDialog
+        open={!!sendingBackStage}
+        stage={sendingBackStage ? STAGE_ORDER[STAGE_ORDER.indexOf(sendingBackStage) - 1] : null}
+        submitting={submitting}
+        onClose={() => setSendingBackStage(null)}
+        onConfirm={(reason) => handleSendBack(sendingBackStage, reason)}
       />
       <ConfirmYesNoDialog
         open={confirmingGoLive}

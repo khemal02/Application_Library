@@ -67,6 +67,31 @@ const cancelBody = Joi.object({
   reason: Joi.string().trim().min(1).required(),
 });
 
+// PATCH /:id/stages/:stage/advance — same params shape as the plain stage PATCH; no body needed
+// beyond an optional finishedDate override, mirroring stageBody's own optional date fields.
+const advanceStageParams = stageParams;
+const advanceStageBody = Joi.object({
+  finishedDate: Joi.date().iso().allow(null),
+});
+
+// PATCH /:id/stages/:stage/send-back — the one place a stage may move backward; reason follows
+// this module's own hold/cancel convention (trimmed, non-empty), not a bare max-length cap.
+const sendBackStageParams = stageParams;
+const sendBackStageBody = Joi.object({
+  reason: Joi.string().trim().min(1).required(),
+});
+
 module.exports = {
-  listQuery, idParam, update, stageParams, stageBody, assignBody, holdBody, cancelBody,
+  listQuery,
+  idParam,
+  update,
+  stageParams,
+  stageBody,
+  assignBody,
+  holdBody,
+  cancelBody,
+  advanceStageParams,
+  advanceStageBody,
+  sendBackStageParams,
+  sendBackStageBody,
 };
