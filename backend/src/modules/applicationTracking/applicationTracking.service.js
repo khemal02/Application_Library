@@ -1,6 +1,6 @@
 const { Op } = require('sequelize');
 const {
-  ApplicationTrack, ApplicationTrackStage, Idea, User, Application, StatusHistory, Comment, sequelize,
+  ApplicationTrack, ApplicationTrackStage, Idea, User, Application, Department, StatusHistory, Comment, sequelize,
 } = require('../../models');
 const ApiError = require('../../utils/ApiError');
 const logger = require('../../config/logger');
@@ -197,7 +197,17 @@ async function list(query, req) {
   const rows = await ApplicationTrack.findAll({
     where,
     include: [
-      { model: Idea, as: 'idea', attributes: ['id', 'ideaNumber', 'title', 'description'] },
+      {
+        model: Idea,
+        as: 'idea',
+        attributes: ['id', 'ideaNumber', 'title', 'description'],
+        // Submitter/department power Idea Prioritization's "Submitted By"/"Department" columns —
+        // display-only, same reasoning industry/functionalArea are display-only on the idea itself.
+        include: [
+          { model: User, as: 'submitter', attributes: ['id', 'name'] },
+          { model: Department, as: 'department', attributes: ['id', 'name'] },
+        ],
+      },
       { model: User, as: 'owner', attributes: ['id', 'name'] },
       { model: Application, as: 'application', attributes: ['id', 'name'] },
       stageIncludeFull,
