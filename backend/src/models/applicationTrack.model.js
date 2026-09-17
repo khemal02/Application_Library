@@ -26,6 +26,12 @@ module.exports = (sequelize, DataTypes) => {
     applicationId: { type: DataTypes.UUID, allowNull: true },
     closureReason: { type: DataTypes.TEXT, allowNull: true },
     closedAt: { type: DataTypes.DATEONLY, allowNull: true },
+    // Manual build-sequence rank for the "Waiting to start" queue — see
+    // 20260130000053-add-application-track-queue-rank.js for the full rationale. NULL whenever
+    // this track isn't currently eligible for that queue (anything but active-with-Development-
+    // not_started) — maintained at every relevant transition in applicationTracking.service.js
+    // (creation, hold, resume, cancel, moveToBuild), never computed on the fly.
+    queueRank: { type: DataTypes.DOUBLE, allowNull: true },
   }, {
     tableName: 'application_tracks',
     indexes: [{ fields: ['status', 'priority'] }],

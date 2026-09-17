@@ -21,6 +21,12 @@ const STATUS_LABELS = {
   active: 'active', on_hold: 'on hold', live: 'live', cancelled: 'cancelled',
 };
 
+// Fixed spacing between fresh queue_rank values — matches the backfill migration
+// (20260130000053) and every append-to-bottom/move-past-an-end case below. Large enough that many
+// successive reorders can each still slot a real midpoint in between neighbors before precision
+// ever becomes a practical concern at this app's data volumes.
+const QUEUE_RANK_GAP = 1000;
+
 const stageIncludeFull = {
   model: ApplicationTrackStage,
   as: 'stages',
@@ -119,6 +125,17 @@ function redactUnassignedStages(record, req) {
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
+
+/**
+ * Appends to the bottom of the ranked "Waiting to start" queue — the rank a track gets the moment
+ * it becomes newly eligible (created at idea-approval, or re-entering via resume()). One extra
+ * `QUEUE_RANK_GAP` past whatever the current lowest-priority (highest-numbered) rank is, or the gap
+ * itself if the queue is currently empty. Runs inside the caller's own transaction.
+ */
+async function nextQueueRank(t) {
+  const max = await ApplicationTrack.max('queueRank', { transaction: t });
+  return (max || 0) + QUEUE_RANK_GAP;
+}
 
 /**
  * GET / — filterable by status, priority, stage, assigneeId, ownerId. `stage`/`assigneeId` live on
@@ -736,13 +753,16 @@ async function moveToBuild(id, {
   const settingOwner = !record.ownerId && !!ownerId;
 
   await sequelize.transaction(async (t) => {
-    if (settingOwner) {
-      await record.update({
+    // Also clears queue_rank — moved-to-build is no longer "waiting to start," so it drops out of
+    // the ranked queue regardless of which screen (this one, or the Ideas list) triggered the move.
+    await record.update({
+      ...(settingOwner ? {
         ownerId,
         startDate: record.startDate || startDate || null,
         targetGoLive: record.targetGoLive || targetGoLive || null,
-      }, { transaction: t });
-    }
+      } : {}),
+      queueRank: null,
+    }, { transaction: t });
     await stageRow.update({
       assigneeId, status: 'in_progress', startDate: stageRow.startDate || today(),
     }, { transaction: t });
@@ -782,6 +802,86 @@ async function moveToBuild(id, {
       });
     }
   }
+
+  return getById(id, req);
+}
+
+/**
+ * Renumbers the ENTIRE ranked queue to clean, evenly-spaced values — only ever reached when a
+ * midpoint computation in reorder() below lands exactly on one of its two neighbors (fractional
+ * precision exhausted, practically unreachable at this app's data volumes, but real code exists
+ * for it rather than leaving that case to throw). Runs inside the caller's own transaction.
+ */
+async function renumberQueue(t) {
+  const ranked = await ApplicationTrack.findAll({
+    where: { queueRank: { [Op.ne]: null } },
+    order: [['queueRank', 'ASC']],
+    attributes: ['id'],
+    transaction: t,
+  });
+  for (let i = 0; i < ranked.length; i += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    await ranked[i].update({ queueRank: (i + 1) * QUEUE_RANK_GAP }, { transaction: t });
+  }
+}
+
+/**
+ * PATCH /:id/reorder — moves a track to a new position in the ranked "Waiting to start" queue.
+ * Fractional ranking (D7): the moved track's new rank is the midpoint between its two new
+ * neighbors' ranks, so a single reorder only ever writes the one row that actually moved — never
+ * a rewrite of the whole queue. `beforeTrackId`/`afterTrackId` name the tracks that should end up
+ * immediately before/after this one in the NEW order; either may be omitted (not both) to mean
+ * "top of the queue" (afterTrackId only) or "bottom of the queue" (beforeTrackId only).
+ *
+ * Authorization is entirely the route's own `ideas:moveToBuild` permission check (the same
+ * decision — "who decides what gets built and in what order" — reused deliberately, not split into
+ * a second permission; see this module's routes file). Nothing further to check here per-record:
+ * there's no ownership concept narrower than that blanket capability for this action.
+ */
+async function reorder(id, { beforeTrackId, afterTrackId }, req) {
+  const record = await ApplicationTrack.findByPk(id, { include: stageAndIdeaInclude });
+  if (!record) throw ApiError.notFound('Application track not found');
+  const stageRow = record.stages.find((s) => s.stage === 'development');
+  if (record.status !== 'active' || stageRow?.status !== 'not_started' || record.queueRank == null) {
+    throw ApiError.conflict('Only a track that is waiting to start Development can be reordered.');
+  }
+
+  const loadNeighbor = async (neighborId) => {
+    if (!neighborId) return null;
+    const neighbor = await ApplicationTrack.findByPk(neighborId, { attributes: ['id', 'queueRank'] });
+    if (!neighbor || neighbor.queueRank == null) {
+      throw ApiError.badRequest('That neighbor is not currently in the waiting-to-start queue.');
+    }
+    return neighbor;
+  };
+  const before = await loadNeighbor(beforeTrackId);
+  const after = await loadNeighbor(afterTrackId);
+  // Joi's `.or()` only checks that a key is PRESENT, so `{ beforeTrackId: null, afterTrackId:
+  // null }` passes validation but is still meaningless here — caught for real at this layer.
+  if (!before && !after) {
+    throw ApiError.badRequest('At least one neighbor is required to reorder.');
+  }
+
+  await sequelize.transaction(async (t) => {
+    let newRank;
+    if (before && after) {
+      newRank = (before.queueRank + after.queueRank) / 2;
+      if (newRank === before.queueRank || newRank === after.queueRank) {
+        await renumberQueue(t);
+        // Re-read both neighbors' now-clean ranks post-renumber before computing the real midpoint.
+        const [freshBefore, freshAfter] = await Promise.all([
+          ApplicationTrack.findByPk(before.id, { attributes: ['queueRank'], transaction: t }),
+          ApplicationTrack.findByPk(after.id, { attributes: ['queueRank'], transaction: t }),
+        ]);
+        newRank = (freshBefore.queueRank + freshAfter.queueRank) / 2;
+      }
+    } else if (before) {
+      newRank = before.queueRank + QUEUE_RANK_GAP;
+    } else {
+      newRank = after.queueRank - QUEUE_RANK_GAP;
+    }
+    await record.update({ queueRank: newRank }, { transaction: t });
+  });
 
   return getById(id, req);
 }
@@ -946,9 +1046,15 @@ async function hold(id, { reason }, req) {
     throw ApiError.conflict(`Only an active track can be put on hold — this one is ${STATUS_LABELS[record.status]}.`);
   }
 
+  // A track already moved to build (Development beyond not_started) has queue_rank: null already
+  // (see moveToBuild) — this only actually clears anything for a track still waiting to start.
+  const stillWaiting = record.stages.find((s) => s.stage === 'development')?.status === 'not_started';
+
   const fromStatus = record.status;
   await sequelize.transaction(async (t) => {
-    await record.update({ status: 'on_hold', closureReason: reason }, { transaction: t });
+    await record.update({
+      status: 'on_hold', closureReason: reason, ...(stillWaiting ? { queueRank: null } : {}),
+    }, { transaction: t });
     await StatusHistory.create({
       entityType: 'application_track', entityId: id, fromStatus, toStatus: 'on_hold', changedBy: req.user.id, note: reason,
     }, { transaction: t });
@@ -958,9 +1064,13 @@ async function hold(id, { reason }, req) {
   return getById(id, req);
 }
 
-/** PATCH /:id/resume — only from `on_hold` (rule 8). No notification — the table lists none. */
+/**
+ * PATCH /:id/resume — only from `on_hold` (rule 8). No notification — the table lists none. A
+ * track still waiting to start Development re-enters the ranked queue at the bottom (not its old
+ * position — simplest correct behavior; nothing before this ever remembered where it used to sit).
+ */
 async function resume(id, req) {
-  const record = await ApplicationTrack.findByPk(id);
+  const record = await ApplicationTrack.findByPk(id, { include: stageAndIdeaInclude });
   if (!record) throw ApiError.notFound('Application track not found');
   if (!isOwnerOrSuper(record, req)) {
     throw ApiError.forbidden("Only this track's owner (or a super-admin) may resume it.");
@@ -969,9 +1079,12 @@ async function resume(id, req) {
     throw ApiError.conflict('Only a track that is on hold can be resumed.');
   }
 
+  const stillWaiting = record.stages.find((s) => s.stage === 'development')?.status === 'not_started';
+
   const fromStatus = record.status;
   await sequelize.transaction(async (t) => {
-    await record.update({ status: 'active', closureReason: null }, { transaction: t });
+    const queueRank = stillWaiting ? await nextQueueRank(t) : null;
+    await record.update({ status: 'active', closureReason: null, queueRank }, { transaction: t });
     await StatusHistory.create({
       entityType: 'application_track', entityId: id, fromStatus, toStatus: 'active', changedBy: req.user.id, note: null,
     }, { transaction: t });
@@ -998,9 +1111,15 @@ async function cancel(id, { reason }, req) {
     throw ApiError.conflict('This track is already cancelled.');
   }
 
+  // Same reasoning as hold()'s own — a no-op if this was already null (moved to build, or already
+  // cleared by an earlier hold).
+  const stillWaiting = record.stages.find((s) => s.stage === 'development')?.status === 'not_started';
+
   const fromStatus = record.status;
   await sequelize.transaction(async (t) => {
-    await record.update({ status: 'cancelled', closureReason: reason, closedAt: today() }, { transaction: t });
+    await record.update({
+      status: 'cancelled', closureReason: reason, closedAt: today(), ...(stillWaiting ? { queueRank: null } : {}),
+    }, { transaction: t });
     await StatusHistory.create({
       entityType: 'application_track', entityId: id, fromStatus, toStatus: 'cancelled', changedBy: req.user.id, note: reason,
     }, { transaction: t });
@@ -1047,6 +1166,8 @@ module.exports = {
   sendBackStage,
   statusHistory,
   moveToBuild,
+  reorder,
+  nextQueueRank,
   goLive,
   assignStages,
   hold,

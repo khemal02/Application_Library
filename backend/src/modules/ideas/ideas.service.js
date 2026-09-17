@@ -634,6 +634,9 @@ async function finalizeIdea(idea, {
           }
         }
 
+        // Born active + Development not_started, i.e. immediately eligible for the "Waiting to
+        // start" ranked queue (applicationTracking.service.js#reorder) — appended to the bottom,
+        // same as anything else newly entering that queue (see resume()'s own identical call).
         const track = await ApplicationTrack.create({
           ideaId: idea.id,
           ownerId: ownerId || null,
@@ -643,6 +646,7 @@ async function finalizeIdea(idea, {
           description: null,
           startDate: startDate || null,
           targetGoLive: targetGoLive || null,
+          queueRank: await applicationTrackingService.nextQueueRank(t),
         }, { transaction: t });
         await ApplicationTrackStage.bulkCreate(
           ['development', 'testing', 'deployment'].map((stage) => ({ applicationTrackId: track.id, stage })),

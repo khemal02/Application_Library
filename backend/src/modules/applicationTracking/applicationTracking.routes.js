@@ -5,7 +5,7 @@ const validate = require('../../middlewares/validate.middleware');
 const controller = require('./applicationTracking.controller');
 const {
   listQuery, idParam, update, stageParams, stageBody, assignBody, holdBody, cancelBody,
-  advanceStageParams, advanceStageBody, sendBackStageParams, sendBackStageBody,
+  advanceStageParams, advanceStageBody, sendBackStageParams, sendBackStageBody, reorderBody,
 } = require('./applicationTracking.validator');
 
 // Top-level, not nested under an application — a track precedes one (see myStages.routes.js for
@@ -68,6 +68,18 @@ router.get(
   authorize('application_tracks', 'read'),
   validate({ params: idParam }),
   controller.statusHistory,
+);
+
+// Moves a track's position in the ranked "Waiting to start" queue — see
+// applicationTracking.service.js#reorder for the fractional-rank scheme. Deliberately gated on the
+// SAME real permission that already gates moveToBuild ('ideas:moveToBuild', not
+// 'application_tracks:update') — this is the same underlying decision ("who decides what gets
+// built and in what order"), just reused rather than split into a second grant.
+router.patch(
+  '/:id/reorder',
+  authorize('ideas', 'moveToBuild'),
+  validate({ params: idParam, body: reorderBody }),
+  controller.reorder,
 );
 
 router.patch('/:id/go-live', authorize('application_tracks', 'update'), validate({ params: idParam }), controller.goLive);

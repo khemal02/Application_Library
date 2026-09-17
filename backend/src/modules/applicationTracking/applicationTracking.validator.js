@@ -81,6 +81,14 @@ const sendBackStageBody = Joi.object({
   reason: Joi.string().trim().min(1).required(),
 });
 
+// PATCH /:id/reorder — see applicationTracking.service.js#reorder. At least one of the two must be
+// given (moving relative to nothing at all is meaningless); either may be null/omitted on its own
+// to mean "top of the queue" or "bottom of the queue."
+const reorderBody = Joi.object({
+  beforeTrackId: Joi.string().uuid().allow(null),
+  afterTrackId: Joi.string().uuid().allow(null),
+}).or('beforeTrackId', 'afterTrackId');
+
 module.exports = {
   listQuery,
   idParam,
@@ -94,4 +102,5 @@ module.exports = {
   advanceStageBody,
   sendBackStageParams,
   sendBackStageBody,
+  reorderBody,
 };

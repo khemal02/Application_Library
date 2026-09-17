@@ -97,6 +97,7 @@ export const applicationTrackingApi = {
   advanceStage: (id, stage, payload) => api.patch(`/application-tracking/${id}/stages/${stage}/advance`, payload).then((r) => r.data),
   sendBackStage: (id, stage, reason) => api.patch(`/application-tracking/${id}/stages/${stage}/send-back`, { reason }).then((r) => r.data),
   statusHistory: (id) => api.get(`/application-tracking/${id}/status-history`).then((r) => r.data),
+  reorder: (id, payload) => api.patch(`/application-tracking/${id}/reorder`, payload).then((r) => r.data),
   goLive: (id) => api.patch(`/application-tracking/${id}/go-live`).then((r) => r.data),
   assignStages: (id, payload) => api.post(`/application-tracking/${id}/stages/assign`, payload).then((r) => r.data),
   assigneeCandidates: (id) => api.get(`/application-tracking/${id}/assignee-candidates`).then((r) => r.data),
