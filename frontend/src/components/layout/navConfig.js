@@ -2,6 +2,7 @@ import DashboardIcon from '@mui/icons-material/DashboardOutlined';
 import AppsIcon from '@mui/icons-material/AppsOutlined';
 import LightbulbIcon from '@mui/icons-material/LightbulbOutlined';
 import TrackChangesIcon from '@mui/icons-material/TrackChangesOutlined';
+import FormatListNumberedIcon from '@mui/icons-material/FormatListNumberedOutlined';
 import PeopleIcon from '@mui/icons-material/PeopleOutline';
 import AdminIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
 
@@ -18,6 +19,13 @@ const navConfig = [
     // Rendered at /feature-requests too (the old "Modify Current Application" route, kept for
     // backward compatibility) — activePaths keeps the sidebar highlighted on either.
     activePaths: ['/ideas', '/feature-requests'],
+  },
+  // Distinct module from Application Tracking below (by explicit request) — same underlying data
+  // (application_tracks) narrowed to just the "waiting to start" ranked queue: deciding what gets
+  // built next, and starting it. See IdeaPrioritizationListPage.jsx.
+  {
+    label: 'Idea Prioritization', path: '/idea-prioritization', icon: FormatListNumberedIcon,
+    resource: 'application_tracks', action: 'read',
   },
   {
     label: 'Application Tracking', path: '/application-tracking', icon: TrackChangesIcon,

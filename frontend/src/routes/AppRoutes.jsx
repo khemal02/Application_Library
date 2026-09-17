@@ -10,6 +10,7 @@ import ApplicationStagesPage from '../pages/Applications/ApplicationStagesPage';
 import ChangeRequestDetailPage from '../pages/Applications/ChangeRequestDetailPage';
 import ApplicationTrackingListPage from '../pages/ApplicationTracking/ApplicationTrackingListPage';
 import ApplicationTrackingDetailPage from '../pages/ApplicationTracking/ApplicationTrackingDetailPage';
+import IdeaPrioritizationListPage from '../pages/IdeaPrioritization/IdeaPrioritizationListPage';
 import IdeasAndFeatureRequestsListPage from '../pages/Ideas/IdeasAndFeatureRequestsListPage';
 import IdeaDetailPage from '../pages/Ideas/IdeaDetailPage';
 import FeatureRequestDetailPage from '../pages/Ideas/FeatureRequestDetailPage';
@@ -55,6 +56,11 @@ export default function AppRoutes() {
 
       <Route path="/application-tracking" element={<Protected resource="application_tracks" action="read"><ApplicationTrackingListPage /></Protected>} />
       <Route path="/application-tracking/:id" element={<Protected resource="application_tracks" action="read"><ApplicationTrackingDetailPage /></Protected>} />
+      {/* Distinct module from Application Tracking (by explicit request) — same underlying
+          resource/data (application_tracks), just narrowed to the "waiting to start" ranked
+          queue; no separate detail page, a row click isn't wired here (the list itself is the
+          whole page). */}
+      <Route path="/idea-prioritization" element={<Protected resource="application_tracks" action="read"><IdeaPrioritizationListPage /></Protected>} />
 
       <Route path="/admin/users" element={<Protected resource="users" action="read"><UsersPage /></Protected>} />
       <Route path="/admin/roles" element={<Protected resource="users" action="read"><RolesPage /></Protected>} />

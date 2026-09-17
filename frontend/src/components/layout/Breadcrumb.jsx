@@ -12,6 +12,7 @@ const LABELS = {
   departments: 'Departments', profile: 'Profile',
   new: 'New', settings: 'Settings', stages: 'Stages', 'change-requests': 'Change Requests',
   'my-stages': 'My Stages', 'application-tracking': 'Application Tracking',
+  'idea-prioritization': 'Idea Prioritization',
 };
 
 export default function Breadcrumb() {
