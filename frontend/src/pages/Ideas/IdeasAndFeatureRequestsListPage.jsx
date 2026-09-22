@@ -5,27 +5,65 @@ import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import Stack from '@mui/material/Stack';
 import Chip from '@mui/material/Chip';
+import Avatar from '@mui/material/Avatar';
+import Badge from '@mui/material/Badge';
+import Popover from '@mui/material/Popover';
+import Divider from '@mui/material/Divider';
+import TextField from '@mui/material/TextField';
+import MenuItem from '@mui/material/MenuItem';
+import InputAdornment from '@mui/material/InputAdornment';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
+import ToggleButton from '@mui/material/ToggleButton';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Switch from '@mui/material/Switch';
 import AddIcon from '@mui/icons-material/Add';
+import SearchIcon from '@mui/icons-material/Search';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
+import BuildOutlinedIcon from '@mui/icons-material/BuildOutlined';
+import HourglassEmptyOutlinedIcon from '@mui/icons-material/HourglassEmptyOutlined';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined';
+import { alpha } from '@mui/material/styles';
 import useToast from '../../hooks/useToast';
 import usePermission from '../../routes/usePermission';
 import { ideasApi, featureRequestsApi, departmentsApi } from '../../services/domains';
 import DataTable from '../../components/common/DataTable';
-import FilterBar from '../../components/common/FilterBar';
 import StatusBadge from '../../components/common/StatusBadge';
+import avatarColor from '../../utils/avatarColor';
 import { IDEA_STATUS_OPTIONS, INDUSTRY_OPTIONS, FUNCTIONAL_AREA_OPTIONS, ideaStatusLabel } from '../../constants/options';
-import humanize from '../../utils/humanize';
 import IdeaFormDialog from './IdeaFormDialog';
 import FeatureRequestFormDialog from './FeatureRequestFormDialog';
 import MoveToBuildDialog from './MoveToBuildDialog';
 
-// New in the merged view — neither source list had a Type filter of its own, so there's no
-// existing option list to reuse here (unlike Status/Industry/Functional Area below).
-const TYPE_OPTIONS = [
-  { value: 'idea', label: 'New Idea' },
-  { value: 'feature_request', label: 'Feature Request' },
-];
+// Same blue/orange pairing used for the Type column's pill and each row's left accent border —
+// blue for a brand-new idea, orange for a feature request against an existing application.
+const TYPE_META = {
+  idea: { label: 'New Idea', color: '#2563eb', icon: LightbulbOutlinedIcon },
+  feature_request: { label: 'Feature Request', color: '#d97706', icon: BuildOutlinedIcon },
+};
+
+function TypeBadge({ type }) {
+  const meta = TYPE_META[type];
+  const Icon = meta.icon;
+  return (
+    <Chip
+      size="small"
+      icon={<Icon fontSize="small" />}
+      label={meta.label}
+      sx={{ bgcolor: alpha(meta.color, 0.12), color: meta.color, border: 'none', '& .MuiChip-icon': { color: 'inherit' } }}
+    />
+  );
+}
+
+// The three LIVE idea statuses (see constants/options.js's LIVE_IDEA_STATUSES) — every row this
+// page can ever show is one of these, so each gets its own real icon rather than forcing a
+// two-way waiting/done split onto what's actually a three-way outcome.
+const STATUS_ICONS = {
+  under_review: HourglassEmptyOutlinedIcon,
+  approved: CheckCircleOutlineIcon,
+  rejected: CancelOutlinedIcon,
+};
 
 // Merging two independently-paginated sources into one client-side array (per the merge spec)
 // means each source needs its OWN real total, not just its first page — otherwise a filter that
@@ -129,10 +167,29 @@ export default function IdeasAndFeatureRequestsListPage() {
   // state, always refetch and re-render from the response" (same rule every stage-action page in
   // this app follows), rather than reaching into `allRows` to hand-patch one row's nested stage.
   const [reloadToken, setReloadToken] = useState(0);
+  const [filtersAnchor, setFiltersAnchor] = useState(null);
+  // The row-level "Awaiting review" tag needs to know per-row, all the time — not just while the
+  // toggle itself is on — whether the viewer has an open panel vote on it. There's no such flag on
+  // the plain list response (only getById's `panel` has that), so this calls the exact same
+  // awaitingMyReview=true endpoints the toggle already uses, unconditionally, purely to build a
+  // lookup set — same source of truth, no new backend logic.
+  const [awaitingIds, setAwaitingIds] = useState(new Set());
 
   useEffect(() => {
     departmentsApi.list({ limit: 100 }).then((res) => setDepartments(res.data)).catch(() => setDepartments([]));
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      canSeeIdeas ? fetchAllPages(ideasApi.list, { awaitingMyReview: 'true' }) : Promise.resolve([]),
+      canSeeFeatureRequests ? fetchAllPages(featureRequestsApi.list, { awaitingMyReview: 'true' }) : Promise.resolve([]),
+    ]).then(([ideaRows, featureRequestRows]) => {
+      if (cancelled) return;
+      setAwaitingIds(new Set([...ideaRows, ...featureRequestRows].map((r) => r.id)));
+    }).catch(() => { if (!cancelled) setAwaitingIds(new Set()); });
+    return () => { cancelled = true; };
+  }, [canSeeIdeas, canSeeFeatureRequests, reloadToken]);
 
   // Every one of these is a real param both endpoints already accept identically — Type is
   // deliberately excluded, it's a client-only filter applied after the merge below, neither
@@ -195,6 +252,22 @@ export default function IdeasAndFeatureRequestsListPage() {
   const pagination = { page, limit, totalItems, totalPages: Math.max(Math.ceil(totalItems / limit), 1) };
   const pageRows = sortedRows.slice((page - 1) * limit, page * limit);
 
+  // Segment counts reflect the currently server-filtered set (allRows, before the client-only
+  // Type narrowing) — so switching segments always shows where the OTHER active filters currently
+  // leave you, not a stale count from before this page's other filters were applied.
+  const typeCounts = {
+    all: allRows.length,
+    idea: allRows.filter((r) => r._type === 'idea').length,
+    feature_request: allRows.filter((r) => r._type === 'feature_request').length,
+  };
+  // The summary line's breakdown, unlike the segment counts above, reflects the FINAL filtered set
+  // (Type included) — it's describing what's actually in the table right now, not what each other
+  // segment would show.
+  const resultBreakdown = {
+    idea: filteredRows.filter((r) => r._type === 'idea').length,
+    feature_request: filteredRows.filter((r) => r._type === 'feature_request').length,
+  };
+
   const toggleAwaitingMyReview = (checked) => {
     const next = { ...filters };
     if (checked) next.awaitingMyReview = 'true';
@@ -202,20 +275,77 @@ export default function IdeasAndFeatureRequestsListPage() {
     setFilters(next);
   };
 
+  // Mirrors FilterBar's own handleFilterChange exactly — same "'' or undefined deletes the key"
+  // rule — since these five fields still ultimately feed the identical sharedParams/filters state
+  // FilterBar used to drive, just from inside a popover instead of six inline dropdowns.
+  const handleFilterChange = (key, value) => {
+    const next = { ...filters };
+    if (value === '' || value === undefined) delete next[key];
+    else next[key] = value;
+    setFilters(next);
+  };
+
+  const handleTypeChange = (e, value) => {
+    if (value === null) return; // exclusive ToggleButtonGroup emits null on a re-click of the
+    // already-selected segment — ignored, since "All" is its own explicit segment for that.
+    const next = { ...filters };
+    if (value) next.type = value;
+    else delete next.type;
+    setFilters(next);
+  };
+
+  const FILTER_PANEL_KEYS = ['departmentId', 'industry', 'functionalArea', 'status'];
+  const activeFilterCount = FILTER_PANEL_KEYS.filter((k) => filters[k]).length + (filters.awaitingMyReview === 'true' ? 1 : 0);
+  const clearAllFilters = () => {
+    const next = { ...filters };
+    FILTER_PANEL_KEYS.forEach((k) => delete next[k]);
+    delete next.awaitingMyReview;
+    setFilters(next);
+  };
+
   const columns = [
-    { key: 'title', label: 'Title', sortable: true },
     {
-      key: 'type',
-      label: 'Type',
-      render: (r) => (r._type === 'idea'
-        ? <Chip size="small" variant="outlined" color="primary" label="New Idea" />
-        : <Chip size="small" variant="outlined" color="secondary" label="Feature Request" />),
+      key: 'title',
+      label: 'Title',
+      sortable: true,
+      render: (r) => (
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Typography variant="body2">{r.title}</Typography>
+          {awaitingIds.has(r.id) && (
+            <Chip size="small" color="primary" label="Awaiting review" sx={{ height: 20, fontSize: 11 }} />
+          )}
+        </Stack>
+      ),
     },
-    { key: 'submitter', label: 'Submitted By', render: (r) => r.submitter?.name || '—' },
+    { key: 'type', label: 'Type', render: (r) => <TypeBadge type={r._type} /> },
+    {
+      key: 'submitter',
+      label: 'Submitted By',
+      render: (r) => (
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Avatar sx={{ width: 24, height: 24, fontSize: 12, bgcolor: avatarColor(r.submitter?.id || r.submitter?.name), color: '#fff' }}>
+            {r.submitter?.name?.[0] || '?'}
+          </Avatar>
+          <Typography variant="body2">{r.submitter?.name || '—'}</Typography>
+        </Stack>
+      ),
+    },
     { key: 'department', label: 'Department', render: (r) => r.department?.name || '—' },
-    { key: 'industry', label: 'Industry', render: (r) => (r.industry ? humanize(r.industry) : '—') },
-    { key: 'functionalArea', label: 'Functional Area', render: (r) => (r.functionalArea ? humanize(r.functionalArea) : '—') },
-    { key: 'status', label: 'Status', sortable: true, render: (r) => <StatusBadge value={r.status} label={ideaStatusLabel(r.status)} /> },
+    {
+      key: 'status',
+      label: 'Status',
+      sortable: true,
+      render: (r) => {
+        const Icon = STATUS_ICONS[r.status];
+        return (
+          <StatusBadge
+            value={r.status}
+            label={ideaStatusLabel(r.status)}
+            icon={Icon ? <Icon fontSize="small" /> : undefined}
+          />
+        );
+      },
+    },
   ];
   // Whole column omitted, not just its buttons, when the viewer holds neither moveToBuild
   // permission — a plain reviewer shouldn't see a column of dashes on every row.
@@ -232,14 +362,6 @@ export default function IdeasAndFeatureRequestsListPage() {
       ),
     });
   }
-
-  const filterDefs = [
-    { key: 'type', label: 'Type', options: TYPE_OPTIONS },
-    { key: 'status', label: 'Status', options: IDEA_STATUS_OPTIONS },
-    { key: 'departmentId', label: 'Department', options: departments.map((d) => ({ value: d.id, label: d.name })) },
-    { key: 'industry', label: 'Industry', options: INDUSTRY_OPTIONS },
-    { key: 'functionalArea', label: 'Functional Area', options: FUNCTIONAL_AREA_OPTIONS },
-  ];
 
   return (
     <Box>
@@ -258,15 +380,70 @@ export default function IdeasAndFeatureRequestsListPage() {
         </Stack>
       </Stack>
 
-      <FilterBar
-        search={search}
-        onSearchChange={setSearch}
-        filters={filters}
-        onFiltersChange={setFilters}
-        filterDefs={filterDefs}
-        searchPlaceholder="Search ideas and feature requests..."
-        right={(
-          <Stack direction="row" spacing={1} alignItems="center">
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }} flexWrap="wrap" useFlexGap rowGap={1.5} sx={{ mb: 1.5 }}>
+        <TextField
+          size="small"
+          placeholder="Search ideas and feature requests..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          sx={{ width: 260, flexShrink: 0 }}
+          InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
+        />
+
+        <ToggleButtonGroup size="small" exclusive value={filters.type || ''} onChange={handleTypeChange}>
+          <ToggleButton value="">All ({typeCounts.all})</ToggleButton>
+          <ToggleButton value="idea">New Ideas ({typeCounts.idea})</ToggleButton>
+          <ToggleButton value="feature_request">Feature Requests ({typeCounts.feature_request})</ToggleButton>
+        </ToggleButtonGroup>
+
+        <Badge badgeContent={activeFilterCount} color="primary" invisible={activeFilterCount === 0}>
+          <Button
+            variant="outlined" size="small" color="inherit"
+            startIcon={<FilterListIcon fontSize="small" />}
+            onClick={(e) => setFiltersAnchor(e.currentTarget)}
+          >
+            Filters
+          </Button>
+        </Badge>
+      </Stack>
+
+      <Popover
+        open={!!filtersAnchor}
+        anchorEl={filtersAnchor}
+        onClose={() => setFiltersAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+      >
+        <Box sx={{ p: 2, width: 280 }}>
+          <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>Filters</Typography>
+          <Stack spacing={1.5}>
+            <TextField
+              select fullWidth size="small" label="Department"
+              value={filters.departmentId ?? ''} onChange={(e) => handleFilterChange('departmentId', e.target.value)}
+            >
+              <MenuItem value="">All</MenuItem>
+              {departments.map((d) => <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>)}
+            </TextField>
+            <TextField
+              select fullWidth size="small" label="Industry"
+              value={filters.industry ?? ''} onChange={(e) => handleFilterChange('industry', e.target.value)}
+            >
+              <MenuItem value="">All</MenuItem>
+              {INDUSTRY_OPTIONS.map((o) => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
+            </TextField>
+            <TextField
+              select fullWidth size="small" label="Functional Area"
+              value={filters.functionalArea ?? ''} onChange={(e) => handleFilterChange('functionalArea', e.target.value)}
+            >
+              <MenuItem value="">All</MenuItem>
+              {FUNCTIONAL_AREA_OPTIONS.map((o) => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
+            </TextField>
+            <TextField
+              select fullWidth size="small" label="Status"
+              value={filters.status ?? ''} onChange={(e) => handleFilterChange('status', e.target.value)}
+            >
+              <MenuItem value="">All</MenuItem>
+              {IDEA_STATUS_OPTIONS.map((o) => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
+            </TextField>
             <FormControlLabel
               control={(
                 <Switch
@@ -278,8 +455,17 @@ export default function IdeasAndFeatureRequestsListPage() {
               label="Awaiting my review"
             />
           </Stack>
-        )}
-      />
+          <Divider sx={{ my: 2 }} />
+          <Stack direction="row" justifyContent="space-between">
+            <Button size="small" onClick={clearAllFilters} disabled={activeFilterCount === 0}>Clear all</Button>
+            <Button size="small" variant="contained" onClick={() => setFiltersAnchor(null)}>Done</Button>
+          </Stack>
+        </Box>
+      </Popover>
+
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+        {totalItems} result{totalItems === 1 ? '' : 's'} · {resultBreakdown.idea} New Idea{resultBreakdown.idea === 1 ? '' : 's'} · {resultBreakdown.feature_request} Feature Request{resultBreakdown.feature_request === 1 ? '' : 's'}
+      </Typography>
 
       <DataTable
         columns={columns}
@@ -290,6 +476,7 @@ export default function IdeasAndFeatureRequestsListPage() {
         onPageChange={setPage}
         onRowsPerPageChange={(n) => { setLimit(n); setPage(1); }}
         onRowClick={(row) => navigate(row._type === 'idea' ? `/ideas/${row.id}` : `/feature-requests/${row.id}`)}
+        rowAccentColor={(row) => TYPE_META[row._type]?.color}
         loading={loading}
         emptyMessage="Nothing submitted yet — be the first!"
       />

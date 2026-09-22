@@ -16,10 +16,6 @@ import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
-import Accordion from '@mui/material/Accordion';
-import AccordionSummary from '@mui/material/AccordionSummary';
-import AccordionDetails from '@mui/material/AccordionDetails';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import { alpha } from '@mui/material/styles';
@@ -34,6 +30,7 @@ import { LoadingBlock, ErrorBlock } from '../../components/common/AsyncState';
 import StatusBadge from '../../components/common/StatusBadge';
 import BackButton from '../../components/common/BackButton';
 import NotesThread from '../../components/common/NotesThread';
+import AccordionSection from '../../components/common/AccordionSection';
 import { STAGE_ORDER, STAGE_LABELS, STAGE_STATUS_LABELS, deriveStatusChip,
 } from '../../utils/applicationTrackStatus';
 
@@ -71,20 +68,16 @@ function DocumentLinks({ url }) {
   );
 }
 
-/** Same collapsed-by-default accordion IdeaDetailPage.jsx uses for these three fields — read-only
- * here, since the idea behind an already-approved track is frozen and never edited from this page. */
-function IdeaFieldAccordion({ label, value }) {
+/** Same +/- accordion IdeaDetailPage.jsx uses for these three fields (AccordionSection, shared) —
+ * read-only here, since the idea behind an already-approved track is frozen and never edited from
+ * this page. */
+function IdeaFieldAccordion({ label, value, defaultOpen }) {
   return (
-    <Accordion disableGutters variant="outlined" sx={{ mb: 1.5, '&:before': { display: 'none' } }}>
-      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-        <Typography variant="subtitle2" fontWeight={700}>{label}</Typography>
-      </AccordionSummary>
-      <AccordionDetails>
-        <Typography variant="body1" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', textAlign: 'justify' }}>
-          {value || '—'}
-        </Typography>
-      </AccordionDetails>
-    </Accordion>
+    <AccordionSection title={label} defaultOpen={defaultOpen}>
+      <Typography variant="body1" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', textAlign: 'justify' }}>
+        {value || '—'}
+      </Typography>
+    </AccordionSection>
   );
 }
 
@@ -745,9 +738,9 @@ export default function ApplicationTrackingDetailPage() {
 
       {track.idea && (
         <Box sx={{ mb: 2 }}>
-          <IdeaFieldAccordion label="Problem Statement" value={track.idea.description} />
-          <IdeaFieldAccordion label="Solution" value={track.idea.proposedSolution} />
-          <IdeaFieldAccordion label="Technologies and Efficiency" value={track.idea.technologiesAndEfficiency} />
+          <IdeaFieldAccordion label="Problem Statement" value={track.idea.description} defaultOpen />
+          <IdeaFieldAccordion label="Proposed Solution" value={track.idea.proposedSolution} />
+          <IdeaFieldAccordion label="Technologies" value={track.idea.technologiesAndEfficiency} />
         </Box>
       )}
 

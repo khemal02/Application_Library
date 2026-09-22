@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import Box from '@mui/material/Box';
-import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
 import Stack from '@mui/material/Stack';
 import Chip from '@mui/material/Chip';
@@ -227,16 +226,7 @@ export default function IdeaPanelCard({
   const consequenceInfo = showVoteForm ? consequence() : null;
 
   return (
-    <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
-        <Typography variant="subtitle2" fontWeight={700}>Review panel</Typography>
-        {isDecided ? (
-          <Chip size="small" color={idea.status === 'approved' ? 'success' : 'error'} label={idea.status === 'approved' ? 'Approved' : 'Rejected'} />
-        ) : (
-          panel.isTied && <Chip size="small" color="warning" label="Tied" />
-        )}
-      </Stack>
-
+    <Box>
       {panel.reviewersTotal === 0 && panel.approversTotal === 0 && !isDecided && (
         <Alert severity="warning" sx={{ mb: 1.5 }}>
           No Reviewers and Approvers have been added yet.
@@ -416,6 +406,6 @@ export default function IdeaPanelCard({
         onConfirm={doSubmit}
         onClose={() => setConfirmReject(false)}
       />
-    </Paper>
+    </Box>
   );
 }

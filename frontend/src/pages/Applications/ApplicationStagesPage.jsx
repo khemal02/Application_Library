@@ -5,10 +5,6 @@ import Stack from '@mui/material/Stack';
 import Grid from '@mui/material/Grid';
 import Typography from '@mui/material/Typography';
 import Link from '@mui/material/Link';
-import Accordion from '@mui/material/Accordion';
-import AccordionSummary from '@mui/material/AccordionSummary';
-import AccordionDetails from '@mui/material/AccordionDetails';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import dayjs from 'dayjs';
 import { applicationsApi } from '../../services/domains';
 import useResource from '../../hooks/useResource';
@@ -18,6 +14,7 @@ import BackButton from '../../components/common/BackButton';
 import StatusBadge from '../../components/common/StatusBadge';
 import { STAGE_ORDER, STAGE_LABELS, STAGE_STATUS_LABELS } from '../../utils/applicationTrackStatus';
 import AttachmentGallery from '../../components/common/AttachmentGallery';
+import AccordionSection from '../../components/common/AccordionSection';
 
 const NOTE_ATTACHMENT_ENTITY = 'comment';
 
@@ -40,18 +37,13 @@ function ReadField({ label, value }) {
   );
 }
 
-function IdeaFieldAccordion({ label, value }) {
+function IdeaFieldAccordion({ label, value, defaultOpen }) {
   return (
-    <Accordion disableGutters variant="outlined" sx={{ mb: 1.5, '&:before': { display: 'none' } }}>
-      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-        <Typography variant="subtitle2" fontWeight={700}>{label}</Typography>
-      </AccordionSummary>
-      <AccordionDetails>
-        <Typography variant="body1" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', textAlign: 'justify' }}>
-          {value || '—'}
-        </Typography>
-      </AccordionDetails>
-    </Accordion>
+    <AccordionSection title={label} defaultOpen={defaultOpen}>
+      <Typography variant="body1" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', textAlign: 'justify' }}>
+        {value || '—'}
+      </Typography>
+    </AccordionSection>
   );
 }
 
@@ -146,9 +138,9 @@ export default function ApplicationStagesPage() {
         <>
           {origin.idea && (
             <Box sx={{ mb: 2 }}>
-              <IdeaFieldAccordion label="Problem Statement" value={origin.idea.description} />
-              <IdeaFieldAccordion label="Solution" value={origin.idea.proposedSolution} />
-              <IdeaFieldAccordion label="Technologies and Efficiency" value={origin.idea.technologiesAndEfficiency} />
+              <IdeaFieldAccordion label="Problem Statement" value={origin.idea.description} defaultOpen />
+              <IdeaFieldAccordion label="Proposed Solution" value={origin.idea.proposedSolution} />
+              <IdeaFieldAccordion label="Technologies" value={origin.idea.technologiesAndEfficiency} />
             </Box>
           )}
 

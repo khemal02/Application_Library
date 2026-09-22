@@ -29,14 +29,17 @@ const COLOR_MAP = {
 // `color` overrides the COLOR_MAP lookup entirely — for a caller whose `value` isn't a real status
 // on some entity (e.g. a derived label like "Not started" that isn't any one field's actual
 // value), so it isn't forced to borrow an unrelated map entry just to get the right tint.
+// `icon` is optional and unused by every existing call site — passing one (a small MUI icon
+// element) renders it before the label, still tinted to match via `.MuiChip-icon`.
 export default function StatusBadge({
-  value, size = 'small', label, color,
+  value, size = 'small', label, color, icon,
 }) {
   const colorKey = color || COLOR_MAP[value] || 'default';
 
   return (
     <Chip
       size={size}
+      icon={icon}
       label={label ?? humanize(value)}
       sx={(theme) => {
         const isDark = theme.palette.mode === 'dark';
@@ -46,6 +49,7 @@ export default function StatusBadge({
             bgcolor: isDark ? alpha('#e2e8f0', 0.08) : alpha('#64748b', 0.1),
             color: neutral,
             border: 'none',
+            '& .MuiChip-icon': { color: 'inherit' },
           };
         }
         const main = theme.palette[colorKey].main;
@@ -53,6 +57,7 @@ export default function StatusBadge({
           bgcolor: alpha(main, isDark ? 0.2 : 0.12),
           color: isDark ? theme.palette[colorKey].light || main : main,
           border: 'none',
+          '& .MuiChip-icon': { color: 'inherit' },
         };
       }}
     />

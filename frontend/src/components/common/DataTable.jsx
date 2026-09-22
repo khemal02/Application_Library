@@ -16,6 +16,7 @@ import Typography from '@mui/material/Typography';
  */
 export default function DataTable({
   columns, rows, pagination, onPageChange, onRowsPerPageChange, onRowClick, loading, emptyMessage = 'No records found',
+  rowAccentColor,
 }) {
   return (
     <Paper variant="outlined" sx={{ width: '100%', overflow: 'hidden' }}>
@@ -41,29 +42,33 @@ export default function DataTable({
                 </TableCell>
               </TableRow>
             )}
-            {rows.map((row) => (
-              <TableRow
-                key={row.id}
-                hover={!!onRowClick}
-                onClick={() => onRowClick?.(row)}
-                tabIndex={onRowClick ? 0 : undefined}
-                role={onRowClick ? 'button' : undefined}
-                onKeyDown={onRowClick ? (e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    onRowClick(row);
-                  }
-                } : undefined}
-                sx={{
-                  cursor: onRowClick ? 'pointer' : 'default',
-                  ...(onRowClick ? { '&:focus-visible': { outline: '2px solid', outlineOffset: '-2px', outlineColor: 'primary.main' } } : {}),
-                }}
-              >
-                {columns.map((col) => (
-                  <TableCell key={col.key}>{col.render ? col.render(row) : row[col.key]}</TableCell>
-                ))}
-              </TableRow>
-            ))}
+            {rows.map((row) => {
+              const accent = rowAccentColor?.(row);
+              return (
+                <TableRow
+                  key={row.id}
+                  hover={!!onRowClick}
+                  onClick={() => onRowClick?.(row)}
+                  tabIndex={onRowClick ? 0 : undefined}
+                  role={onRowClick ? 'button' : undefined}
+                  onKeyDown={onRowClick ? (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onRowClick(row);
+                    }
+                  } : undefined}
+                  sx={{
+                    cursor: onRowClick ? 'pointer' : 'default',
+                    ...(accent ? { borderLeft: 3, borderLeftColor: accent, borderLeftStyle: 'solid' } : {}),
+                    ...(onRowClick ? { '&:focus-visible': { outline: '2px solid', outlineOffset: '-2px', outlineColor: 'primary.main' } } : {}),
+                  }}
+                >
+                  {columns.map((col) => (
+                    <TableCell key={col.key}>{col.render ? col.render(row) : row[col.key]}</TableCell>
+                  ))}
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </TableContainer>

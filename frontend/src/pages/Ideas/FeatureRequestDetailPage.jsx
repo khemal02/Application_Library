@@ -12,6 +12,8 @@ import EditIcon from '@mui/icons-material/EditOutlined';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import dayjs from 'dayjs';
 import { featureRequestsApi } from '../../services/domains';
 import useResource from '../../hooks/useResource';
 import useBreadcrumbLabel from '../../hooks/useBreadcrumbLabel';
@@ -42,6 +44,7 @@ export default function FeatureRequestDetailPage() {
   const [voteDecision, setVoteDecision] = useState('');
   const [voteNote, setVoteNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
   const canUpdateFeatureRequests = usePermission('feature_requests', 'update');
   const user = useAppSelector((state) => state.auth.user);
   const { showSuccess, showError } = useToast();
@@ -145,6 +148,26 @@ export default function FeatureRequestDetailPage() {
     roleLabel: entry.role,
   }));
 
+  // The Review panel card used to render inline, always visible — now it's a click-to-open
+  // Dialog (its own internals, and FeatureRequestPanelCard itself, are unchanged); this trigger
+  // row summarizes enough of its state (decided/tied/counts, plus whether the viewer still owes
+  // a response) that collapsing it behind a click doesn't hide anything actionable.
+  const panel = featureRequest.panel;
+  const panelMyRow = panel?.myRow;
+  const panelNeedsAction = !!panel && (panel.canTieBreak || (panelMyRow?.canAct && panelMyRow?.decision === null));
+  const panelChip = !panel ? null : isDecided
+    ? <Chip size="small" color={featureRequest.status === 'approved' ? 'success' : 'error'} label={featureRequest.status === 'approved' ? 'Approved' : 'Rejected'} />
+    : panel.isTied
+      ? <Chip size="small" color="warning" label="Tied" />
+      : null;
+  const panelSummary = !panel
+    ? ''
+    : isDecided
+      ? `Decided${decidedAt ? ` ${dayjs(decidedAt).format('MMM D, YYYY')}` : ''}`
+      : panel.isTied
+        ? `Tied ${panel.approversApproved}–${panel.approversRejected} — needs a CEO tie-break`
+        : `${panel.reviewersTotal} reviewer${panel.reviewersTotal === 1 ? '' : 's'}, ${panel.approversTotal} approver${panel.approversTotal === 1 ? '' : 's'}${panelNeedsAction ? ' · Awaiting your response' : ''}`;
+
   return (
     <Box>
       <Stack direction="row" alignItems="center" spacing={1}>
@@ -221,13 +244,57 @@ export default function FeatureRequestDetailPage() {
         </Grid>
 
         <Grid item xs={12} sx={{ flexBasis: { md: '40%' }, maxWidth: { md: '40%' }, mt: { md: '-123px' } }}>
-          <FeatureRequestPanelCard
-            featureRequest={featureRequest} panel={featureRequest.panel}
-            voteDecision={voteDecision} onVoteDecisionChange={setVoteDecision}
-            voteNote={voteNote} onVoteNoteChange={setVoteNote}
-            submitting={submitting} onSubmitReview={handleSubmitReview}
-            onPanelChanged={reload}
-          />
+          {panel && (
+            <Box sx={{ mb: 2, border: 1, borderColor: 'divider', borderRadius: 2.5, overflow: 'hidden', bgcolor: 'background.paper' }}>
+              <Box
+                component="button" type="button"
+                aria-expanded={panelOpen}
+                onClick={() => setPanelOpen((o) => !o)}
+                sx={{
+                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  gap: 1.5, m: 0, p: 2, bgcolor: 'background.paper', border: 0,
+                  font: 'inherit', color: 'inherit', textAlign: 'left', cursor: 'pointer',
+                  '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 },
+                }}
+              >
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography variant="subtitle2" component="span" fontWeight={700} sx={{ display: 'block' }}>
+                    Review panel
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" component="span" sx={{ display: 'block', mt: 0.25 }}>
+                    {panelSummary}
+                  </Typography>
+                </Box>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ flex: '0 0 auto' }}>
+                  {panelChip}
+                  {panelNeedsAction && <Chip size="small" color="primary" label="Action needed" />}
+                  <ChevronRightIcon
+                    fontSize="small" color="action"
+                    sx={{ transform: panelOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s ease' }}
+                  />
+                </Stack>
+              </Box>
+
+              <Box sx={{
+                display: 'grid', gridTemplateRows: panelOpen ? '1fr' : '0fr',
+                transition: 'grid-template-rows 0.25s ease',
+                '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
+              }}
+              >
+                <Box sx={{ overflow: 'hidden' }}>
+                  <Box sx={{ p: 2, pt: 0 }}>
+                    <FeatureRequestPanelCard
+                      featureRequest={featureRequest} panel={featureRequest.panel}
+                      voteDecision={voteDecision} onVoteDecisionChange={setVoteDecision}
+                      voteNote={voteNote} onVoteNoteChange={setVoteNote}
+                      submitting={submitting} onSubmitReview={handleSubmitReview}
+                      onPanelChanged={reload}
+                    />
+                  </Box>
+                </Box>
+              </Box>
+            </Box>
+          )}
 
           <Paper variant="outlined" sx={{ p: 2 }}>
             <CommentThread
