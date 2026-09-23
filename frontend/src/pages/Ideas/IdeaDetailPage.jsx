@@ -242,7 +242,7 @@ export default function IdeaDetailPage() {
             full width on mobile via xs={12}. */}
         <Grid item xs={12} sx={{ flexBasis: { md: '60%' }, maxWidth: { md: '60%' } }}>
           {(idea.description || canEditIdeaFields) && (
-            <AccordionSection title="Problem Statement" defaultOpen>
+            <AccordionSection title="Problem Statement">
               {editingDescription ? (
                 <Box>
                   <TextField

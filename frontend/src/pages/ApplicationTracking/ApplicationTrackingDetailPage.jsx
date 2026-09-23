@@ -189,16 +189,15 @@ function ActivityTimeline({ history }) {
 }
 
 /**
- * One of the three stacked sections. Started/Expected finish are editable (and Save shows up) for
- * the owner/assignee/super-admin at ANY status, not just in_progress — the owner can plan every
- * stage's dates right after the track is created, laying out the whole timeline before Development
- * even starts. Document link stays narrower (assignee-only, in_progress-only — see linkEditable)
- * since it's a real deliverable, not a plan. A complete stage is always plain text, no inputs.
- * Never a disabled action BUTTON (1c/Stage 4 style rule) — canAct=false renders zero buttons, in
- * any mode, rather than greying them out. Assignee is its own inline select, right here in the
- * card — no separate "Assign the work" rail anymore; picking a name commits immediately (there's
- * nothing else on the row to batch it with, unlike Started/Expected finish, which share one Save
- * button since those two are genuinely edited together).
+ * One of the three stacked sections. Started is editable (and Save shows up) for the owner/
+ * assignee/super-admin at ANY status, not just in_progress — the owner can plan every stage's
+ * start right after the track is created, laying out the whole timeline before Development even
+ * starts. Document link stays narrower (assignee-only, in_progress-only — see linkEditable) since
+ * it's a real deliverable, not a plan. A complete stage is always plain text, no inputs. Never a
+ * disabled action BUTTON (1c/Stage 4 style rule) — canAct=false renders zero buttons, in any mode,
+ * rather than greying them out. Assignee is its own inline select, right here in the card — no
+ * separate "Assign the work" rail anymore; picking a name commits immediately, together with
+ * Started, via the same Assignee button.
  *
  * The chip is assignee-aware, same as ChangeRequestDetailPage.jsx's StageCard: the person actually
  * assigned to THIS stage sees "Your turn" / "Waiting on {predecessor's assignee}" instead of the
@@ -212,13 +211,13 @@ function StageSection({
 }) {
   const isComplete = stageData.status === 'complete';
   const isInProgress = stageData.status === 'in_progress';
-  // Owner/super-admin only — same reasoning as canAssign, not canAct: planning Started/Expected
-  // finish is the owner's job (same person who names the assignee), not the assignee's own to
-  // edit. Reuses canAssign's exact condition rather than duplicating it — the two are the same
-  // permission scope. Deliberately NOT gated on isInProgress either — the owner can plan every
-  // stage's dates right after the track is created, laying out the whole Development -> Testing
-  // -> Deployment timeline before any of them actually begin. Only a completed stage locks these
-  // back down to a historical record (canAssign already excludes complete stages).
+  // Owner/super-admin only — same reasoning as canAssign, not canAct: planning Started is the
+  // owner's job (same person who names the assignee), not the assignee's own to edit. Reuses
+  // canAssign's exact condition rather than duplicating it — the two are the same permission
+  // scope. Deliberately NOT gated on isInProgress either — the owner can plan every stage's start
+  // right after the track is created, laying out the whole Development -> Testing -> Deployment
+  // timeline before any of them actually begin. Only a completed stage locks this back down to a
+  // historical record (canAssign already excludes complete stages).
   const datesEditable = canAssign;
   // Narrower than datesEditable — the document link is the assignee's own deliverable to attach,
   // same reasoning canWriteNotesOnStage already applies to Notes: the owner doesn't get a pass here
@@ -231,12 +230,10 @@ function StageSection({
   const fileInputRef = useRef(null);
 
   const [startDraft, setStartDraft] = useState(stageData.startDate || '');
-  const [endDraft, setEndDraft] = useState(stageData.endDate || '');
   const [assigneeDraft, setAssigneeDraft] = useState(stageData.assigneeId || '');
   useEffect(() => {
     setStartDraft(stageData.startDate || '');
-    setEndDraft(stageData.endDate || '');
-  }, [stageData.startDate, stageData.endDate]);
+  }, [stageData.startDate]);
   // Deliberately its own effect, not folded into the one above — saving dates (Save button) must
   // never wipe out an assignee the owner already picked but hasn't confirmed yet via the
   // "Assignee" button. This one only resyncs when the stage's STORED assigneeId itself changes
@@ -252,19 +249,19 @@ function StageSection({
     ? candidates
     : [{ id: stageData.assigneeId, name: stageData.assignee?.name, roleLabel: null }, ...candidates];
 
-  // "Assignee" only enables once every field it commits is actually filled in — name, Started, AND
-  // Expected finish. Picking "Unassigned" keeps it disabled too, same as leaving the name blank —
-  // there's no exception for clearing an existing assignment through this button.
-  const needsDatesFirst = !!assigneeDraft && (!startDraft || !endDraft);
-  const assigneeDirty = canAssign && !!assigneeDraft && !!startDraft && !!endDraft;
+  // "Assignee" only enables once every field it commits is actually filled in — name AND Started.
+  // Picking "Unassigned" keeps it disabled too, same as leaving the name blank — there's no
+  // exception for clearing an existing assignment through this button.
+  const needsDatesFirst = !!assigneeDraft && !startDraft;
+  const assigneeDirty = canAssign && !!assigneeDraft && !!startDraft;
   const confirmAssign = async () => {
     setAssigning(true);
     try {
-      // Carries the draft dates along with the assignment — this is now the ONLY way the owner's
-      // dates ever get persisted, there's no separate Save for them any more.
+      // Carries the draft Started date along with the assignment — this is now the ONLY way the
+      // owner's Started date ever gets persisted, there's no separate Save for it any more.
       await onAssign({
         assigneeId: assigneeDraft || null,
-        ...(assigneeDraft && datesEditable ? { startDate: startDraft || null, endDate: endDraft || null } : {}),
+        ...(assigneeDraft && datesEditable ? { startDate: startDraft || null } : {}),
       });
     } finally {
       setAssigning(false);
@@ -274,24 +271,18 @@ function StageSection({
   // A planned date is the owner's own draft of a stage nobody's picked up yet — showing it to every
   // viewer before anyone's actually assigned made an unassigned stage look like it already had a
   // start in motion. The owner still sees their own plan (they're the one editing it); everyone
-  // else sees "—" for these four fields until the stage genuinely has an assignee, same as the
-  // Assignee field itself already reads while unassigned.
+  // else sees "—" for these fields until the stage genuinely has an assignee, same as the Assignee
+  // field itself already reads while unassigned.
   const datesVisible = !!stageData.assigneeId || canAssign;
 
   // ISO 'YYYY-MM-DD' strings sort correctly lexicographically, so plain string min/max works here
-  // without parsing into real Date objects. Each field's range depends on BOTH the track's own
-  // overall window AND the other field's current draft value — so picking Started bumps Expected
-  // finish's earliest selectable day up to match it, and vice versa, making the two mutually
-  // impossible to set backwards through the native date picker (the existing "Expected finish
-  // can't be before Started" rejection on Save is the backend's own safety net underneath this,
-  // for whatever bypasses the picker, e.g. a pasted value).
+  // without parsing into real Date objects. Bounded by the track's own overall window — Started
+  // can't be planned before the track's own Start Date or after its Expected Deployment Date.
   const startMin = trackStartDate || undefined;
-  const startMax = [trackTargetGoLive, endDraft].filter(Boolean).sort()[0] || undefined;
-  const endMin = [trackStartDate, startDraft].filter(Boolean).sort().slice(-1)[0] || undefined;
-  const endMax = trackTargetGoLive || undefined;
+  const startMax = trackTargetGoLive || undefined;
 
-  // There's no "Save" button anywhere on this card any more. The owner's Started/Expected finish
-  // only ever commit together with the Assignee button (confirmAssign carries the draft dates
+  // There's no "Save" button anywhere on this card any more. The owner's Started date
+  // only ever commits together with the Assignee button (confirmAssign carries the draft date
   // along); the assignee's Document Link now commits itself the moment a file finishes uploading —
   // picking the file IS the confirm action, so there's nothing left standing around to "save".
   const handleDocumentUpload = async (e) => {
@@ -335,7 +326,7 @@ function StageSection({
       </Stack>
 
       <Grid container spacing={2} sx={{ mt: 0.5, mb: 2 }}>
-        <Grid item xs={6} sm={2.4}>
+        <Grid item xs={6} sm={3}>
           {canAssign ? (
             <TextField
               select fullWidth size="small" label="Assignee"
@@ -353,7 +344,7 @@ function StageSection({
             <ReadField label="Assignee" value={stageData.assignee?.name} />
           )}
         </Grid>
-        <Grid item xs={6} sm={2.4}>
+        <Grid item xs={6} sm={3}>
           {/* Locked during submitting/assigning — dates now commit only via the Assignee button, so
               its own in-flight state is what could otherwise race an in-progress edit here, same
               reasoning the Assignee dropdown's own disabled={assigning} already covers. */}
@@ -368,22 +359,10 @@ function StageSection({
             <ReadField label="Started" value={datesVisible ? formatDate(stageData.startDate) : null} />
           )}
         </Grid>
-        <Grid item xs={6} sm={2.4}>
-          {datesEditable ? (
-            <TextField
-              fullWidth size="small" label="Expected finish" type="date" InputLabelProps={{ shrink: true }}
-              value={endDraft} disabled={submitting || assigning}
-              onChange={(e) => setEndDraft(e.target.value)}
-              inputProps={{ min: endMin, max: endMax }}
-            />
-          ) : (
-            <ReadField label="Expected finish" value={datesVisible ? formatDate(stageData.endDate) : null} />
-          )}
-        </Grid>
-        <Grid item xs={6} sm={2.4}>
+        <Grid item xs={6} sm={3}>
           <ReadField label="Finished date" value={datesVisible ? formatDate(stageData.finishedDate) : null} />
         </Grid>
-        <Grid item xs={6} sm={2.4}>
+        <Grid item xs={6} sm={3}>
           {linkEditable ? (
             <Box>
               <Typography variant="caption" sx={CAPTION_SX}>Document link</Typography>
@@ -461,7 +440,7 @@ function StageSection({
                 </Button>
               )}
               {canAssign && (
-                <Tooltip title={needsDatesFirst ? 'Set Started and Expected finish before assigning someone.' : ''}>
+                <Tooltip title={needsDatesFirst ? 'Set Started before assigning someone.' : ''}>
                   <span>
                     <Button variant="contained" disabled={assigning || !assigneeDirty || needsDatesFirst} onClick={confirmAssign}>
                       Assignee
