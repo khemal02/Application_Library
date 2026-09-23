@@ -89,6 +89,19 @@ const reorderBody = Joi.object({
   afterTrackId: Joi.string().uuid().allow(null),
 }).or('beforeTrackId', 'afterTrackId');
 
+// PATCH /queue/reorder — the combined-queue version, spanning both application_tracks and
+// change_requests (see applicationTracking.service.js#reorderQueueItem /
+// queueRank.service.js). Each of `item`/`before`/`after` names which table a queue row lives in.
+const queueItemRef = Joi.object({
+  itemType: Joi.string().valid('track', 'changeRequest').required(),
+  id: Joi.string().uuid().required(),
+});
+const queueReorderBody = Joi.object({
+  item: queueItemRef.required(),
+  before: queueItemRef.allow(null),
+  after: queueItemRef.allow(null),
+}).or('before', 'after');
+
 module.exports = {
   listQuery,
   idParam,
@@ -103,4 +116,5 @@ module.exports = {
   sendBackStageParams,
   sendBackStageBody,
   reorderBody,
+  queueReorderBody,
 };

@@ -11,6 +11,9 @@ const { getStorageDriver } = require('../attachments/storage');
 const { ROLE_LABELS } = require('../../utils/reviewPanel');
 const notificationsService = require('../notifications/notifications.service');
 const issuesService = require('../issues/issues.service');
+// A leaf module with no back-reference to this file, so requiring it here is safe — see its own
+// header comment for why applicationTracking.service.js itself can't be required from here.
+const { nextQueueRank } = require('../applicationTracking/queueRank.service');
 
 const STAGE_ORDER = ['development', 'testing', 'deployment'];
 const STAGE_LABELS = { development: 'Development', testing: 'Testing', deployment: 'Deployment' };
@@ -254,6 +257,9 @@ async function createFromFeatureRequest(featureRequest, { transaction }) {
     requestedBy: featureRequest.submittedBy,
     featureRequestId: featureRequest.id,
     status: 'approved',
+    // Joins the SAME ranked "Idea Prioritization" queue an approved idea's track lands in — see
+    // queueRank.service.js. Cleared the moment this moves to build (moveToBuild() below).
+    queueRank: await nextQueueRank(transaction),
   }, { transaction });
   await ChangeRequestStage.bulkCreate(
     STAGE_ORDER.map((stage) => ({ changeRequestId: record.id, stage })),
@@ -771,6 +777,9 @@ async function moveToBuild(id, assigneeId, req) {
 
   const today = new Date().toISOString().slice(0, 10);
   await sequelize.transaction(async (t) => {
+    // Also clears queue_rank — moved-to-build is no longer "waiting to start," so it drops out of
+    // the shared ranked queue, same as applicationTracking.service.js#moveToBuild does for a track.
+    await record.update({ queueRank: null }, { transaction: t });
     await stageRow.update({
       assigneeId, status: 'in_progress', startDate: stageRow.startDate || today,
     }, { transaction: t });

@@ -28,28 +28,23 @@ import useBreadcrumbLabel from '../../hooks/useBreadcrumbLabel';
 import MoveToBuildDialog from '../Ideas/MoveToBuildDialog';
 import { deriveStatusChip } from '../../utils/applicationTrackStatus';
 
-// A track's own Development stage row — every track has exactly one. Eligible for the ranked
-// queue the same way the backend does (applicationTracking.service.js#reorder/#moveToBuild):
-// status 'active' AND Development still 'not_started'.
-function developmentStage(track) {
-  return track.stages?.find((s) => s.stage === 'development');
-}
-function isWaitingToStart(track) {
-  return track.status === 'active' && developmentStage(track)?.status === 'not_started';
-}
-
 /**
- * Computes the two track ids that should end up immediately before/after a moved item, given its
+ * Computes the two queue items that should end up immediately before/after a moved item, given its
  * OLD index and desired FINAL index in `list` (already sorted by rank ascending). Shared by both
  * the up/down arrow buttons (toIndex = fromIndex ∓ 1) and drag-and-drop (toIndex = the row the
- * item was dropped onto) — same math either way, just a different `toIndex`.
+ * item was dropped onto) — same math either way, just a different `toIndex`. Items carry
+ * `{itemType, id}` now (a track OR a change request), not a bare track id — see
+ * applicationTracking.service.js#reorderQueueItem.
  */
 function computeNeighbors(list, fromIndex, toIndex) {
   const reduced = list.filter((_, idx) => idx !== fromIndex);
   const insertAt = Math.max(0, Math.min(toIndex, reduced.length));
   const before = reduced[insertAt - 1] || null;
   const after = reduced[insertAt] || null;
-  return { beforeTrackId: before?.id ?? null, afterTrackId: after?.id ?? null };
+  return {
+    before: before ? { itemType: before.itemType, id: before.id } : null,
+    after: after ? { itemType: after.itemType, id: after.id } : null,
+  };
 }
 
 function OrderBadge({ children, muted }) {
@@ -66,57 +61,78 @@ function OrderBadge({ children, muted }) {
   );
 }
 
-function ApplicationIdeaCell({ track }) {
+function ItemCell({ item }) {
   return (
-    <Link component={RouterLink} to={`/application-tracking/${track.id}`} underline="hover" variant="body2" fontWeight={600}>
-      {track.name}
+    <Link component={RouterLink} to={item.detailPath} underline="hover" variant="body2" fontWeight={600}>
+      {item.name}
     </Link>
   );
 }
 
+// The row-shape MoveToBuildDialog needs, built from a normalized queue item — see
+// MoveToBuildDialog.jsx's own docstring for the exact `{_type, id, title, track?, changeRequest?,
+// application?}` contract it expects.
+function toMoveToBuildRow(item) {
+  return item.itemType === 'track'
+    ? { _type: 'idea', id: item.ideaId, title: item.name, track: { id: item.id, ownerId: item.ownerId } }
+    : {
+      _type: 'feature_request',
+      id: item.featureRequestId,
+      title: item.name,
+      application: { id: item.changeRequestApplicationId },
+      changeRequest: { id: item.id },
+    };
+}
+
 /**
  * Idea Prioritization — a dedicated module (distinct from Application Tracking, by explicit
- * request) for exactly one job: deciding what gets built next, and starting it. Two tables:
- * "Waiting to start" (active tracks whose Development stage hasn't begun, in manual build-
- * sequence order via `queue_rank` — see the reorder migration/service on
- * applicationTracking.service.js) is the reorderable, actionable one; everything else (already
- * in progress, on hold, live, cancelled) is shown below, read-only, for context — clearly labeled
- * "not reorderable — work is underway" rather than just silently missing.
+ * request) for exactly one job: deciding what gets built next, and starting it. Spans BOTH an
+ * approved idea's track AND an approved feature request's (feature-request-sourced) change
+ * request — the two share one combined ranked queue (applicationTracking.service.js#getQueue),
+ * since both are, the moment they're ready, competing for the same development bandwidth. Two
+ * tables: "Waiting to start" (queueRank set, manual build-sequence order) is the reorderable,
+ * actionable one; everything else (already in progress, on hold, live, implemented, cancelled) is
+ * shown below, read-only, for context — clearly labeled "not reorderable — work is underway"
+ * rather than just silently missing.
  *
- * Reorder controls (drag handle + up/down arrows) and "Move to Build →" are missing entirely, not
- * disabled, for a viewer without `ideas:moveToBuild` — the same permission that already gates
- * Move to Build on the merged Ideas/Feature Requests list, reused here rather than a second grant.
- * That list's own Build column is untouched by this page.
+ * Reorder controls (drag handle + up/down arrows) and "Move to Build →" are per-row, not
+ * per-table: a track row needs `ideas:moveToBuild`, a change-request row needs
+ * `feature_requests:moveToBuild` — the same two permissions that already gate Move to Build on the
+ * merged Ideas/Feature-Requests list, reused here rather than a third grant. Missing entirely, not
+ * disabled, for a viewer without the matching permission.
  */
 export default function IdeaPrioritizationListPage() {
   const { showError } = useToast();
-  const canManageQueue = usePermission('ideas', 'moveToBuild');
+  const canMoveIdeasToBuild = usePermission('ideas', 'moveToBuild');
+  const canMoveFeatureRequestsToBuild = usePermission('feature_requests', 'moveToBuild');
+  const canManageAnyQueue = canMoveIdeasToBuild || canMoveFeatureRequestsToBuild;
   useBreadcrumbLabel('Idea Prioritization');
 
-  const [tracks, setTracks] = useState([]);
+  const [queue, setQueue] = useState({ waiting: [], started: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [buildTarget, setBuildTarget] = useState(null);
   const [dragIndex, setDragIndex] = useState(null);
   const [reloadToken, setReloadToken] = useState(0);
 
-  const loadTracks = () => {
+  const loadQueue = () => {
     setLoading(true);
     setError(null);
-    applicationTrackingApi.list({ limit: 100 })
-      .then((res) => setTracks(res.data))
+    applicationTrackingApi.getQueue()
+      .then((res) => setQueue(res.data))
       .catch((err) => setError(err.response?.data?.message || 'Failed to load'))
       .finally(() => setLoading(false));
   };
 
-  useEffect(loadTracks, [reloadToken]);
+  useEffect(loadQueue, [reloadToken]);
 
-  const waiting = tracks.filter(isWaitingToStart).sort((a, b) => (a.queueRank ?? 0) - (b.queueRank ?? 0));
-  const started = tracks.filter((t) => !isWaitingToStart(t));
+  const { waiting, started } = queue;
 
-  const handleReorder = async (trackId, neighbors) => {
+  const canManageItem = (item) => (item.itemType === 'track' ? canMoveIdeasToBuild : canMoveFeatureRequestsToBuild);
+
+  const handleReorder = async (item, neighbors) => {
     try {
-      await applicationTrackingApi.reorder(trackId, neighbors);
+      await applicationTrackingApi.reorderQueue({ item: { itemType: item.itemType, id: item.id }, ...neighbors });
       setReloadToken((t) => t + 1);
     } catch (err) {
       showError(err.response?.data?.message || 'Failed to reorder');
@@ -124,7 +140,7 @@ export default function IdeaPrioritizationListPage() {
   };
 
   if (loading) return null;
-  if (error) return <ErrorBlock message={error} onRetry={loadTracks} />;
+  if (error) return <ErrorBlock message={error} onRetry={loadQueue} />;
 
   return (
     <Box>
@@ -135,86 +151,89 @@ export default function IdeaPrioritizationListPage() {
           <TableHead>
             <TableRow>
               <TableCell sx={{ fontWeight: 700 }}>Order</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Application / Idea</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>Idea / Feature Request</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Submitted By</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Department</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Priority</TableCell>
-              {canManageQueue && <TableCell sx={{ fontWeight: 700 }} align="right">Actions</TableCell>}
+              {canManageAnyQueue && <TableCell sx={{ fontWeight: 700 }} align="right">Actions</TableCell>}
             </TableRow>
           </TableHead>
           <TableBody>
             {waiting.length === 0 && (
               <TableRow>
-                <TableCell colSpan={canManageQueue ? 6 : 5}>
+                <TableCell colSpan={canManageAnyQueue ? 5 : 4}>
                   <Typography variant="body2" color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
-                    Nothing waiting to start — approved ideas appear here until they're moved to build.
+                    Nothing waiting to start — approved ideas and feature requests appear here until they&rsquo;re moved to build.
                   </Typography>
                 </TableCell>
               </TableRow>
             )}
-            {waiting.map((track, index) => (
-              <TableRow
-                key={track.id}
-                draggable={canManageQueue}
-                onDragStart={() => setDragIndex(index)}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  if (dragIndex === null || dragIndex === index) return;
-                  handleReorder(waiting[dragIndex].id, computeNeighbors(waiting, dragIndex, index));
-                  setDragIndex(null);
-                }}
-                sx={{ opacity: dragIndex === index ? 0.4 : 1, cursor: canManageQueue ? 'grab' : 'default' }}
-              >
-                <TableCell>
-                  <Stack direction="row" alignItems="center" spacing={0.5}>
-                    {canManageQueue && <DragIndicatorIcon fontSize="small" color="disabled" />}
-                    <OrderBadge>{index + 1}</OrderBadge>
-                  </Stack>
-                </TableCell>
-                <TableCell><ApplicationIdeaCell track={track} /></TableCell>
-                <TableCell>
-                  <Typography variant="body2" color={track.idea?.submitter?.name ? 'text.primary' : 'text.disabled'}>
-                    {track.idea?.submitter?.name || '—'}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2" color={track.idea?.department?.name ? 'text.primary' : 'text.disabled'}>
-                    {track.idea?.department?.name || '—'}
-                  </Typography>
-                </TableCell>
-                <TableCell><StatusBadge value={track.priority} /></TableCell>
-                {canManageQueue && (
-                  <TableCell align="right">
-                    <Stack direction="row" spacing={0.5} justifyContent="flex-end" alignItems="center">
-                      <Tooltip title="Move up">
-                        <span>
-                          <IconButton
-                            size="small" disabled={index === 0}
-                            onClick={() => handleReorder(track.id, computeNeighbors(waiting, index, index - 1))}
-                          >
-                            <KeyboardArrowUpIcon fontSize="small" />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                      <Tooltip title="Move down">
-                        <span>
-                          <IconButton
-                            size="small" disabled={index === waiting.length - 1}
-                            onClick={() => handleReorder(track.id, computeNeighbors(waiting, index, index + 1))}
-                          >
-                            <KeyboardArrowDownIcon fontSize="small" />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                      <Button size="small" variant="contained" color="info" onClick={() => setBuildTarget(track)}>
-                        Move to Build →
-                      </Button>
+            {waiting.map((item, index) => {
+              const canManage = canManageItem(item);
+              return (
+                <TableRow
+                  key={`${item.itemType}:${item.id}`}
+                  draggable={canManage}
+                  onDragStart={() => setDragIndex(index)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (dragIndex === null || dragIndex === index) return;
+                    handleReorder(waiting[dragIndex], computeNeighbors(waiting, dragIndex, index));
+                    setDragIndex(null);
+                  }}
+                  sx={{ opacity: dragIndex === index ? 0.4 : 1, cursor: canManage ? 'grab' : 'default' }}
+                >
+                  <TableCell>
+                    <Stack direction="row" alignItems="center" spacing={0.5}>
+                      {canManage && <DragIndicatorIcon fontSize="small" color="disabled" />}
+                      <OrderBadge>{index + 1}</OrderBadge>
                     </Stack>
                   </TableCell>
-                )}
-              </TableRow>
-            ))}
+                  <TableCell><ItemCell item={item} /></TableCell>
+                  <TableCell>
+                    <Typography variant="body2" color={item.submitter?.name ? 'text.primary' : 'text.disabled'}>
+                      {item.submitter?.name || '—'}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" color={item.department?.name ? 'text.primary' : 'text.disabled'}>
+                      {item.department?.name || '—'}
+                    </Typography>
+                  </TableCell>
+                  {canManageAnyQueue && (
+                    <TableCell align="right">
+                      {canManage ? (
+                        <Stack direction="row" spacing={0.5} justifyContent="flex-end" alignItems="center">
+                          <Tooltip title="Move up">
+                            <span>
+                              <IconButton
+                                size="small" disabled={index === 0}
+                                onClick={() => handleReorder(item, computeNeighbors(waiting, index, index - 1))}
+                              >
+                                <KeyboardArrowUpIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          <Tooltip title="Move down">
+                            <span>
+                              <IconButton
+                                size="small" disabled={index === waiting.length - 1}
+                                onClick={() => handleReorder(item, computeNeighbors(waiting, index, index + 1))}
+                              >
+                                <KeyboardArrowDownIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          <Button size="small" variant="contained" color="info" onClick={() => setBuildTarget(item)}>
+                            Move to Build →
+                          </Button>
+                        </Stack>
+                      ) : null}
+                    </TableCell>
+                  )}
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </TableContainer>
@@ -230,10 +249,9 @@ export default function IdeaPrioritizationListPage() {
           <TableHead>
             <TableRow>
               <TableCell sx={{ fontWeight: 700 }}>Order</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Application / Idea</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>Idea / Feature Request</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Submitted By</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Department</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Priority</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Owner</TableCell>
             </TableRow>
@@ -241,39 +259,38 @@ export default function IdeaPrioritizationListPage() {
           <TableBody>
             {started.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7}>
+                <TableCell colSpan={6}>
                   <Typography variant="body2" color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
                     Nothing in progress yet.
                   </Typography>
                 </TableCell>
               </TableRow>
             )}
-            {started.map((track) => {
-              const isMuted = track.status === 'on_hold' || track.status === 'cancelled';
+            {started.map((item) => {
+              const isMuted = item.status === 'on_hold' || item.status === 'cancelled';
               return (
-                <TableRow key={track.id} sx={{ opacity: isMuted ? 0.55 : 1 }}>
+                <TableRow key={`${item.itemType}:${item.id}`} sx={{ opacity: isMuted ? 0.55 : 1 }}>
                   <TableCell><OrderBadge muted>—</OrderBadge></TableCell>
-                  <TableCell><ApplicationIdeaCell track={track} /></TableCell>
+                  <TableCell><ItemCell item={item} /></TableCell>
                   <TableCell>
-                    <Typography variant="body2" color={track.idea?.submitter?.name ? 'text.primary' : 'text.disabled'}>
-                      {track.idea?.submitter?.name || '—'}
+                    <Typography variant="body2" color={item.submitter?.name ? 'text.primary' : 'text.disabled'}>
+                      {item.submitter?.name || '—'}
                     </Typography>
                   </TableCell>
                   <TableCell>
-                    <Typography variant="body2" color={track.idea?.department?.name ? 'text.primary' : 'text.disabled'}>
-                      {track.idea?.department?.name || '—'}
+                    <Typography variant="body2" color={item.department?.name ? 'text.primary' : 'text.disabled'}>
+                      {item.department?.name || '—'}
                     </Typography>
                   </TableCell>
-                  <TableCell><StatusBadge value={track.priority} /></TableCell>
                   <TableCell>
                     {(() => {
-                      const chip = deriveStatusChip(track);
+                      const chip = deriveStatusChip(item);
                       return <StatusBadge color={chip.color} label={chip.label} />;
                     })()}
                   </TableCell>
                   <TableCell>
-                    <Typography variant="body2" color={track.owner?.name ? 'text.primary' : 'text.disabled'}>
-                      {track.owner?.name || '—'}
+                    <Typography variant="body2" color={item.owner?.name ? 'text.primary' : 'text.disabled'}>
+                      {item.owner?.name || '—'}
                     </Typography>
                   </TableCell>
                 </TableRow>
@@ -285,12 +302,7 @@ export default function IdeaPrioritizationListPage() {
 
       {buildTarget && (
         <MoveToBuildDialog
-          row={{
-            _type: 'idea',
-            id: buildTarget.ideaId,
-            title: buildTarget.name,
-            track: { id: buildTarget.id, ownerId: buildTarget.ownerId },
-          }}
+          row={toMoveToBuildRow(buildTarget)}
           onClose={() => setBuildTarget(null)}
           onMoved={() => { setBuildTarget(null); setReloadToken((t) => t + 1); }}
         />

@@ -18,6 +18,12 @@ module.exports = (sequelize, DataTypes) => {
     // issues.service.js#convert. A change request with this set is LOCKED: approved -> implemented
     // only, never rejectable, never deletable — enforced in this module's update()/remove().
     issueId: { type: DataTypes.UUID, allowNull: true },
+    // Manual build-sequence rank, shared with application_tracks.queue_rank — see
+    // 20260130000054-add-change-request-queue-rank.js. Non-null only for a feature-request-sourced
+    // change request that's `approved` with Development still `not_started`; cleared the moment it
+    // moves to build (changeRequests.service.js#moveToBuild). A directly-raised or issue-converted
+    // change request never gets one — outside Idea Prioritization's scope, always NULL.
+    queueRank: { type: DataTypes.DOUBLE, allowNull: true },
   }, {
     tableName: 'change_requests',
     indexes: [{ fields: ['application_id', 'status'] }],

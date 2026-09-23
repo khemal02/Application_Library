@@ -1,16 +1,18 @@
 const { Op } = require('sequelize');
 const {
-  ApplicationTrack, ApplicationTrackStage, Idea, User, Application, Department, StatusHistory, Comment, sequelize,
+  ApplicationTrack, ApplicationTrackStage, ChangeRequest, ChangeRequestStage, FeatureRequest,
+  Idea, User, Application, Department, StatusHistory, Comment, sequelize,
 } = require('../../models');
 const ApiError = require('../../utils/ApiError');
 const logger = require('../../config/logger');
-const { isSuperAdmin } = require('../../utils/permissions');
+const { isSuperAdmin, hasPermission } = require('../../utils/permissions');
 const notificationsService = require('../notifications/notifications.service');
 // Reused, not duplicated — assigneeCandidates() is generic (any active user, no module-specific
 // filtering) and already exported for exactly this. Not a refactor of changeRequests.service.js,
 // just calling its existing public API, same as this module already does for
 // notificationsService/tagsService-shaped dependencies elsewhere in the codebase (see C4/C9).
 const changeRequestsService = require('../changeRequests/changeRequests.service');
+const { QUEUE_RANK_GAP, nextQueueRank, renumberQueue } = require('./queueRank.service');
 
 const STAGE_ORDER = ['development', 'testing', 'deployment'];
 const STAGE_LABELS = {
@@ -20,12 +22,6 @@ const STAGE_STATUS_ORDER = ['not_started', 'in_progress', 'complete'];
 const STATUS_LABELS = {
   active: 'active', on_hold: 'on hold', live: 'live', cancelled: 'cancelled',
 };
-
-// Fixed spacing between fresh queue_rank values — matches the backfill migration
-// (20260130000053) and every append-to-bottom/move-past-an-end case below. Large enough that many
-// successive reorders can each still slot a real midpoint in between neighbors before precision
-// ever becomes a practical concern at this app's data volumes.
-const QUEUE_RANK_GAP = 1000;
 
 const stageIncludeFull = {
   model: ApplicationTrackStage,
@@ -125,17 +121,6 @@ function redactUnassignedStages(record, req) {
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
-
-/**
- * Appends to the bottom of the ranked "Waiting to start" queue — the rank a track gets the moment
- * it becomes newly eligible (created at idea-approval, or re-entering via resume()). One extra
- * `QUEUE_RANK_GAP` past whatever the current lowest-priority (highest-numbered) rank is, or the gap
- * itself if the queue is currently empty. Runs inside the caller's own transaction.
- */
-async function nextQueueRank(t) {
-  const max = await ApplicationTrack.max('queueRank', { transaction: t });
-  return (max || 0) + QUEUE_RANK_GAP;
-}
 
 /**
  * GET / — filterable by status, priority, stage, assigneeId, ownerId. `stage`/`assigneeId` live on
@@ -373,17 +358,16 @@ async function updateStage(id, stage, payload, req) {
   if (payload.assigneeId !== undefined && (record.status === 'cancelled' || record.status === 'live')) {
     throw ApiError.conflict(`This track is ${STATUS_LABELS[record.status]} — its stages can no longer be assigned.`);
   }
-  // No one gets named to a stage until its planned Started/Expected finish dates exist — an
-  // assignment with no timeline attached is exactly what the date-planning mechanism above exists
-  // to prevent. Only checked when actually naming someone (a truthy assigneeId) — clearing an
-  // assignment (assigneeId: null) never needs a timeline. Checks the EFFECTIVE dates (this same
-  // call's own startDate/endDate if it happens to carry them too, else whatever's already stored),
-  // same as the sequencing guardrail below.
+  // No one gets named to a stage until its planned Started date exists — an assignment with no
+  // timeline attached is exactly what the date-planning mechanism above exists to prevent. Only
+  // checked when actually naming someone (a truthy assigneeId) — clearing an assignment
+  // (assigneeId: null) never needs a timeline. Checks the EFFECTIVE start (this same call's own
+  // startDate if it happens to carry one too, else whatever's already stored), same as the
+  // sequencing guardrail below.
   if (payload.assigneeId) {
     const effectiveStart = payload.startDate !== undefined ? payload.startDate : stageRow.startDate;
-    const effectiveEnd = payload.endDate !== undefined ? payload.endDate : stageRow.endDate;
-    if (!effectiveStart || !effectiveEnd) {
-      throw ApiError.badRequest(`Set ${STAGE_LABELS[stage]}'s Started and Expected finish dates before assigning someone to it.`);
+    if (!effectiveStart) {
+      throw ApiError.badRequest(`Set ${STAGE_LABELS[stage]}'s Started date before assigning someone to it.`);
     }
   }
   // Narrower than the general gate above, same reasoning comments.service.js's note-writing rule
@@ -817,25 +801,6 @@ async function moveToBuild(id, {
 }
 
 /**
- * Renumbers the ENTIRE ranked queue to clean, evenly-spaced values — only ever reached when a
- * midpoint computation in reorder() below lands exactly on one of its two neighbors (fractional
- * precision exhausted, practically unreachable at this app's data volumes, but real code exists
- * for it rather than leaving that case to throw). Runs inside the caller's own transaction.
- */
-async function renumberQueue(t) {
-  const ranked = await ApplicationTrack.findAll({
-    where: { queueRank: { [Op.ne]: null } },
-    order: [['queueRank', 'ASC']],
-    attributes: ['id'],
-    transaction: t,
-  });
-  for (let i = 0; i < ranked.length; i += 1) {
-    // eslint-disable-next-line no-await-in-loop
-    await ranked[i].update({ queueRank: (i + 1) * QUEUE_RANK_GAP }, { transaction: t });
-  }
-}
-
-/**
  * PATCH /:id/reorder — moves a track to a new position in the ranked "Waiting to start" queue.
  * Fractional ranking (D7): the moved track's new rank is the midpoint between its two new
  * neighbors' ranks, so a single reorder only ever writes the one row that actually moved — never
@@ -894,6 +859,175 @@ async function reorder(id, { beforeTrackId, afterTrackId }, req) {
   });
 
   return getById(id, req);
+}
+
+// Shared by both queue item normalizers below — every queue item, whichever table it's from,
+// exposes the same shape so the Idea Prioritization page can render one unified list without
+// branching on itemType for anything but the Move-to-Build row it constructs on click.
+function normalizeTrackItem(track) {
+  return {
+    itemType: 'track',
+    id: track.id,
+    queueRank: track.queueRank,
+    name: track.name || track.idea?.title || null,
+    priority: track.priority,
+    status: track.status,
+    stages: track.stages,
+    submitter: track.idea?.submitter || null,
+    department: track.idea?.department || null,
+    owner: track.owner || null,
+    ideaId: track.ideaId,
+    ownerId: track.ownerId,
+    detailPath: `/application-tracking/${track.id}`,
+  };
+}
+
+function normalizeChangeRequestItem(cr) {
+  return {
+    itemType: 'changeRequest',
+    id: cr.id,
+    queueRank: cr.queueRank,
+    name: cr.featureRequest?.title || cr.title || null,
+    priority: cr.featureRequest?.priority || 'medium',
+    status: cr.status,
+    stages: cr.stages,
+    submitter: cr.featureRequest?.submitter || null,
+    department: cr.featureRequest?.department || null,
+    owner: cr.application?.owner || null,
+    featureRequestId: cr.featureRequestId,
+    changeRequestApplicationId: cr.applicationId,
+    applicationName: cr.application?.name || null,
+    detailPath: `/applications/${cr.applicationId}/change-requests/${cr.id}`,
+  };
+}
+
+/**
+ * GET /queue — the combined "Idea Prioritization" queue: every approved idea's track AND every
+ * approved feature request's (feature-request-sourced only, see the queue_rank migration's own
+ * comment) change request, normalized into one shared shape and split the same way the page
+ * already splits tracks — `waiting` (queueRank set, ranked, reorderable) vs. `started` (everything
+ * else — in progress, on hold, live/implemented, cancelled — read-only, shown for context).
+ */
+async function getQueue(req) {
+  const tracks = await ApplicationTrack.findAll({
+    include: [
+      {
+        model: Idea,
+        as: 'idea',
+        attributes: ['id', 'ideaNumber', 'title'],
+        include: [
+          { model: User, as: 'submitter', attributes: ['id', 'name'] },
+          { model: Department, as: 'department', attributes: ['id', 'name'] },
+        ],
+      },
+      { model: User, as: 'owner', attributes: ['id', 'name'] },
+      stageIncludeFull,
+    ],
+  });
+  const changeRequests = await ChangeRequest.findAll({
+    where: { featureRequestId: { [Op.ne]: null } },
+    include: [
+      {
+        model: FeatureRequest,
+        as: 'featureRequest',
+        attributes: ['id', 'title', 'priority'],
+        include: [
+          { model: User, as: 'submitter', attributes: ['id', 'name'] },
+          { model: Department, as: 'department', attributes: ['id', 'name'] },
+        ],
+      },
+      {
+        model: Application,
+        as: 'application',
+        attributes: ['id', 'name'],
+        include: [{ model: User, as: 'owner', attributes: ['id', 'name'] }],
+      },
+      { model: ChangeRequestStage, as: 'stages' },
+    ],
+  });
+
+  tracks.forEach(sortStages);
+  resolveTrackMany(tracks);
+  changeRequests.forEach(sortStages);
+
+  const items = [...tracks.map(normalizeTrackItem), ...changeRequests.map(normalizeChangeRequestItem)];
+  const waiting = items.filter((i) => i.queueRank != null).sort((a, b) => a.queueRank - b.queueRank);
+  const started = items.filter((i) => i.queueRank == null);
+
+  return { waiting, started };
+}
+
+const QUEUE_ITEM_MODELS = { track: ApplicationTrack, changeRequest: ChangeRequest };
+// Which real permission actually governs reordering an item of this type — the same two grants
+// that already gate Move to Build on the merged Ideas/Feature-Requests list, reused rather than a
+// third permission just for reordering.
+const QUEUE_ITEM_PERMISSION_RESOURCE = { track: 'ideas', changeRequest: 'feature_requests' };
+
+async function loadQueueNeighbor(ref) {
+  if (!ref) return null;
+  const Model = QUEUE_ITEM_MODELS[ref.itemType];
+  const row = await Model.findByPk(ref.id, { attributes: ['id', 'queueRank'] });
+  if (!row || row.queueRank == null) {
+    throw ApiError.badRequest('That neighbor is not currently in the waiting-to-start queue.');
+  }
+  return { Model, row };
+}
+
+/**
+ * PATCH /queue/reorder — the combined-queue version of reorder() above, spanning both tables via
+ * QUEUE_ITEM_MODELS. Same fractional-midpoint scheme; item-type-agnostic since the math only ever
+ * needs each row's numeric queueRank, not what table it came from.
+ *
+ * The route itself only enforces the coarser `ideas:moveToBuild` baseline (every role holding one
+ * of the two grants holds both today, same reasoning the single-type reorder route already
+ * documents) — this is the real, per-type gate: whichever of `track`/`changeRequest` the moved
+ * item and its two neighbors actually are, each type touched must be backed by ITS OWN real
+ * permission, not just the route's coarse baseline. Mirrors the merged Ideas/Feature-Requests
+ * list's own per-row `canAct` check on the frontend, enforced here for real.
+ */
+async function reorderQueueItem({ item, before, after }, req) {
+  const touchedTypes = new Set([item.itemType, before?.itemType, after?.itemType].filter(Boolean));
+  touchedTypes.forEach((type) => {
+    if (!hasPermission(req.user.permissions, QUEUE_ITEM_PERMISSION_RESOURCE[type], 'moveToBuild')) {
+      throw ApiError.forbidden(`You do not have permission to reorder a ${type === 'track' ? 'idea' : 'feature request'} in this queue.`);
+    }
+  });
+
+  const Model = QUEUE_ITEM_MODELS[item.itemType];
+  const record = await Model.findByPk(item.id, { attributes: ['id', 'queueRank'] });
+  if (!record || record.queueRank == null) {
+    throw ApiError.conflict('Only an item that is waiting to start Development can be reordered.');
+  }
+
+  const beforeRef = await loadQueueNeighbor(before);
+  const afterRef = await loadQueueNeighbor(after);
+  // Joi's `.or()` only checks that a key is PRESENT, so `{ before: null, after: null }` passes
+  // validation but is still meaningless here — caught for real at this layer, same as reorder()'s.
+  if (!beforeRef && !afterRef) {
+    throw ApiError.badRequest('At least one neighbor is required to reorder.');
+  }
+
+  await sequelize.transaction(async (t) => {
+    let newRank;
+    if (beforeRef && afterRef) {
+      newRank = (beforeRef.row.queueRank + afterRef.row.queueRank) / 2;
+      if (newRank === beforeRef.row.queueRank || newRank === afterRef.row.queueRank) {
+        await renumberQueue(t);
+        const [freshBefore, freshAfter] = await Promise.all([
+          beforeRef.Model.findByPk(beforeRef.row.id, { attributes: ['queueRank'], transaction: t }),
+          afterRef.Model.findByPk(afterRef.row.id, { attributes: ['queueRank'], transaction: t }),
+        ]);
+        newRank = (freshBefore.queueRank + freshAfter.queueRank) / 2;
+      }
+    } else if (beforeRef) {
+      newRank = beforeRef.row.queueRank + QUEUE_RANK_GAP;
+    } else {
+      newRank = afterRef.row.queueRank - QUEUE_RANK_GAP;
+    }
+    await Model.update({ queueRank: newRank }, { where: { id: item.id }, transaction: t });
+  });
+
+  return getQueue(req);
 }
 
 /**
@@ -1178,6 +1312,8 @@ module.exports = {
   moveToBuild,
   reorder,
   nextQueueRank,
+  getQueue,
+  reorderQueueItem,
   goLive,
   assignStages,
   hold,

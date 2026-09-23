@@ -6,6 +6,7 @@ const controller = require('./applicationTracking.controller');
 const {
   listQuery, idParam, update, stageParams, stageBody, assignBody, holdBody, cancelBody,
   advanceStageParams, advanceStageBody, sendBackStageParams, sendBackStageBody, reorderBody,
+  queueReorderBody,
 } = require('./applicationTracking.validator');
 
 // Top-level, not nested under an application — a track precedes one (see myStages.routes.js for
@@ -19,6 +20,18 @@ const router = express.Router();
 router.use(authenticate);
 
 router.get('/', authorize('application_tracks', 'read'), validate({ query: listQuery }), controller.list);
+
+// The combined "Idea Prioritization" queue (application_tracks + feature-request-sourced
+// change_requests — see applicationTracking.service.js#getQueue/#reorderQueueItem). Registered
+// before '/:id' so 'queue' is never swallowed as an :id.
+router.get('/queue', authorize('application_tracks', 'read'), controller.getQueue);
+router.patch(
+  '/queue/reorder',
+  authorize('ideas', 'moveToBuild'),
+  validate({ body: queueReorderBody }),
+  controller.reorderQueue,
+);
+
 router.get('/:id', authorize('application_tracks', 'read'), validate({ params: idParam }), controller.getById);
 router.patch('/:id', authorize('application_tracks', 'update'), validate({ params: idParam, body: update }), controller.update);
 

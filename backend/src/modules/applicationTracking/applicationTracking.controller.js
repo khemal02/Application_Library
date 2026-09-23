@@ -49,6 +49,16 @@ module.exports = {
     return ApiResponse.success(res, record, 'Reordered');
   }),
 
+  getQueue: asyncHandler(async (req, res) => {
+    const queue = await service.getQueue(req);
+    return ApiResponse.success(res, queue);
+  }),
+
+  reorderQueue: asyncHandler(async (req, res) => {
+    const queue = await service.reorderQueueItem(req.body, req);
+    return ApiResponse.success(res, queue, 'Reordered');
+  }),
+
   goLive: asyncHandler(async (req, res) => {
     const record = await service.goLive(req.params.id, req);
     return ApiResponse.success(res, record, 'Application registered — this track is now live');
