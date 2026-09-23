@@ -26,7 +26,13 @@ export default function DataTable({
           <TableHead>
             <TableRow>
               {columns.map((col) => (
-                <TableCell key={col.key} sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
+                <TableCell
+                  key={col.key}
+                  sx={{
+                    fontWeight: 700, whiteSpace: 'nowrap', textTransform: 'uppercase',
+                    letterSpacing: '0.06em', fontSize: '0.72rem', color: 'text.disabled',
+                  }}
+                >
                   {col.label}
                 </TableCell>
               ))}

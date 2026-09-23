@@ -365,35 +365,50 @@ export default function IdeasAndFeatureRequestsListPage() {
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" useFlexGap rowGap={1} sx={{ mb: 2 }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" useFlexGap rowGap={1} sx={{ mb: 3 }}>
         <Typography variant="h5" fontWeight={700}>Ideas</Typography>
         {/* Both buttons reused exactly as they exist on their own original pages — same label,
             same variant/icon, same onClick opening the same unmodified dialog — just relocated to
             sit together here. */}
         <Stack direction="row" spacing={1}>
           {canSeeIdeas && (
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setIdeaFormOpen(true)}>Submit Idea</Button>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setIdeaFormOpen(true)} sx={{ borderRadius: 999 }}>Submit Idea</Button>
           )}
           {canSeeFeatureRequests && (
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setFeatureRequestFormOpen(true)}>Submit Feature Request</Button>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setFeatureRequestFormOpen(true)} sx={{ borderRadius: 999 }}>Submit Feature Request</Button>
           )}
         </Stack>
       </Stack>
 
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }} flexWrap="wrap" useFlexGap rowGap={1.5} sx={{ mb: 1.5 }}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2.5} alignItems={{ sm: 'center' }} flexWrap="wrap" useFlexGap rowGap={2} sx={{ mb: 2.5 }}>
         <TextField
           size="small"
           placeholder="Search ideas and feature requests..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          sx={{ width: 260, flexShrink: 0 }}
+          sx={{ width: 320, flexShrink: 0 }}
           InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
         />
 
-        <ToggleButtonGroup size="small" exclusive value={filters.type || ''} onChange={handleTypeChange}>
+        <ToggleButtonGroup
+          size="small" exclusive value={filters.type || ''} onChange={handleTypeChange}
+          sx={{
+            bgcolor: 'action.hover', borderRadius: 999, p: 0.5, gap: 0.5,
+            '& .MuiToggleButtonGroup-grouped': {
+              border: 0, borderRadius: '999px !important', textTransform: 'none', px: 1.5,
+              '&.Mui-selected': { bgcolor: 'background.paper', boxShadow: 1, '&:hover': { bgcolor: 'background.paper' } },
+            },
+          }}
+        >
           <ToggleButton value="">All ({typeCounts.all})</ToggleButton>
-          <ToggleButton value="idea">New Ideas ({typeCounts.idea})</ToggleButton>
-          <ToggleButton value="feature_request">Feature Requests ({typeCounts.feature_request})</ToggleButton>
+          <ToggleButton value="idea">
+            <Box component="span" sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: TYPE_META.idea.color, mr: 1 }} />
+            New Ideas ({typeCounts.idea})
+          </ToggleButton>
+          <ToggleButton value="feature_request">
+            <Box component="span" sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: TYPE_META.feature_request.color, mr: 1 }} />
+            Feature Requests ({typeCounts.feature_request})
+          </ToggleButton>
         </ToggleButtonGroup>
 
         <Badge badgeContent={activeFilterCount} color="primary" invisible={activeFilterCount === 0}>
@@ -401,6 +416,7 @@ export default function IdeasAndFeatureRequestsListPage() {
             variant="outlined" size="small" color="inherit"
             startIcon={<FilterListIcon fontSize="small" />}
             onClick={(e) => setFiltersAnchor(e.currentTarget)}
+            sx={{ borderRadius: 999 }}
           >
             Filters
           </Button>
@@ -463,7 +479,7 @@ export default function IdeasAndFeatureRequestsListPage() {
         </Box>
       </Popover>
 
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         {totalItems} result{totalItems === 1 ? '' : 's'} · {resultBreakdown.idea} New Idea{resultBreakdown.idea === 1 ? '' : 's'} · {resultBreakdown.feature_request} Feature Request{resultBreakdown.feature_request === 1 ? '' : 's'}
       </Typography>
 

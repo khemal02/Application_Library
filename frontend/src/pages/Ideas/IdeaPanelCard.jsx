@@ -216,7 +216,7 @@ export default function IdeaPanelCard({
       };
     }
     if (!voteDecision) {
-      return { severity: 'info', text: 'You are the last of the approvers to vote — your choice decides the outcome.' };
+      return { severity: 'info', text: 'You are the last of the approvers to vote .' };
     }
     if (completingOutcome === 'tie') {
       return { severity: 'warning', text: `You are the last of ${panel.approversTotal} approvers. Right now this would tie ${approveTally}–${rejectTally} — the CEO would need to break it.` };
