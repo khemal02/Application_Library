@@ -218,7 +218,7 @@ export default function IdeaDetailPage() {
         </Typography>
       </Stack>
       <Box sx={{ mb: 2 }}>
-        <Typography variant="h5" fontWeight={700}>{idea.title}</Typography>
+        <Typography fontWeight={800} sx={{ fontSize: '24px' }}>{idea.title}</Typography>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
           {idea.changeRequest && (
             <Chip
@@ -242,7 +242,7 @@ export default function IdeaDetailPage() {
             full width on mobile via xs={12}. */}
         <Grid item xs={12} sx={{ flexBasis: { md: '60%' }, maxWidth: { md: '60%' } }}>
           {(idea.description || canEditIdeaFields) && (
-            <AccordionSection title="Problem Statement">
+            <AccordionSection title="Problem Statement" defaultOpen>
               {editingDescription ? (
                 <Box>
                   <TextField
@@ -261,7 +261,7 @@ export default function IdeaDetailPage() {
                 </Box>
               ) : (
                 <Stack direction="row" spacing={1} alignItems="flex-start">
-                  <Typography variant="body1" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', textAlign: 'justify', flexGrow: 1 }}>
+                  <Typography sx={{ fontSize: '13.3px', color: '#374151', lineHeight: 1.65, whiteSpace: 'pre-wrap', textAlign: 'justify', flexGrow: 1 }}>
                     {idea.description || '—'}
                   </Typography>
                   {canEditIdeaFields && (
@@ -275,7 +275,7 @@ export default function IdeaDetailPage() {
           )}
 
           {(idea.proposedSolution || canEditIdeaFields) && (
-            <AccordionSection title="Proposed Solution">
+            <AccordionSection title="Proposed Solution" defaultOpen>
               {editingSolution ? (
                 <Box>
                   <TextField
@@ -294,7 +294,7 @@ export default function IdeaDetailPage() {
                 </Box>
               ) : (
                 <Stack direction="row" spacing={1} alignItems="flex-start">
-                  <Typography variant="body1" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', textAlign: 'justify', flexGrow: 1 }}>
+                  <Typography sx={{ fontSize: '13.3px', color: '#374151', lineHeight: 1.65, whiteSpace: 'pre-wrap', textAlign: 'justify', flexGrow: 1 }}>
                     {idea.proposedSolution || '—'}
                   </Typography>
                   {canEditIdeaFields && (
@@ -308,7 +308,7 @@ export default function IdeaDetailPage() {
           )}
 
           {(idea.technologiesAndEfficiency || canEditIdeaFields) && (
-            <AccordionSection title="Technologies">
+            <AccordionSection title="Technologies" defaultOpen>
               {editingTech ? (
                 <Box>
                   <TextField
@@ -327,7 +327,7 @@ export default function IdeaDetailPage() {
                 </Box>
               ) : (
                 <Stack direction="row" spacing={1} alignItems="flex-start">
-                  <Typography variant="body1" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', textAlign: 'justify', flexGrow: 1 }}>
+                  <Typography sx={{ fontSize: '13.3px', color: '#374151', lineHeight: 1.65, whiteSpace: 'pre-wrap', textAlign: 'justify', flexGrow: 1 }}>
                     {idea.technologiesAndEfficiency || '—'}
                   </Typography>
                   {canEditIdeaFields && (

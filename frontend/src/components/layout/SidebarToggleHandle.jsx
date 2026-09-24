@@ -23,18 +23,21 @@ export default function SidebarToggleHandle() {
         sx={{
           position: 'fixed',
           top: '50%',
-          left: `${(open ? DRAWER_WIDTH : COLLAPSED_WIDTH) - 14}px`,
+          left: `${(open ? DRAWER_WIDTH : COLLAPSED_WIDTH) - 15}px`,
           transform: 'translateY(-50%)',
           zIndex: (t) => t.zIndex.drawer + 2,
-          width: 28,
-          height: 28,
-          bgcolor: 'background.paper',
-          color: 'text.secondary',
-          border: '1px solid',
-          borderColor: 'divider',
-          boxShadow: 2,
+          width: 30,
+          height: 30,
+          // SAR India Digital reference (sampled directly from its screenshot): the handle isn't a
+          // solid blue circle with a white ring — it's a muted navy fill (between the sidebar's own
+          // navy and the bright accent blue) with a thin bright-blue ring, so it reads as part of
+          // the sidebar's own surface rather than a floating chip.
+          bgcolor: '#163565',
+          color: '#fff',
+          border: '2px solid',
+          borderColor: 'primary.light',
           transition: (t) => t.transitions.create('left', { duration: t.transitions.duration.short }),
-          '&:hover': { bgcolor: 'background.paper', color: 'primary.main' },
+          '&:hover': { bgcolor: '#1c4179' },
         }}
       >
         {open ? <ChevronLeftIcon fontSize="small" /> : <ChevronRightIcon fontSize="small" />}

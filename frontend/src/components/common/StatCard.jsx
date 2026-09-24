@@ -14,10 +14,9 @@ export default function StatCard({
       tabIndex={onClick ? 0 : undefined}
       onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
       sx={{
+        // A vertical stack — icon tile on its own row above the number/label, not beside them —
+        // matching the approved reference's `.stat-card` layout exactly.
         p: 2.5,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 2,
         height: '100%',
         cursor: onClick ? 'pointer' : 'default',
         transition: 'transform 0.15s ease, box-shadow 0.15s ease',
@@ -27,18 +26,16 @@ export default function StatCard({
     >
       <Box
         sx={{
-          width: 48, height: 48, borderRadius: 2.5, flexShrink: 0,
+          width: 38, height: 38, borderRadius: '10px', mb: 1.5,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           bgcolor: (t) => alpha(t.palette[color]?.main || t.palette.primary.main, t.palette.mode === 'dark' ? 0.18 : 0.12),
           color: (t) => t.palette[color]?.main || t.palette.primary.main,
         }}
       >
-        <Icon />
+        <Icon sx={{ fontSize: 19 }} />
       </Box>
-      <Box sx={{ minWidth: 0 }}>
-        <Typography variant="h5" fontWeight={800} lineHeight={1.2}>{value ?? '—'}</Typography>
-        <Typography variant="body2" color="text.secondary" noWrap>{label}</Typography>
-      </Box>
+      <Typography fontWeight={800} lineHeight={1.2} sx={{ fontSize: '22px', mb: '2px' }}>{value ?? '—'}</Typography>
+      <Typography fontWeight={700} noWrap sx={{ fontSize: '13.2px', color: '#374151' }}>{label}</Typography>
     </Paper>
   );
 }

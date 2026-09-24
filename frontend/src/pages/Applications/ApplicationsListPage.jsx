@@ -2,26 +2,19 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
-import Button from '@mui/material/Button';
-import Stack from '@mui/material/Stack';
-import AddIcon from '@mui/icons-material/Add';
 import useServerList from '../../hooks/useServerList';
-import useToast from '../../hooks/useToast';
 import { applicationsApi, departmentsApi } from '../../services/domains';
 import DataTable from '../../components/common/DataTable';
 import FilterBar from '../../components/common/FilterBar';
 import StatusBadge from '../../components/common/StatusBadge';
-import usePermission from '../../routes/usePermission';
-import ApplicationFormDialog from './ApplicationFormDialog';
+import usePageMeta from '../../hooks/usePageMeta';
 import { APPLICATION_STATUS_OPTIONS, INDUSTRY_OPTIONS, FUNCTIONAL_AREA_OPTIONS, applicationStatusLabel } from '../../constants/options';
 import humanize from '../../utils/humanize';
 
 export default function ApplicationsListPage() {
   const navigate = useNavigate();
-  const canCreate = usePermission('applications', 'create');
-  const [formOpen, setFormOpen] = useState(false);
+  usePageMeta('Applications', 'Every live and in-progress application.');
   const [departments, setDepartments] = useState([]);
-  const { showSuccess } = useToast();
   // A Dashboard stat tile (e.g. "Applications In Progress", "My Applications") links here with
   // ?status=... / ?ownerId=... — read once at mount, same convention every list page linked from
   // a dashboard tile follows.
@@ -51,13 +44,6 @@ export default function ApplicationsListPage() {
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-        <Typography variant="h5" fontWeight={700}>Applications</Typography>
-        {canCreate && (
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setFormOpen(true)}>New Application</Button>
-        )}
-      </Stack>
-
       <FilterBar
         search={list.search}
         onSearchChange={list.setSearch}
@@ -69,8 +55,14 @@ export default function ApplicationsListPage() {
           { key: 'industry', label: 'Industry', options: INDUSTRY_OPTIONS },
           { key: 'functionalArea', label: 'Functional Area', options: FUNCTIONAL_AREA_OPTIONS },
         ]}
-        searchPlaceholder="Search applications..."
+        searchPlaceholder="Search here..."
       />
+
+      {list.pagination && (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+          {list.rows.length} of {list.pagination.totalItems} application{list.pagination.totalItems === 1 ? '' : 's'}
+        </Typography>
+      )}
 
       <DataTable
         columns={columns}
@@ -82,13 +74,7 @@ export default function ApplicationsListPage() {
         onRowsPerPageChange={list.setLimit}
         onRowClick={(row) => navigate(`/applications/${row.id}`)}
         loading={list.loading}
-        emptyMessage="No applications yet — create the first one to get started."
-      />
-
-      <ApplicationFormDialog
-        open={formOpen}
-        onClose={() => setFormOpen(false)}
-        onSaved={() => { setFormOpen(false); showSuccess('Application created'); list.reload(); }}
+        emptyMessage="No applications yet."
       />
     </Box>
   );

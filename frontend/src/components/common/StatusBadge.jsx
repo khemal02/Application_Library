@@ -43,22 +43,15 @@ export default function StatusBadge({
       label={label ?? humanize(value)}
       sx={(theme) => {
         const isDark = theme.palette.mode === 'dark';
+        // 11.6px/700 — the approved reference's own `.status-pill` size, not the theme's default
+        // (small) Chip font — applies to every status pill app-wide via this one shared component.
+        const base = { fontSize: '11.6px', fontWeight: 700, border: 'none', '& .MuiChip-icon': { color: 'inherit' } };
         if (colorKey === 'default') {
           const neutral = isDark ? theme.palette.text.secondary : theme.palette.text.secondary;
-          return {
-            bgcolor: isDark ? alpha('#e2e8f0', 0.08) : alpha('#64748b', 0.1),
-            color: neutral,
-            border: 'none',
-            '& .MuiChip-icon': { color: 'inherit' },
-          };
+          return { ...base, bgcolor: isDark ? alpha('#e2e8f0', 0.08) : alpha('#64748b', 0.1), color: neutral };
         }
         const main = theme.palette[colorKey].main;
-        return {
-          bgcolor: alpha(main, isDark ? 0.2 : 0.12),
-          color: isDark ? theme.palette[colorKey].light || main : main,
-          border: 'none',
-          '& .MuiChip-icon': { color: 'inherit' },
-        };
+        return { ...base, bgcolor: alpha(main, isDark ? 0.2 : 0.12), color: isDark ? theme.palette[colorKey].light || main : main };
       }}
     />
   );

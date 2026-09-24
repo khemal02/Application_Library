@@ -188,7 +188,7 @@ export default function FeatureRequestDetailPage() {
         </Stack>
       )}
       <Box sx={{ mb: 2 }}>
-        <Typography variant="h5" fontWeight={700}>{featureRequest.title}</Typography>
+        <Typography fontWeight={800} sx={{ fontSize: '24px' }}>{featureRequest.title}</Typography>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
           {featureRequest.changeRequest && (
             <Chip

@@ -15,7 +15,10 @@ import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { fetchUnreadCount } from '../../features/notifications/notificationsSlice';
 import { notificationsApi } from '../../services/domains';
 
-export default function NotificationPanel() {
+// `iconSx` lets a second instance (the sidebar footer's own bell, per the approved reference)
+// restyle just the trigger icon — muted blue-gray there instead of the topbar's default inherited
+// color — without forking a second copy of the fetch/menu/mark-read logic.
+export default function NotificationPanel({ iconSx }) {
   const dispatch = useAppDispatch();
   const unreadCount = useAppSelector((state) => state.notifications.unreadCount);
   const [anchorEl, setAnchorEl] = useState(null);
@@ -65,7 +68,7 @@ export default function NotificationPanel() {
     <>
       <IconButton color="inherit" aria-label="Notifications" onClick={openMenu}>
         <Badge badgeContent={unreadCount} color="error">
-          <NotificationsIcon />
+          <NotificationsIcon sx={iconSx} />
         </Badge>
       </IconButton>
       <Menu anchorEl={anchorEl} open={!!anchorEl} onClose={() => setAnchorEl(null)} PaperProps={{ sx: { width: 360 } }}>

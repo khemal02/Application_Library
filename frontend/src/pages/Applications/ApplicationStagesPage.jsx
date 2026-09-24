@@ -40,7 +40,7 @@ function ReadField({ label, value }) {
 function IdeaFieldAccordion({ label, value, defaultOpen }) {
   return (
     <AccordionSection title={label} defaultOpen={defaultOpen}>
-      <Typography variant="body1" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', textAlign: 'justify' }}>
+      <Typography sx={{ fontSize: '13.3px', color: '#374151', lineHeight: 1.65, whiteSpace: 'pre-wrap', textAlign: 'justify' }}>
         {value || '—'}
       </Typography>
     </AccordionSection>
@@ -139,8 +139,8 @@ export default function ApplicationStagesPage() {
           {origin.idea && (
             <Box sx={{ mb: 2 }}>
               <IdeaFieldAccordion label="Problem Statement" value={origin.idea.description} defaultOpen />
-              <IdeaFieldAccordion label="Proposed Solution" value={origin.idea.proposedSolution} />
-              <IdeaFieldAccordion label="Technologies" value={origin.idea.technologiesAndEfficiency} />
+              <IdeaFieldAccordion label="Proposed Solution" value={origin.idea.proposedSolution} defaultOpen />
+              <IdeaFieldAccordion label="Technologies" value={origin.idea.technologiesAndEfficiency} defaultOpen />
             </Box>
           )}
 

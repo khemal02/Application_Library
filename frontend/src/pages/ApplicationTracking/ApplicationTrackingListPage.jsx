@@ -14,6 +14,7 @@ import { ErrorBlock } from '../../components/common/AsyncState';
 import { applicationTrackingApi } from '../../services/domains';
 import { useAppSelector } from '../../app/hooks';
 import useBreadcrumbLabel from '../../hooks/useBreadcrumbLabel';
+import usePageMeta from '../../hooks/usePageMeta';
 import { STAGE_ORDER, STAGE_LABELS, deriveStatusChip } from '../../utils/applicationTrackStatus';
 
 // Muted, not hidden (per spec) — on_hold/cancelled rows stay fully visible and clickable, just
@@ -59,6 +60,7 @@ export default function ApplicationTrackingListPage() {
   const navigate = useNavigate();
   const user = useAppSelector((s) => s.auth.user);
   useBreadcrumbLabel('Application Tracking');
+  usePageMeta('Application Tracking', 'Where every build stands today.');
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
@@ -128,11 +130,7 @@ export default function ApplicationTrackingListPage() {
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" useFlexGap rowGap={1} sx={{ mb: 2 }}>
-        <Stack direction="row" alignItems="baseline" spacing={1}>
-          <Typography variant="h5" fontWeight={700}>Application Tracking</Typography>
-        </Stack>
-
+      <Stack direction="row" justifyContent="flex-end" alignItems="center" flexWrap="wrap" useFlexGap rowGap={1} sx={{ mb: 2 }}>
         <Stack direction="row" spacing={2} alignItems="center">
           <TextField
             select size="small" label="Stage" value={stageFilter}
@@ -162,6 +160,12 @@ export default function ApplicationTrackingListPage() {
           />
         </Stack>
       </Stack>
+
+      {pagination && (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+          {rows.length} of {pagination.totalItems} application{pagination.totalItems === 1 ? '' : 's'}
+        </Typography>
+      )}
 
       {error ? (
         <ErrorBlock message={error} onRetry={() => setPage((p) => p)} />

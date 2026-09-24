@@ -25,6 +25,7 @@ import useToast from '../../hooks/useToast';
 import usePermission from '../../routes/usePermission';
 import { applicationTrackingApi } from '../../services/domains';
 import useBreadcrumbLabel from '../../hooks/useBreadcrumbLabel';
+import usePageMeta from '../../hooks/usePageMeta';
 import MoveToBuildDialog from '../Ideas/MoveToBuildDialog';
 import { deriveStatusChip } from '../../utils/applicationTrackStatus';
 
@@ -107,6 +108,7 @@ export default function IdeaPrioritizationListPage() {
   const canMoveFeatureRequestsToBuild = usePermission('feature_requests', 'moveToBuild');
   const canManageAnyQueue = canMoveIdeasToBuild || canMoveFeatureRequestsToBuild;
   useBreadcrumbLabel('Idea Prioritization');
+  usePageMeta('Idea Prioritization', 'Set the build order for approved work.');
 
   const [queue, setQueue] = useState({ waiting: [], started: [] });
   const [loading, setLoading] = useState(true);
@@ -144,7 +146,6 @@ export default function IdeaPrioritizationListPage() {
 
   return (
     <Box>
-      <Typography variant="h5" fontWeight={700} sx={{ mb: 2 }}>Idea Prioritization</Typography>
 
       <TableContainer component={Paper} variant="outlined" sx={{ mb: 3 }}>
         <Table size="small">
@@ -283,10 +284,11 @@ export default function IdeaPrioritizationListPage() {
                     </Typography>
                   </TableCell>
                   <TableCell>
-                    {(() => {
-                      const chip = deriveStatusChip(item);
-                      return <StatusBadge color={chip.color} label={chip.label} />;
-                    })()}
+                    {/* Deliberately always neutral gray here, ignoring deriveStatusChip's own
+                        color bucket — color-coding by status is Application Tracking's own
+                        column's job (see applicationTrackStatus.js), not duplicated in this
+                        read-only "already underway" table. */}
+                    <StatusBadge color="default" label={deriveStatusChip(item).label} />
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2" color={item.owner?.name ? 'text.primary' : 'text.disabled'}>

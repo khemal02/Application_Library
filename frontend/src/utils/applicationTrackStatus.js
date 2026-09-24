@@ -15,21 +15,33 @@ function stageRow(track, stage) {
  * `status` is a lifecycle, not a duplicate of the stages (1b) — 'active' means "read the stages to
  * know where it's got to"; the other three override that entirely. Mirrors
  * changeRequestStatus.js#deriveStatusChip's shape.
+ *
+ * Label computation is unchanged; the COLOR is deliberately reduced to just three buckets per the
+ * approved design system — 'Live' is the only success/green, 'In Development' is the only
+ * warning/amber, and every other label (In Testing, Not started, Deployment completed, On hold,
+ * Cancelled, ...) is neutral gray. This used to color-code more finely (on_hold amber, any
+ * "in progress"/"completed" stage blue) — that's intentionally gone now, not a bug.
  */
-export function deriveStatusChip(track) {
-  if (track.status === 'on_hold') return { color: 'warning', label: 'On hold' };
-  if (track.status === 'cancelled') return { color: 'default', label: 'Cancelled' };
-  if (track.status === 'live') return { color: 'success', label: 'Live' };
+function deriveStatusLabel(track) {
+  if (track.status === 'on_hold') return 'On hold';
+  if (track.status === 'cancelled') return 'Cancelled';
+  if (track.status === 'live') return 'Live';
 
   const stages = STAGE_ORDER.map((s) => stageRow(track, s));
   const inProgress = stages.find((s) => s.status === 'in_progress');
-  if (inProgress) return { color: 'info', label: `In ${STAGE_LABELS[inProgress.stage]}` };
+  if (inProgress) return `In ${STAGE_LABELS[inProgress.stage]}`;
 
   const anyStarted = stages.some((s) => s.status !== 'not_started');
-  if (!anyStarted) return { color: 'default', label: 'Not started' };
+  if (!anyStarted) return 'Not started';
 
   const lastCompleted = [...STAGE_ORDER].reverse().find((s) => stageRow(track, s).status === 'complete');
-  return lastCompleted ? { color: 'info', label: `${STAGE_LABELS[lastCompleted]} completed` } : { color: 'default', label: 'Not started' };
+  return lastCompleted ? `${STAGE_LABELS[lastCompleted]} completed` : 'Not started';
+}
+
+export function deriveStatusChip(track) {
+  const label = deriveStatusLabel(track);
+  const color = label === 'Live' ? 'success' : label === 'In Development' ? 'warning' : 'default';
+  return { color, label };
 }
 
 /** The Stage column's text — named explicitly so the current stage never depends on color alone. */

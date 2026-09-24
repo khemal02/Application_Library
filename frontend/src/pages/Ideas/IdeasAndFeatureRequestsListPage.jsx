@@ -27,10 +27,11 @@ import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined';
 import { alpha } from '@mui/material/styles';
 import useToast from '../../hooks/useToast';
 import usePermission from '../../routes/usePermission';
+import usePageMeta from '../../hooks/usePageMeta';
 import { ideasApi, featureRequestsApi, departmentsApi } from '../../services/domains';
 import DataTable from '../../components/common/DataTable';
 import StatusBadge from '../../components/common/StatusBadge';
-import avatarColor from '../../utils/avatarColor';
+import initials from '../../utils/initials';
 import { IDEA_STATUS_OPTIONS, INDUSTRY_OPTIONS, FUNCTIONAL_AREA_OPTIONS, ideaStatusLabel } from '../../constants/options';
 import IdeaFormDialog from './IdeaFormDialog';
 import FeatureRequestFormDialog from './FeatureRequestFormDialog';
@@ -38,9 +39,12 @@ import MoveToBuildDialog from './MoveToBuildDialog';
 
 // Same blue/orange pairing used for the Type column's pill and each row's left accent border —
 // blue for a brand-new idea, orange for a feature request against an existing application.
+// idea's blue already equals the theme's own primary (#2563EB) — no separate token needed.
+// feature_request's orange is the approved reference's own distinct "feature-request accent"
+// token (#C2570C), not the old warning color it used to borrow before the navy/blue restyle.
 const TYPE_META = {
-  idea: { label: 'New Idea', color: '#2563eb', icon: LightbulbOutlinedIcon },
-  feature_request: { label: 'Feature Request', color: '#d97706', icon: BuildOutlinedIcon },
+  idea: { label: 'New Idea', color: '#2563EB', icon: LightbulbOutlinedIcon },
+  feature_request: { label: 'Feature Request', color: '#C2570C', icon: BuildOutlinedIcon },
 };
 
 function TypeBadge({ type }) {
@@ -51,7 +55,11 @@ function TypeBadge({ type }) {
       size="small"
       icon={<Icon fontSize="small" />}
       label={meta.label}
-      sx={{ bgcolor: alpha(meta.color, 0.12), color: meta.color, border: 'none', '& .MuiChip-icon': { color: 'inherit' } }}
+      sx={{
+        bgcolor: alpha(meta.color, 0.12), color: meta.color, border: 'none',
+        fontSize: '11.6px', fontWeight: 700,
+        '& .MuiChip-icon': { color: 'inherit' },
+      }}
     />
   );
 }
@@ -132,6 +140,7 @@ function BuildCell({ row, canAct, onOpen }) {
 export default function IdeasAndFeatureRequestsListPage() {
   const navigate = useNavigate();
   const { showSuccess, showError } = useToast();
+  usePageMeta('Ideas', 'New ideas and feature requests awaiting review.');
   // Real, independent RBAC checks — 'ideas' and 'feature_requests' are two distinct resources
   // (see ideas.routes.js / featureRequests.routes.js), even though every role seeded today happens
   // to hold both. A viewer who only has one sees only that one's button and rows.
@@ -156,7 +165,7 @@ export default function IdeasAndFeatureRequestsListPage() {
   const [filters, setFilters] = useState(initialFilters);
   const [sort, setSort] = useState({ field: 'createdAt', direction: 'desc' });
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(20);
+  const [limit, setLimit] = useState(10);
   const [allRows, setAllRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [departments, setDepartments] = useState([]);
@@ -323,8 +332,8 @@ export default function IdeasAndFeatureRequestsListPage() {
       label: 'Submitted By',
       render: (r) => (
         <Stack direction="row" spacing={1} alignItems="center">
-          <Avatar sx={{ width: 24, height: 24, fontSize: 12, bgcolor: avatarColor(r.submitter?.id || r.submitter?.name), color: '#fff' }}>
-            {r.submitter?.name?.[0] || '?'}
+          <Avatar sx={{ width: 24, height: 24, fontSize: '10.5px', fontWeight: 800, bgcolor: '#EAF2FE', color: '#1D4ED8' }}>
+            {initials(r.submitter?.name)}
           </Avatar>
           <Typography variant="body2">{r.submitter?.name || '—'}</Typography>
         </Stack>
@@ -365,37 +374,26 @@ export default function IdeasAndFeatureRequestsListPage() {
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" useFlexGap rowGap={1} sx={{ mb: 3 }}>
-        <Typography variant="h5" fontWeight={700}>Ideas</Typography>
-        {/* Both buttons reused exactly as they exist on their own original pages — same label,
-            same variant/icon, same onClick opening the same unmodified dialog — just relocated to
-            sit together here. */}
-        <Stack direction="row" spacing={1}>
-          {canSeeIdeas && (
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setIdeaFormOpen(true)} sx={{ borderRadius: 999 }}>Submit Idea</Button>
-          )}
-          {canSeeFeatureRequests && (
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setFeatureRequestFormOpen(true)} sx={{ borderRadius: 999 }}>Submit Feature Request</Button>
-          )}
-        </Stack>
-      </Stack>
-
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2.5} alignItems={{ sm: 'center' }} flexWrap="wrap" useFlexGap rowGap={2} sx={{ mb: 2.5 }}>
         <TextField
           size="small"
-          placeholder="Search ideas and feature requests..."
+          placeholder="Search here..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          sx={{ width: 320, flexShrink: 0 }}
+          sx={{
+            width: 220, flexShrink: 0,
+            '& .MuiInputBase-input': { fontSize: '13px', textOverflow: 'ellipsis' },
+          }}
           InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
         />
 
         <ToggleButtonGroup
           size="small" exclusive value={filters.type || ''} onChange={handleTypeChange}
           sx={{
-            bgcolor: 'action.hover', borderRadius: 999, p: 0.5, gap: 0.5,
+            bgcolor: '#EEF0F4', borderRadius: '9px', p: '3px', gap: '2px',
             '& .MuiToggleButtonGroup-grouped': {
-              border: 0, borderRadius: '999px !important', textTransform: 'none', px: 1.5,
+              border: 0, borderRadius: '7px !important', textTransform: 'none', px: 1.5,
+              fontSize: '12.3px', fontWeight: 700,
               '&.Mui-selected': { bgcolor: 'background.paper', boxShadow: 1, '&:hover': { bgcolor: 'background.paper' } },
             },
           }}
@@ -416,11 +414,22 @@ export default function IdeasAndFeatureRequestsListPage() {
             variant="outlined" size="small" color="inherit"
             startIcon={<FilterListIcon fontSize="small" />}
             onClick={(e) => setFiltersAnchor(e.currentTarget)}
-            sx={{ borderRadius: 999 }}
           >
             Filters
           </Button>
         </Badge>
+
+        {/* Both buttons reused exactly as they exist on their own original pages — same label,
+            same variant/icon, same onClick opening the same unmodified dialog — just relocated
+            onto the toolbar row, pushed to its far right. */}
+        <Stack direction="row" spacing={1} sx={{ ml: { sm: 'auto' } }}>
+          {canSeeIdeas && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setIdeaFormOpen(true)}>Submit Idea</Button>
+          )}
+          {canSeeFeatureRequests && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setFeatureRequestFormOpen(true)}>Submit Feature Request</Button>
+          )}
+        </Stack>
       </Stack>
 
       <Popover
@@ -492,7 +501,6 @@ export default function IdeasAndFeatureRequestsListPage() {
         onPageChange={setPage}
         onRowsPerPageChange={(n) => { setLimit(n); setPage(1); }}
         onRowClick={(row) => navigate(row._type === 'idea' ? `/ideas/${row.id}` : `/feature-requests/${row.id}`)}
-        rowAccentColor={(row) => TYPE_META[row._type]?.color}
         loading={loading}
         emptyMessage="Nothing submitted yet — be the first!"
       />

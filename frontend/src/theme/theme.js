@@ -10,7 +10,9 @@ export function getTheme(mode) {
   const isDark = mode === 'dark';
 
   const neutral = {
-    50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 300: '#cbd5e1',
+    // 200 is the approved reference's own card-border token (#E5E7EB), not the old slate-200 —
+    // every border/divider below reads off this one value, so it only needed changing here.
+    50: '#f8fafc', 100: '#f1f5f9', 200: '#E5E7EB', 300: '#cbd5e1',
     400: '#94a3b8', 500: '#64748b', 600: '#475569', 700: '#334155',
     800: '#1e293b', 900: '#0f172a',
   };
@@ -18,26 +20,43 @@ export function getTheme(mode) {
   const theme = createTheme({
     palette: {
       mode,
-      primary: { main: '#4f46e5', light: '#818cf8', dark: '#3730a3', contrastText: '#fff' },
+      // Navy/blue design system (approved reference, see design-reference/ — the reference file
+      // itself wasn't in the repo when this was applied, so these are the prompt's own written
+      // token values). primary.dark deliberately matches the approved role-pill text color
+      // (#1D4ED8) so the pill and every other "strong blue" reads as the same blue.
+      primary: { main: '#2563EB', light: '#3B82F6', dark: '#1D4ED8', contrastText: '#fff' },
       secondary: { main: '#0ea5e9', light: '#38bdf8', dark: '#0369a1', contrastText: '#fff' },
-      success: { main: '#059669' },
-      warning: { main: '#d97706' },
-      error: { main: '#dc2626' },
+      success: { main: '#16A34A' },
+      warning: { main: '#B45309' },
+      error: { main: '#DC2626' },
       info: { main: '#2563eb' },
+      // Not a semantic status color — used by exactly one place (Dashboard's "Total Applications"
+      // stat card, see DashboardPage.jsx) to stay visually distinct from "My Applications" right
+      // next to it, per the approved reference's own dedicated tile color for that one card.
+      violet: { main: '#7C3AED' },
+      // The approved reference's dedicated "feature-request" accent — the Ideas list's Feature
+      // Request badge/row-accent, and Dashboard's two "My Review" stat cards, both use this same
+      // token (not `warning`, a different amber it used to borrow before the navy/blue restyle).
+      orange: { main: '#C2570C' },
       divider: isDark ? alpha('#e2e8f0', 0.09) : neutral[200],
-      // Page background and card/Paper background were both pure white in light mode, so cards
-      // had no visible separation from the page behind them. Paper stays white; the page itself
-      // gets a light neutral gray so bordered/shadowed boxes actually read as boxes.
+      // Light mode's page background is pure white now, matching the SAR India Digital
+      // reference's own main content area (sampled directly from the screenshot — #FFFFFF, not a
+      // light gray) — only the sidebar stays navy. Cards still read as boxes via their own 1px
+      // border (MuiPaper's outlined override), not a background-color contrast against the page.
       background: isDark
         ? { default: '#0b0d13', paper: '#12151d' }
-        : { default: neutral[100], paper: '#ffffff' },
+        : { default: '#ffffff', paper: '#ffffff' },
       text: isDark
         ? { primary: '#e5e7eb', secondary: alpha('#e5e7eb', 0.62) }
-        : { primary: neutral[900], secondary: neutral[600] },
+        // secondary is the approved reference's own muted-text token, not neutral[600] — same
+        // reasoning as background.default above.
+        : { primary: neutral[900], secondary: '#6B7280' },
     },
     shape: { borderRadius: 10 },
     typography: {
-      fontFamily: ['Inter', 'Roboto', 'Segoe UI', 'sans-serif'].join(','),
+      // The approved reference's own body font stack, verbatim — it leads with "Segoe UI", not
+      // Inter (which the app used before this restyle).
+      fontFamily: ['"Segoe UI"', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'].join(','),
       h4: { fontWeight: 800, letterSpacing: -0.5 },
       h5: { fontWeight: 700, letterSpacing: -0.3 },
       h6: { fontWeight: 700 },
@@ -97,17 +116,23 @@ export function getTheme(mode) {
       },
       MuiButton: {
         styleOverrides: {
-          root: { textTransform: 'none', fontWeight: 600, borderRadius: 8, paddingInline: 16 },
+          // fontWeight 700 and 13px, not the default 600/14px — matches the reference's
+          // `.btn-blue`/`.btn-outline` exactly, and applies to every button app-wide.
+          root: {
+            textTransform: 'none', fontWeight: 700, fontSize: '0.8125rem', borderRadius: 9, paddingInline: 16,
+          },
           containedPrimary: {
-            boxShadow: `0 1px 2px ${alpha('#3730a3', 0.24)}`,
-            '&:hover': { boxShadow: `0 4px 12px ${alpha('#3730a3', 0.32)}` },
+            boxShadow: `0 1px 2px ${alpha('#1D4ED8', 0.24)}`,
+            '&:hover': { boxShadow: `0 4px 12px ${alpha('#1D4ED8', 0.32)}` },
           },
           outlined: { borderColor: isDark ? alpha('#e2e8f0', 0.18) : neutral[300] },
         },
       },
       MuiChip: {
         styleOverrides: {
-          root: { fontWeight: 600, borderRadius: 6 },
+          // 12px, not 6 — the approved reference's type/status pills read as genuinely rounded
+          // capsules, not just softened rectangles.
+          root: { fontWeight: 600, borderRadius: 12 },
         },
       },
       MuiAppBar: {
@@ -177,8 +202,8 @@ export function getTheme(mode) {
             marginInline: 8,
             width: 'auto',
             '&.Mui-selected': {
-              backgroundColor: alpha('#4f46e5', isDark ? 0.18 : 0.1),
-              '&:hover': { backgroundColor: alpha('#4f46e5', isDark ? 0.24 : 0.14) },
+              backgroundColor: alpha('#2563EB', isDark ? 0.18 : 0.1),
+              '&:hover': { backgroundColor: alpha('#2563EB', isDark ? 0.24 : 0.14) },
             },
           },
         },

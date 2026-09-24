@@ -74,7 +74,7 @@ function DocumentLinks({ url }) {
 function IdeaFieldAccordion({ label, value, defaultOpen }) {
   return (
     <AccordionSection title={label} defaultOpen={defaultOpen}>
-      <Typography variant="body1" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', textAlign: 'justify' }}>
+      <Typography sx={{ fontSize: '13.3px', color: '#374151', lineHeight: 1.65, whiteSpace: 'pre-wrap', textAlign: 'justify' }}>
         {value || '—'}
       </Typography>
     </AccordionSection>
@@ -718,8 +718,8 @@ export default function ApplicationTrackingDetailPage() {
       {track.idea && (
         <Box sx={{ mb: 2 }}>
           <IdeaFieldAccordion label="Problem Statement" value={track.idea.description} defaultOpen />
-          <IdeaFieldAccordion label="Proposed Solution" value={track.idea.proposedSolution} />
-          <IdeaFieldAccordion label="Technologies" value={track.idea.technologiesAndEfficiency} />
+          <IdeaFieldAccordion label="Proposed Solution" value={track.idea.proposedSolution} defaultOpen />
+          <IdeaFieldAccordion label="Technologies" value={track.idea.technologiesAndEfficiency} defaultOpen />
         </Box>
       )}
 

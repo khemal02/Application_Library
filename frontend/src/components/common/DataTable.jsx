@@ -16,7 +16,6 @@ import Typography from '@mui/material/Typography';
  */
 export default function DataTable({
   columns, rows, pagination, onPageChange, onRowsPerPageChange, onRowClick, loading, emptyMessage = 'No records found',
-  rowAccentColor,
 }) {
   return (
     <Paper variant="outlined" sx={{ width: '100%', overflow: 'hidden' }}>
@@ -29,8 +28,11 @@ export default function DataTable({
                 <TableCell
                   key={col.key}
                   sx={{
-                    fontWeight: 700, whiteSpace: 'nowrap', textTransform: 'uppercase',
-                    letterSpacing: '0.06em', fontSize: '0.72rem', color: 'text.disabled',
+                    fontWeight: 600, whiteSpace: 'nowrap', textTransform: 'uppercase',
+                    letterSpacing: '0.05em', fontSize: '0.75rem', color: 'text.disabled',
+                    // 14px 14px — matches the People Directory reference's own header row, sampled
+                    // pixel-for-pixel: noticeably roomier than MUI's dense default.
+                    padding: '14px 14px',
                   }}
                 >
                   {col.label}
@@ -48,33 +50,33 @@ export default function DataTable({
                 </TableCell>
               </TableRow>
             )}
-            {rows.map((row) => {
-              const accent = rowAccentColor?.(row);
-              return (
-                <TableRow
-                  key={row.id}
-                  hover={!!onRowClick}
-                  onClick={() => onRowClick?.(row)}
-                  tabIndex={onRowClick ? 0 : undefined}
-                  role={onRowClick ? 'button' : undefined}
-                  onKeyDown={onRowClick ? (e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      onRowClick(row);
-                    }
-                  } : undefined}
-                  sx={{
-                    cursor: onRowClick ? 'pointer' : 'default',
-                    ...(accent ? { borderLeft: 3, borderLeftColor: accent, borderLeftStyle: 'solid' } : {}),
-                    ...(onRowClick ? { '&:focus-visible': { outline: '2px solid', outlineOffset: '-2px', outlineColor: 'primary.main' } } : {}),
-                  }}
-                >
-                  {columns.map((col) => (
-                    <TableCell key={col.key}>{col.render ? col.render(row) : row[col.key]}</TableCell>
-                  ))}
-                </TableRow>
-              );
-            })}
+            {rows.map((row) => (
+              <TableRow
+                key={row.id}
+                hover={!!onRowClick}
+                onClick={() => onRowClick?.(row)}
+                tabIndex={onRowClick ? 0 : undefined}
+                role={onRowClick ? 'button' : undefined}
+                onKeyDown={onRowClick ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onRowClick(row);
+                  }
+                } : undefined}
+                sx={{
+                  cursor: onRowClick ? 'pointer' : 'default',
+                  ...(onRowClick ? { '&:focus-visible': { outline: '2px solid', outlineOffset: '-2px', outlineColor: 'primary.main' } } : {}),
+                }}
+              >
+                {columns.map((col) => (
+                  // 16px 14px / 14px text — matches the People Directory reference's own row
+                  // spacing and type size (sampled pixel-for-pixel), not the small-table default.
+                  <TableCell key={col.key} sx={{ padding: '16px 14px', fontSize: '14px' }}>
+                    {col.render ? col.render(row) : row[col.key]}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
           </TableBody>
         </Table>
       </TableContainer>

@@ -195,7 +195,7 @@ export default function UsersPage() {
           { key: 'roleId', label: 'Role', options: roles.map((r) => ({ value: r.id, label: r.label })) },
           { key: 'departmentId', label: 'Department', options: departments.map((d) => ({ value: d.id, label: d.name })) },
         ]}
-        searchPlaceholder="Search users..."
+        searchPlaceholder="Search here..."
       />
 
       <DataTable
