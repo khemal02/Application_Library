@@ -28,6 +28,28 @@ import useBreadcrumbLabel from '../../hooks/useBreadcrumbLabel';
 import usePageMeta from '../../hooks/usePageMeta';
 import MoveToBuildDialog from '../Ideas/MoveToBuildDialog';
 import { deriveStatusChip } from '../../utils/applicationTrackStatus';
+import initials from '../../utils/initials';
+
+// Matches DataTable.jsx's own header/row styling exactly (see its own comments) — this page can't
+// use that shared component (drag-and-drop reorder, per-row action buttons, two separate tables),
+// so its hand-rolled Table/TableCell markup carries the same look by hand instead.
+const HEAD_CELL_SX = {
+  fontWeight: 600, whiteSpace: 'nowrap', textTransform: 'uppercase',
+  letterSpacing: '0.05em', fontSize: '0.75rem', color: 'text.disabled', padding: '14px 14px',
+};
+const BODY_CELL_SX = { padding: '16px 14px', fontSize: '14px' };
+
+function PersonCell({ name }) {
+  if (!name) return <Typography variant="body2" color="text.disabled">—</Typography>;
+  return (
+    <Stack direction="row" spacing={1} alignItems="center">
+      <Avatar sx={{ width: 24, height: 24, fontSize: '10.5px', fontWeight: 800, bgcolor: '#EAF2FE', color: '#1D4ED8' }}>
+        {initials(name)}
+      </Avatar>
+      <Typography variant="body2">{name}</Typography>
+    </Stack>
+  );
+}
 
 /**
  * Computes the two queue items that should end up immediately before/after a moved item, given its
@@ -151,11 +173,11 @@ export default function IdeaPrioritizationListPage() {
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell sx={{ fontWeight: 700 }}>Order</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Idea / Feature Request</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Submitted By</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Department</TableCell>
-              {canManageAnyQueue && <TableCell sx={{ fontWeight: 700 }} align="right">Actions</TableCell>}
+              <TableCell sx={HEAD_CELL_SX}>Order</TableCell>
+              <TableCell sx={HEAD_CELL_SX}>Idea / Feature Request</TableCell>
+              <TableCell sx={HEAD_CELL_SX}>Submitted By</TableCell>
+              <TableCell sx={HEAD_CELL_SX}>Department</TableCell>
+              {canManageAnyQueue && <TableCell sx={HEAD_CELL_SX} align="right">Actions</TableCell>}
             </TableRow>
           </TableHead>
           <TableBody>
@@ -184,25 +206,23 @@ export default function IdeaPrioritizationListPage() {
                   }}
                   sx={{ opacity: dragIndex === index ? 0.4 : 1, cursor: canManage ? 'grab' : 'default' }}
                 >
-                  <TableCell>
+                  <TableCell sx={BODY_CELL_SX}>
                     <Stack direction="row" alignItems="center" spacing={0.5}>
                       {canManage && <DragIndicatorIcon fontSize="small" color="disabled" />}
                       <OrderBadge>{index + 1}</OrderBadge>
                     </Stack>
                   </TableCell>
-                  <TableCell><ItemCell item={item} /></TableCell>
-                  <TableCell>
-                    <Typography variant="body2" color={item.submitter?.name ? 'text.primary' : 'text.disabled'}>
-                      {item.submitter?.name || '—'}
-                    </Typography>
+                  <TableCell sx={BODY_CELL_SX}><ItemCell item={item} /></TableCell>
+                  <TableCell sx={BODY_CELL_SX}>
+                    <PersonCell name={item.submitter?.name} />
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={BODY_CELL_SX}>
                     <Typography variant="body2" color={item.department?.name ? 'text.primary' : 'text.disabled'}>
                       {item.department?.name || '—'}
                     </Typography>
                   </TableCell>
                   {canManageAnyQueue && (
-                    <TableCell align="right">
+                    <TableCell sx={BODY_CELL_SX} align="right">
                       {canManage ? (
                         <Stack direction="row" spacing={0.5} justifyContent="flex-end" alignItems="center">
                           <Tooltip title="Move up">
@@ -249,12 +269,12 @@ export default function IdeaPrioritizationListPage() {
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell sx={{ fontWeight: 700 }}>Order</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Idea / Feature Request</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Submitted By</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Department</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Owner</TableCell>
+              <TableCell sx={HEAD_CELL_SX}>Order</TableCell>
+              <TableCell sx={HEAD_CELL_SX}>Idea / Feature Request</TableCell>
+              <TableCell sx={HEAD_CELL_SX}>Submitted By</TableCell>
+              <TableCell sx={HEAD_CELL_SX}>Department</TableCell>
+              <TableCell sx={HEAD_CELL_SX}>Status</TableCell>
+              <TableCell sx={HEAD_CELL_SX}>Owner</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -271,29 +291,25 @@ export default function IdeaPrioritizationListPage() {
               const isMuted = item.status === 'on_hold' || item.status === 'cancelled';
               return (
                 <TableRow key={`${item.itemType}:${item.id}`} sx={{ opacity: isMuted ? 0.55 : 1 }}>
-                  <TableCell><OrderBadge muted>—</OrderBadge></TableCell>
-                  <TableCell><ItemCell item={item} /></TableCell>
-                  <TableCell>
-                    <Typography variant="body2" color={item.submitter?.name ? 'text.primary' : 'text.disabled'}>
-                      {item.submitter?.name || '—'}
-                    </Typography>
+                  <TableCell sx={BODY_CELL_SX}><OrderBadge muted>—</OrderBadge></TableCell>
+                  <TableCell sx={BODY_CELL_SX}><ItemCell item={item} /></TableCell>
+                  <TableCell sx={BODY_CELL_SX}>
+                    <PersonCell name={item.submitter?.name} />
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={BODY_CELL_SX}>
                     <Typography variant="body2" color={item.department?.name ? 'text.primary' : 'text.disabled'}>
                       {item.department?.name || '—'}
                     </Typography>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={BODY_CELL_SX}>
                     {/* Deliberately always neutral gray here, ignoring deriveStatusChip's own
                         color bucket — color-coding by status is Application Tracking's own
                         column's job (see applicationTrackStatus.js), not duplicated in this
                         read-only "already underway" table. */}
                     <StatusBadge color="default" label={deriveStatusChip(item).label} />
                   </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" color={item.owner?.name ? 'text.primary' : 'text.disabled'}>
-                      {item.owner?.name || '—'}
-                    </Typography>
+                  <TableCell sx={BODY_CELL_SX}>
+                    <PersonCell name={item.owner?.name} />
                   </TableCell>
                 </TableRow>
               );

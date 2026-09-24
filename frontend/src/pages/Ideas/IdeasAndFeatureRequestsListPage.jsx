@@ -10,7 +10,6 @@ import Badge from '@mui/material/Badge';
 import Popover from '@mui/material/Popover';
 import Divider from '@mui/material/Divider';
 import TextField from '@mui/material/TextField';
-import MenuItem from '@mui/material/MenuItem';
 import InputAdornment from '@mui/material/InputAdornment';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import ToggleButton from '@mui/material/ToggleButton';
@@ -30,6 +29,7 @@ import usePermission from '../../routes/usePermission';
 import usePageMeta from '../../hooks/usePageMeta';
 import { ideasApi, featureRequestsApi, departmentsApi } from '../../services/domains';
 import DataTable from '../../components/common/DataTable';
+import FilterPopoverField from '../../components/common/FilterPopoverField';
 import StatusBadge from '../../components/common/StatusBadge';
 import initials from '../../utils/initials';
 import { IDEA_STATUS_OPTIONS, INDUSTRY_OPTIONS, FUNCTIONAL_AREA_OPTIONS, ideaStatusLabel } from '../../constants/options';
@@ -441,34 +441,26 @@ export default function IdeasAndFeatureRequestsListPage() {
         <Box sx={{ p: 2, width: 280 }}>
           <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>Filters</Typography>
           <Stack spacing={1.5}>
-            <TextField
-              select fullWidth size="small" label="Department"
-              value={filters.departmentId ?? ''} onChange={(e) => handleFilterChange('departmentId', e.target.value)}
-            >
-              <MenuItem value="">All</MenuItem>
-              {departments.map((d) => <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>)}
-            </TextField>
-            <TextField
-              select fullWidth size="small" label="Industry"
-              value={filters.industry ?? ''} onChange={(e) => handleFilterChange('industry', e.target.value)}
-            >
-              <MenuItem value="">All</MenuItem>
-              {INDUSTRY_OPTIONS.map((o) => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
-            </TextField>
-            <TextField
-              select fullWidth size="small" label="Functional Area"
-              value={filters.functionalArea ?? ''} onChange={(e) => handleFilterChange('functionalArea', e.target.value)}
-            >
-              <MenuItem value="">All</MenuItem>
-              {FUNCTIONAL_AREA_OPTIONS.map((o) => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
-            </TextField>
-            <TextField
-              select fullWidth size="small" label="Status"
-              value={filters.status ?? ''} onChange={(e) => handleFilterChange('status', e.target.value)}
-            >
-              <MenuItem value="">All</MenuItem>
-              {IDEA_STATUS_OPTIONS.map((o) => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
-            </TextField>
+            <FilterPopoverField
+              label="Department" allLabel="All departments"
+              value={filters.departmentId} onChange={(v) => handleFilterChange('departmentId', v)}
+              options={departments.map((d) => ({ value: d.id, label: d.name }))}
+            />
+            <FilterPopoverField
+              label="Industry" allLabel="All industries"
+              value={filters.industry} onChange={(v) => handleFilterChange('industry', v)}
+              options={INDUSTRY_OPTIONS}
+            />
+            <FilterPopoverField
+              label="Functional Area" allLabel="All functional areas"
+              value={filters.functionalArea} onChange={(v) => handleFilterChange('functionalArea', v)}
+              options={FUNCTIONAL_AREA_OPTIONS}
+            />
+            <FilterPopoverField
+              label="Status" allLabel="All statuses"
+              value={filters.status} onChange={(v) => handleFilterChange('status', v)}
+              options={IDEA_STATUS_OPTIONS}
+            />
             <FormControlLabel
               control={(
                 <Switch

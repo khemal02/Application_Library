@@ -125,7 +125,7 @@ export default function ApplicationStagesPage() {
           Owner by, <Typography component="span" variant="body2" fontWeight={700} color="text.primary">{application.owner?.name || '—'}</Typography>
         </Typography>
       </Stack>
-      <Typography variant="h5" fontWeight={700} sx={{ mb: 2, mt: 1 }}>{application.name}</Typography>
+      <Typography fontWeight={800} sx={{ fontSize: '24px', mb: 2, mt: 1 }}>{application.name}</Typography>
 
       {!origin ? (
         <Paper variant="outlined" sx={{ p: 3, textAlign: 'center' }}>

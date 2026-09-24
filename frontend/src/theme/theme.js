@@ -174,10 +174,9 @@ export function getTheme(mode) {
       },
       MuiTablePagination: {
         styleOverrides: {
-          root: {
-            backgroundColor: isDark ? alpha('#e2e8f0', 0.03) : neutral[50],
-            borderTop: `1px solid ${isDark ? alpha('#e2e8f0', 0.09) : neutral[200]}`,
-          },
+          // DataTable.jsx renders this below its own bordered table card now, not as the card's
+          // last row — plain background, no border, so it reads as the table's control strip
+          // rather than a second card stacked underneath.
           toolbar: {
             minHeight: 40,
             paddingTop: 2,

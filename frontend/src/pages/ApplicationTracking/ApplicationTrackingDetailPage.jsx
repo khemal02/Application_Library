@@ -688,7 +688,7 @@ export default function ApplicationTrackingDetailPage() {
       <Box sx={{ mt: 1, mb: 2 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" useFlexGap rowGap={1}>
           <Stack direction="row" alignItems="center" spacing={1}>
-            <Typography variant="h5" fontWeight={700}>{track.name}</Typography>
+            <Typography fontWeight={800} sx={{ fontSize: '24px' }}>{track.name}</Typography>
           </Stack>
           <Stack direction="row" alignItems="center" spacing={1}>
             <StatusBadge color={chip.color} label={chip.label} />

@@ -619,7 +619,7 @@ export default function ChangeRequestDetailPage() {
 
       <Paper variant="outlined" sx={{ p: 2, mt: 1, mb: 2 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" useFlexGap rowGap={1}>
-          <Typography variant="h5" fontWeight={700}>{data.title}</Typography>
+          <Typography fontWeight={800} sx={{ fontSize: '24px' }}>{data.title}</Typography>
           <Stack direction="row" alignItems="center" spacing={1}>
             <StatusBadge color={chip.color} label={chip.label} />
             {readyToImplement && isOwnerOrSuper && (

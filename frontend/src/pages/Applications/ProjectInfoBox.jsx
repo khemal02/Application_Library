@@ -44,13 +44,12 @@ export default function ProjectInfoBox({ application }) {
         '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: '-2px' },
       }}
     >
-      <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" useFlexGap rowGap={1} sx={{ mb: 3 }}>
-        <Typography variant="h6" fontWeight={700} color="text.primary">
-          {application.name}
-        </Typography>
+      <Stack direction="row" justifyContent="flex-end" alignItems="center" sx={{ mb: 3 }}>
         {/* Just the current status, not the whole Development -> Testing -> Live journey — by the
             time an app is registered here (almost always via Application Tracking's go-live step),
-            it's already live; showing the full stepper implied it was still mid-rollout. */}
+            it's already live; showing the full stepper implied it was still mid-rollout. The
+            application's name itself is now the page's own title above (ApplicationDetailPage),
+            not repeated here. */}
         <StatusBadge value={application.status} label={applicationStatusLabel(application.status)} />
       </Stack>
 

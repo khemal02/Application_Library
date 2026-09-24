@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
+import Avatar from '@mui/material/Avatar';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
 import FormControlLabel from '@mui/material/FormControlLabel';
@@ -16,6 +17,7 @@ import { useAppSelector } from '../../app/hooks';
 import useBreadcrumbLabel from '../../hooks/useBreadcrumbLabel';
 import usePageMeta from '../../hooks/usePageMeta';
 import { STAGE_ORDER, STAGE_LABELS, deriveStatusChip } from '../../utils/applicationTrackStatus';
+import initials from '../../utils/initials';
 
 // Muted, not hidden (per spec) — on_hold/cancelled rows stay fully visible and clickable, just
 // visually de-emphasized against active/live ones.
@@ -90,9 +92,19 @@ export default function ApplicationTrackingListPage() {
     {
       key: 'owner',
       label: 'Owner',
+      // Same avatar + name treatment as the Ideas module's own "Submitted By" column.
       render: (t) => (
         <MutedCell track={t}>
-          <Typography variant="body2" color={t.owner?.name ? 'text.primary' : 'text.disabled'}>{t.owner?.name || '—'}</Typography>
+          {t.owner?.name ? (
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Avatar sx={{ width: 24, height: 24, fontSize: '10.5px', fontWeight: 800, bgcolor: '#EAF2FE', color: '#1D4ED8' }}>
+                {initials(t.owner.name)}
+              </Avatar>
+              <Typography variant="body2">{t.owner.name}</Typography>
+            </Stack>
+          ) : (
+            <Typography variant="body2" color="text.disabled">—</Typography>
+          )}
         </MutedCell>
       ),
     },
