@@ -4,7 +4,7 @@ import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import { applicationsApi } from '../../services/domains';
 import useResource from '../../hooks/useResource';
-import useBreadcrumbLabel from '../../hooks/useBreadcrumbLabel';
+import usePageMeta from '../../hooks/usePageMeta';
 import { LoadingBlock, ErrorBlock } from '../../components/common/AsyncState';
 import ProjectInfoBox from './ProjectInfoBox';
 import ChangeRequestsTab from './tabs/ChangeRequestsTab';
@@ -13,9 +13,11 @@ import BackButton from '../../components/common/BackButton';
 
 export default function ApplicationDetailPage() {
   const { id } = useParams();
+  // Same title/subtitle as the Applications list page — the topbar shouldn't go blank just
+  // because the viewer navigated from the list into one specific application.
+  usePageMeta('Applications', 'Every live and in-progress application.');
 
   const { data: application, loading, error, reload } = useResource(() => applicationsApi.getById(id), [id]);
-  useBreadcrumbLabel(application?.name);
 
   if (loading) return <LoadingBlock />;
   if (error) return <ErrorBlock message={error} onRetry={reload} />;
@@ -35,9 +37,10 @@ export default function ApplicationDetailPage() {
 
       <ChangeRequestsTab applicationId={id} />
 
-      {/* Plain Box, same reasoning as the Change Requests wrapper above — IssuesCard.jsx already
-          has its own bordered rows and shouldn't be wrapped in a second bordered/shadowed shell. */}
-      <Box sx={{ p: 2, mt: 2 }}>
+      {/* IssuesCard.jsx now renders its own bordered card (matching ChangeRequestsCard.jsx's own
+          chrome exactly), so it just needs the same top margin as that gives itself — no extra
+          wrapper. */}
+      <Box sx={{ mt: 2 }}>
         <IssuesCard applicationId={id} applicationOwnerId={application.ownerId} />
       </Box>
     </Box>

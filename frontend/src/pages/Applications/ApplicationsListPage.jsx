@@ -115,6 +115,8 @@ export default function ApplicationsListPage() {
         anchorEl={filtersAnchor}
         onClose={() => setFiltersAnchor(null)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+        PaperProps={{ sx: { mt: 0.5 } }}
       >
         <Box sx={{ p: 2, width: 280 }}>
           <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>Filters</Typography>

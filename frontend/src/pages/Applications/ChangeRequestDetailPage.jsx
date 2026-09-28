@@ -11,7 +11,6 @@ import MenuItem from '@mui/material/MenuItem';
 import Grid from '@mui/material/Grid';
 import Alert from '@mui/material/Alert';
 import CircularProgress from '@mui/material/CircularProgress';
-import Tooltip from '@mui/material/Tooltip';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
@@ -23,7 +22,7 @@ import dayjs from 'dayjs';
 import { changeRequestsApi, attachmentsApi } from '../../services/domains';
 import { useAppSelector } from '../../app/hooks';
 import useResource from '../../hooks/useResource';
-import useBreadcrumbLabel from '../../hooks/useBreadcrumbLabel';
+import usePageMeta from '../../hooks/usePageMeta';
 import useToast from '../../hooks/useToast';
 import usePermission from '../../routes/usePermission';
 import { LoadingBlock, ErrorBlock } from '../../components/common/AsyncState';
@@ -187,10 +186,6 @@ function StageCard({
 }) {
   const isComplete = stageData.status === 'complete';
   const isInProgress = stageData.status === 'in_progress';
-  // Owner/super-admin only — planning Started is the owner's job (the same person who names the
-  // assignee), not the assignee's own to edit. A completed stage locks it back down to a
-  // historical record (canAssign already excludes complete stages).
-  const datesEditable = canAssign;
   // `canAct` (assignee-or-super, NO owner) — narrower than `canWriteNotes` (owner/assignee/super,
   // Notes' own deliberately broader rule). The document is the assignee's own deliverable to
   // attach, only meaningful once work is actually under way — the owner doesn't get a pass here
@@ -201,14 +196,9 @@ function StageCard({
   const [uploadError, setUploadError] = useState('');
   const fileInputRef = useRef(null);
 
-  const [startDraft, setStartDraft] = useState(stageData.startDate || '');
   const [assigneeDraft, setAssigneeDraft] = useState(stageData.assigneeId || '');
-  useEffect(() => {
-    setStartDraft(stageData.startDate || '');
-  }, [stageData.startDate]);
-  // Deliberately its own effect, not folded into the one above — an unconfirmed assignee pick
-  // must never get wiped out by an unrelated reload. This one only resyncs when the stage's
-  // STORED assigneeId itself changes (i.e. after a real commit, or someone else's edit).
+  // Resyncs when the stage's STORED assigneeId itself changes (i.e. after a real commit, or
+  // someone else's edit coming in via reload).
   useEffect(() => {
     setAssigneeDraft(stageData.assigneeId || '');
   }, [stageData.assigneeId]);
@@ -219,30 +209,23 @@ function StageCard({
     ? candidates
     : [{ id: stageData.assigneeId, name: stageData.assignee?.name, roleLabel: null }, ...candidates];
 
-  // "Assignee" only enables once both fields it commits are filled in — name AND Started.
-  // Picking "Unassigned" keeps it disabled too, same as leaving the name blank — no exception for
-  // clearing an existing assignment through this button.
-  const needsDateFirst = !!assigneeDraft && !startDraft;
-  const assigneeDirty = canAssign && !!assigneeDraft && !!startDraft;
+  const assigneeDirty = canAssign && !!assigneeDraft;
   const confirmAssign = async () => {
     setAssigning(true);
     try {
-      // Carries the draft date along with the assignment — this is the only way the owner's
-      // Started date ever gets persisted, there's no separate Save for it.
-      await onAssign({
-        assigneeId: assigneeDraft || null,
-        ...(assigneeDraft && datesEditable ? { startDate: startDraft || null } : {}),
-      });
+      // No Started date here any more — naming someone doesn't plan a date, it just says who's on
+      // it. The date is set automatically, the moment that person actually clicks "Start
+      // {stage}" (see updateStage's own in_progress default), not chosen by the owner up front.
+      await onAssign({ assigneeId: assigneeDraft || null });
     } finally {
       setAssigning(false);
     }
   };
 
-  // A planned date is the owner's own draft of a stage nobody's picked up yet — showing it to
-  // every viewer before anyone's actually assigned made an unassigned stage look like it already
-  // had a start in motion. The owner still sees their own plan; everyone else sees "—" for these
-  // fields until the stage genuinely has an assignee.
-  const datesVisible = !!stageData.assigneeId || canAssign;
+  // A stage nobody's picked up yet shouldn't look like it already has a start in motion —
+  // everyone sees "—" for Started/Finished/Document link until the stage genuinely has an
+  // assignee.
+  const datesVisible = !!stageData.assigneeId;
 
   const handleDocumentUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -302,19 +285,14 @@ function StageCard({
               ))}
             </TextField>
           ) : (
-            <ReadField label="Assigned to" value={stageData.assignee?.name} />
+            <ReadField label="Assignee" value={stageData.assignee?.name} />
           )}
         </Grid>
         <Grid item xs={6} sm={3}>
-          {datesEditable ? (
-            <TextField
-              fullWidth size="small" label="Started" type="date" InputLabelProps={{ shrink: true }}
-              value={startDraft} disabled={submitting || assigning}
-              onChange={(e) => setStartDraft(e.target.value)}
-            />
-          ) : (
-            <ReadField label="Started" value={datesVisible ? formatDate(stageData.startDate) : null} />
-          )}
+          {/* Always read-only, for everyone, including the owner — Started is never chosen by
+              hand any more. It's set automatically, the instant the assignee themselves clicks
+              "Start {stage}", so it reads "—" until then, exactly like Finished does. */}
+          <ReadField label="Started" value={datesVisible ? formatDate(stageData.startDate) : null} />
         </Grid>
         <Grid item xs={6} sm={3}>
           <ReadField label="Finished" value={datesVisible ? formatDate(stageData.endDate) : null} />
@@ -392,13 +370,9 @@ function StageCard({
                 </Button>
               )}
               {canAssign && (
-                <Tooltip title={needsDateFirst ? 'Set Started before assigning someone.' : ''}>
-                  <span>
-                    <Button variant="contained" disabled={assigning || !assigneeDirty || needsDateFirst} onClick={confirmAssign}>
-                      Assignee
-                    </Button>
-                  </span>
-                </Tooltip>
+                <Button variant="contained" disabled={assigning || !assigneeDirty} onClick={confirmAssign}>
+                  Assignee
+                </Button>
               )}
               {/* Warning-toned, deliberately not primary — this is the one place a stage can move
                   backward, and it must never be confusable with the forward Move/Mark-complete
@@ -433,6 +407,9 @@ function StageCard({
 
 export default function ChangeRequestDetailPage() {
   const { applicationId, changeRequestId } = useParams();
+  // Same title/subtitle as the Applications list page — the topbar shouldn't go blank just
+  // because the viewer navigated into a specific application's change request.
+  usePageMeta('Applications', 'Every live and in-progress application.');
   const user = useAppSelector((s) => s.auth.user);
   const isSuperAdmin = usePermission('*', 'manage');
   const { showSuccess, showError } = useToast();
@@ -448,9 +425,6 @@ export default function ChangeRequestDetailPage() {
   const [confirmingImplement, setConfirmingImplement] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
   const [history, setHistory] = useState([]);
-
-  useBreadcrumbLabel(data?.application?.name, `/applications/${applicationId}`);
-  useBreadcrumbLabel(data?.title);
 
   useEffect(() => {
     changeRequestsApi.assigneeCandidates(applicationId, changeRequestId)

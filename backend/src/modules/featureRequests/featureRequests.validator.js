@@ -56,11 +56,11 @@ const panelCandidatesQuery = Joi.object({
   kind: Joi.string().valid('reviewer', 'approver').required(),
 });
 
-// PATCH /:id/move-to-build — see featureRequests.service.js#moveToBuild. Who may reach this at
-// all is the route's own `feature_requests:moveToBuild` permission gate; Joi only owns the shape.
-const moveToBuild = Joi.object({
-  assigneeId: Joi.string().uuid().required(),
-});
+// PATCH /:id/move-to-build — see featureRequests.service.js#moveToBuild. No body: it just starts
+// Development unassigned — the change request's owner assigns who's doing it afterward via
+// Application Tracking's own per-stage Assignee control. Who may reach this at all is the route's
+// own `feature_requests:moveToBuild` permission gate; Joi only owns the shape.
+const moveToBuild = Joi.object({});
 
 module.exports = {
   create, update, submitReview, addParticipants, panelCandidatesQuery, moveToBuild,

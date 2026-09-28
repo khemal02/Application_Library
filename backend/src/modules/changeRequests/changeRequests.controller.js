@@ -2,6 +2,11 @@ const { createCrudController } = require('../../utils/controllerFactory');
 const asyncHandler = require('../../utils/asyncHandler');
 const ApiResponse = require('../../utils/ApiResponse');
 const service = require('./changeRequests.service');
+// Imported here, not in changeRequests.service.js itself — applicationTracking.service.js already
+// imports changeRequests.service.js (reuses its assigneeCandidates()), so importing it back the
+// other way from there would be a circular service-to-service require. The controller layer sits
+// above both, so merging their two result sets here is safe.
+const applicationTrackingService = require('../applicationTracking/applicationTracking.service');
 
 module.exports = {
   ...createCrudController(service, { entityName: 'Change request' }),
@@ -55,9 +60,16 @@ module.exports = {
   }),
 
   // GET /change-requests/my-stages?stage=development — top-level, not under one application; see
-  // changeRequests.service.js#myAssignedStages for why.
+  // changeRequests.service.js#myAssignedStages for why. Merges in the idea-track half too (see
+  // applicationTrackingService.myAssignedStages's own docstring) — a Dashboard tile's count
+  // (dashboard.service.js#getSummary) already covers both, so the list it links into must show
+  // both as well, not just the change-request slice of it.
   myAssignedStages: asyncHandler(async (req, res) => {
-    const rows = await service.myAssignedStages(req.user.id, req.query.stage);
+    const [changeRequestRows, trackRows] = await Promise.all([
+      service.myAssignedStages(req.user.id, req.query.stage),
+      applicationTrackingService.myAssignedStages(req.user.id, req.query.stage),
+    ]);
+    const rows = [...changeRequestRows, ...trackRows].sort((a, b) => new Date(a.startDate || 0) - new Date(b.startDate || 0));
     return ApiResponse.success(res, rows);
   }),
 };

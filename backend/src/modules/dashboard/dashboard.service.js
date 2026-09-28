@@ -3,13 +3,14 @@ const { Application, Idea, FeatureRequest } = require('../../models');
 const ideasService = require('../ideas/ideas.service');
 const featureRequestsService = require('../featureRequests/featureRequests.service');
 const changeRequestsService = require('../changeRequests/changeRequests.service');
+const applicationTrackingService = require('../applicationTracking/applicationTracking.service');
 
 async function getSummary(userId) {
   const [
     totalApplications, myApplications, inProgressApplications, completedApplications,
     pendingIdeas, approvedIdeas,
     pendingFeatureRequests, approvedFeatureRequests,
-    myIdeaCounts, myFeatureRequestCounts, myStageCounts,
+    myIdeaCounts, myFeatureRequestCounts, myChangeRequestStageCounts, myTrackStageCounts,
   ] = await Promise.all([
     Application.count(),
     Application.count({ where: { ownerId: userId } }),
@@ -28,10 +29,18 @@ async function getSummary(userId) {
     ideasService.myPendingCounts(userId),
     featureRequestsService.myPendingCounts(userId),
     // "My Development" / "My Testing" / "My Deployment" — stages assigned to the caller across
-    // every application, still waiting on their action. See
-    // changeRequests.service.js#myStageCounts.
+    // every application, still waiting on their action. Two sources, both counted: a feature
+    // request's own change request (changeRequests.service.js#myStageCounts) AND an approved
+    // idea's own track (applicationTracking.service.js#myStageCounts) — a tile's number used to
+    // only ever count the former, silently missing every idea-sourced assignment.
     changeRequestsService.myStageCounts(userId),
+    applicationTrackingService.myStageCounts(userId),
   ]);
+  const myStageCounts = {
+    development: myChangeRequestStageCounts.development + myTrackStageCounts.development,
+    testing: myChangeRequestStageCounts.testing + myTrackStageCounts.testing,
+    deployment: myChangeRequestStageCounts.deployment + myTrackStageCounts.deployment,
+  };
 
   return {
     stats: {

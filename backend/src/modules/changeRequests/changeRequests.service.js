@@ -417,15 +417,6 @@ async function updateStage(applicationId, id, stage, payload, req) {
   if (payload.startDate !== undefined && payload.assigneeId === undefined) {
     throw ApiError.badRequest(`${STAGE_LABELS[stage]}'s Started date can only be set together with its Assignee.`);
   }
-  // No one gets named to a stage with no start date planned — an assignment with nothing to plan
-  // around is exactly what this pairing exists to prevent. Only checked when actually naming
-  // someone (a truthy assigneeId); clearing an assignment never needs a date.
-  if (payload.assigneeId) {
-    const effectiveStart = payload.startDate !== undefined ? payload.startDate : stageRow.startDate;
-    if (!effectiveStart) {
-      throw ApiError.badRequest(`Set ${STAGE_LABELS[stage]}'s Started date before assigning someone to it.`);
-    }
-  }
   // Narrower than the general gate — the document link is the assignee's own deliverable to
   // attach, not the owner's to set on their behalf.
   if (payload.documentUrl !== undefined && !isAssignee && !isSuper) {
@@ -697,9 +688,12 @@ async function sendBackStage(applicationId, id, stage, reason, req) {
   }
 
   await sequelize.transaction(async (t) => {
-    // Current stage resets fully — it hasn't actually been (re)done yet. assigneeId is
-    // deliberately left as-is: sending back doesn't unassign whoever was working it.
-    await stageRow.update({ status: 'not_started', startDate: null, endDate: null }, { transaction: t });
+    // Current stage resets to not_started and clears its end date — it hasn't actually been
+    // (re)done yet. assigneeId AND start_date are deliberately left as-is: sending back doesn't
+    // unassign whoever was working it, and start_date is genuinely when work on it first began,
+    // which doesn't change just because it's being redone — same reasoning the previous stage's
+    // own start_date below already gets.
+    await stageRow.update({ status: 'not_started', endDate: null }, { transaction: t });
     // Previous stage only clears its end date — its start_date stays exactly what it was, since
     // that's genuinely when work on it first began and hasn't changed just because it's being
     // reopened.
@@ -749,14 +743,17 @@ async function sendBackStage(applicationId, id, stage, reason, req) {
 }
 
 /**
- * Called by featureRequests.service.js#moveToBuild — names the Development stage's assignee and
- * starts it in one call, right after approval creates this change request with every stage still
- * not_started. Authorization is entirely the route's own `feature_requests:moveToBuild` permission
- * check; nothing to re-check here, since this function is never itself exposed as a route (only
- * ever reached through featureRequests.service.js). Reuses updateStage's own stage-start shape
- * (rule 4) rather than duplicating it.
+ * Called by featureRequests.service.js#moveToBuild — commits this change request to being built
+ * now: takes it out of the shared "Waiting to start" ranked queue (clears queueRank), right after
+ * approval creates it with every stage still not_started. Deliberately does NOT touch the
+ * Development stage itself — same reasoning as applicationTracking.service.js#moveToBuild's own
+ * docstring: starting it is the assignee's own action once the change request's owner has picked
+ * one via the per-stage Assignee control, not something this forces with nobody able to act on it.
+ * Authorization is entirely the route's own `feature_requests:moveToBuild` permission check;
+ * nothing to re-check here, since this function is never itself exposed as a route (only ever
+ * reached through featureRequests.service.js).
  */
-async function moveToBuild(id, assigneeId, req) {
+async function moveToBuild(id, req) {
   const record = await ChangeRequest.findByPk(id, {
     include: [{ model: ChangeRequestStage, as: 'stages' }, ...sourceTitleInclude],
   });
@@ -764,46 +761,13 @@ async function moveToBuild(id, assigneeId, req) {
   if (record.status !== 'approved') {
     throw ApiError.conflict(`Only an approved change request can be moved to build — this one is ${record.status}.`);
   }
-
-  const stageRow = record.stages.find((s) => s.stage === 'development');
-  if (stageRow.status !== 'not_started') {
-    throw ApiError.conflict('Development has already started — this has already been moved to build.');
+  if (record.queueRank === null) {
+    throw ApiError.conflict('This has already been moved to build.');
   }
 
-  const assignee = await User.findByPk(assigneeId, { attributes: ['id', 'status'] });
-  if (!assignee || assignee.status !== 'active') {
-    throw ApiError.badRequest('Assignee must be an existing, active user.');
-  }
-
-  const today = new Date().toISOString().slice(0, 10);
   await sequelize.transaction(async (t) => {
-    // Also clears queue_rank — moved-to-build is no longer "waiting to start," so it drops out of
-    // the shared ranked queue, same as applicationTracking.service.js#moveToBuild does for a track.
     await record.update({ queueRank: null }, { transaction: t });
-    await stageRow.update({
-      assigneeId, status: 'in_progress', startDate: stageRow.startDate || today,
-    }, { transaction: t });
-    await StatusHistory.create({
-      entityType: 'change_request', entityId: record.id, fromStatus: 'development: not_started', toStatus: 'development: in_progress', changedBy: req.user.id, note: null,
-    }, { transaction: t });
   });
-
-  if (assigneeId !== req.user.id) {
-    const title = effectiveTitle(record);
-    try {
-      await notificationsService.createMany([{
-        userId: assigneeId,
-        type: 'change_request_stage_assigned',
-        title: 'You were assigned to a change request stage',
-        message: `You're now assigned to the Development stage of "${title}" — it's now in progress.`,
-        link: `/applications/${record.applicationId}/change-requests/${id}`,
-      }]);
-    } catch (err) {
-      logger.error('Failed to create move-to-build notification', {
-        changeRequestId: id, error: { message: err.message, stack: err.stack },
-      });
-    }
-  }
 
   return getById(id, req);
 }

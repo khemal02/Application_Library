@@ -14,7 +14,6 @@ import StatusBadge from '../../components/common/StatusBadge';
 import { ErrorBlock } from '../../components/common/AsyncState';
 import { applicationTrackingApi } from '../../services/domains';
 import { useAppSelector } from '../../app/hooks';
-import useBreadcrumbLabel from '../../hooks/useBreadcrumbLabel';
 import usePageMeta from '../../hooks/usePageMeta';
 import { STAGE_ORDER, STAGE_LABELS, deriveStatusChip } from '../../utils/applicationTrackStatus';
 import initials from '../../utils/initials';
@@ -61,7 +60,6 @@ function ApplicationCell({ track }) {
 export default function ApplicationTrackingListPage() {
   const navigate = useNavigate();
   const user = useAppSelector((s) => s.auth.user);
-  useBreadcrumbLabel('Application Tracking');
   usePageMeta('Application Tracking', 'Where every build stands today.');
 
   const [page, setPage] = useState(1);
@@ -115,17 +113,6 @@ export default function ApplicationTrackingListPage() {
         <MutedCell track={t}>
           <Typography variant="body2" color={t.startDate ? 'text.primary' : 'text.disabled'}>
             {t.startDate ? dayjs(t.startDate).format('MMM D, YYYY') : '—'}
-          </Typography>
-        </MutedCell>
-      ),
-    },
-    {
-      key: 'targetGoLive',
-      label: 'Expected Deployment Date',
-      render: (t) => (
-        <MutedCell track={t}>
-          <Typography variant="body2" color={t.targetGoLive ? 'text.primary' : 'text.disabled'}>
-            {t.targetGoLive ? dayjs(t.targetGoLive).format('MMM D, YYYY') : '—'}
           </Typography>
         </MutedCell>
       ),

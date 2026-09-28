@@ -131,12 +131,12 @@ const today = () => new Date().toISOString().slice(0, 10);
  * two-step: find which track ids have a matching stage row, then filter the main (fully-included)
  * query on `id IN (...)`. `ownerId` IS a plain column on the track itself, so it's just a WHERE.
  *
- * Order is the feature: normally priority critical->low, then target_go_live ascending with nulls
- * last — a literal CASE expression, since Sequelize has no built-in "order by this enum's declared
- * order" and target_go_live's nulls-last needs its own tiebreaker column. But once the caller is
- * looking at only THEIR OWN tracks ("Assigned to me" / "My Apps" — assigneeId or ownerId given),
- * the question changes from "what matters most org-wide" to "what do I personally need to start
- * next" — so the order switches to the track's own start_date ascending (nulls last) instead.
+ * Order is the feature: normally priority critical->low, then created_at ascending as the
+ * tiebreaker — a literal CASE expression, since Sequelize has no built-in "order by this enum's
+ * declared order". But once the caller is looking at only THEIR OWN tracks ("Assigned to me" /
+ * "My Apps" — assigneeId or ownerId given), the question changes from "what matters most
+ * org-wide" to "what do I personally need to start next" — so the order switches to the track's
+ * own start_date ascending (nulls last) instead.
  */
 async function list(query, req) {
   const page = Math.max(parseInt(query.page, 10) || 1, 1);
@@ -174,7 +174,6 @@ async function list(query, req) {
     ]
     : [
       [sequelize.literal("CASE \"ApplicationTrack\".\"priority\" WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END"), 'ASC'],
-      ['targetGoLive', 'ASC NULLS LAST'],
       ['createdAt', 'ASC'],
     ];
 
@@ -223,7 +222,7 @@ async function getById(id, req) {
 }
 
 /**
- * PATCH /:id — priority, targetGoLive, ownerId, name, description. status/ideaId/applicationId/
+ * PATCH /:id — priority, ownerId, name, description. status/ideaId/applicationId/
  * closedAt are Joi.forbidden() at the validator layer already; this is the authorization + the
  * side effects Joi can't express. Owner or super-admin only (1d) — narrower than plain
  * application_tracks:update, the same "route-level check is coarse, the service is the real gate"
@@ -358,18 +357,6 @@ async function updateStage(id, stage, payload, req) {
   if (payload.assigneeId !== undefined && (record.status === 'cancelled' || record.status === 'live')) {
     throw ApiError.conflict(`This track is ${STATUS_LABELS[record.status]} — its stages can no longer be assigned.`);
   }
-  // No one gets named to a stage until its planned Started date exists — an assignment with no
-  // timeline attached is exactly what the date-planning mechanism above exists to prevent. Only
-  // checked when actually naming someone (a truthy assigneeId) — clearing an assignment
-  // (assigneeId: null) never needs a timeline. Checks the EFFECTIVE start (this same call's own
-  // startDate if it happens to carry one too, else whatever's already stored), same as the
-  // sequencing guardrail below.
-  if (payload.assigneeId) {
-    const effectiveStart = payload.startDate !== undefined ? payload.startDate : stageRow.startDate;
-    if (!effectiveStart) {
-      throw ApiError.badRequest(`Set ${STAGE_LABELS[stage]}'s Started date before assigning someone to it.`);
-    }
-  }
   // Narrower than the general gate above, same reasoning comments.service.js's note-writing rule
   // already applies to this stage's Notes — the document link is the assignee's own deliverable to
   // attach, not the owner's to set on their behalf.
@@ -423,22 +410,15 @@ async function updateStage(id, stage, payload, req) {
         );
       }
     }
-    // The track's own startDate/targetGoLive are the overall window the approver set at idea
-    // approval (see ideas.service.js#finalizeIdea) — every stage's own planned window must stay
+    // The track's own startDate is the overall window's start, set by the approver at idea
+    // approval (see ideas.service.js#finalizeIdea) — every stage's own planned start must stay
     // inside it, not just consistent with its neighbors. Only enforced when the track actually HAS
-    // both bounds set — an idea approved before this pair existed (or approved without them, since
-    // neither is required) leaves the track with no outer window to check against, and that's not
-    // an error, just nothing to constrain against.
+    // it set — an idea approved without one (it's optional) leaves the track with no outer bound
+    // to check against, and that's not an error, just nothing to constrain against.
     const trackStart = toDateStr(record.startDate);
-    const trackEnd = toDateStr(record.targetGoLive);
     if (trackStart && effectiveStart && effectiveStart < trackStart) {
       throw ApiError.badRequest(
         `${STAGE_LABELS[stage]} can't be planned to start before the track's own Start Date (${trackStart}).`,
-      );
-    }
-    if (trackEnd && effectiveEnd && effectiveEnd > trackEnd) {
-      throw ApiError.badRequest(
-        `${STAGE_LABELS[stage]} can't be planned to finish after the track's Expected Deployment Date (${trackEnd}).`,
       );
     }
   }
@@ -637,9 +617,11 @@ async function advanceStage(id, stage, payload, req) {
  * `finishedDate` (this module's "actually complete" marker) clears on the reopened previous stage,
  * same as changeRequests clears its own `endDate` there — but `endDate` ("Expected finish", the
  * owner's plan) is left untouched on both stages, since sending work back doesn't erase what was
- * planned, only what actually happened. Notes live in the polymorphic `comments` table keyed by the
- * stage's own immutable id (see attachStageNotes) — completely unaffected by either stage's status/
- * dates resetting here, same reasoning changeRequests.service.js's D6 finding already established.
+ * planned, only what actually happened. `startDate` is left untouched on BOTH stages too, same
+ * reasoning: it's genuinely when work first began, and that fact doesn't change just because the
+ * stage is being redone. Notes live in the polymorphic `comments` table keyed by the stage's own
+ * immutable id (see attachStageNotes) — completely unaffected by either stage's status/dates
+ * resetting here, same reasoning changeRequests.service.js's D6 finding already established.
  */
 async function sendBackStage(id, stage, reason, req) {
   const record = await ApplicationTrack.findByPk(id, { include: stageAndIdeaInclude });
@@ -667,7 +649,7 @@ async function sendBackStage(id, stage, reason, req) {
   }
 
   await sequelize.transaction(async (t) => {
-    await stageRow.update({ status: 'not_started', startDate: null, finishedDate: null }, { transaction: t });
+    await stageRow.update({ status: 'not_started', finishedDate: null }, { transaction: t });
     await previousRow.update({ status: 'in_progress', finishedDate: null }, { transaction: t });
 
     await StatusHistory.create({
@@ -709,59 +691,48 @@ async function statusHistory(id) {
 }
 
 /**
- * Called by ideas.service.js#moveToBuild — names the Development stage's assignee and starts it
- * in one call, right after approval. Also fills in the track's own owner (and, optionally, its
- * overall Start/Expected Deployment window) the FIRST time this is called, since approving an idea
- * no longer picks one (see ideas.service.js#finalizeIdea) — every idea-sourced track is born with
- * `ownerId: null` now, so this is genuinely the earliest point one exists, not a redundant
- * re-ask. `ownerId` eligibility is already validated by the caller (ideas.service.js, which owns
+ * Called by ideas.service.js#moveToBuild — commits this track to being built now: takes it out of
+ * the "Waiting to start" ranked queue (clears queueRank) and, the FIRST time this is called, fills
+ * in the track's own owner (and, optionally, its Start Date), since approving an idea no longer
+ * picks one (see ideas.service.js#finalizeIdea) — every idea-sourced track is born with
+ * `ownerId: null` now, so this is genuinely the earliest point one exists, not a redundant re-ask.
+ * `ownerId` eligibility is already validated by the caller (ideas.service.js, which owns
  * `isEligibleOwner`) before this is reached — trusted here, not re-checked, same as this function
  * already isn't itself exposed as a route. A track that already has an owner (legacy data from
  * before this change, or a second call after the first already set one) is left alone; `ownerId`
  * is simply ignored if given again.
  *
+ * Deliberately does NOT touch the Development stage itself — it's left `not_started`, with no
+ * assignee, exactly as it already was. Starting Development is the assignee's own action (the
+ * "Start Development" button, gated on actually being that stage's assignee) once the owner has
+ * picked one via the per-stage Assignee control — moveToBuild forcing it to `in_progress` with no
+ * assignee would leave a stage nobody can act on (canWriteNotes/canAct require a real assigneeId
+ * match). The track reads "Not Started" until that real assignment happens, which is the point.
+ *
  * Authorization is entirely the route's own `ideas:moveToBuild` permission check; nothing to
- * re-check here. Reuses updateStage's own stage-start shape (rule 3: in_progress defaults
- * startDate to today if unset) rather than duplicating it.
+ * re-check here.
  */
 async function moveToBuild(id, {
-  assigneeId, ownerId, startDate, targetGoLive,
+  ownerId, startDate,
 }, req) {
   const record = await ApplicationTrack.findByPk(id, { include: stageAndIdeaInclude });
   if (!record) throw ApiError.notFound('Application track not found');
   if (record.status !== 'active') {
     throw ApiError.conflict(`This track is ${STATUS_LABELS[record.status]} and can no longer be moved to build.`);
   }
-
-  const stageRow = record.stages.find((s) => s.stage === 'development');
-  if (!stageRow) throw ApiError.notFound('Development stage not found');
-  if (stageRow.status !== 'not_started') {
-    throw ApiError.conflict('Development has already started — this has already been moved to build.');
-  }
-
-  const assignee = await User.findByPk(assigneeId, { attributes: ['id', 'status'] });
-  if (!assignee || assignee.status !== 'active') {
-    throw ApiError.badRequest('Assignee must be an existing, active user.');
+  if (record.queueRank === null) {
+    throw ApiError.conflict('This has already been moved to build.');
   }
 
   const settingOwner = !record.ownerId && !!ownerId;
 
   await sequelize.transaction(async (t) => {
-    // Also clears queue_rank — moved-to-build is no longer "waiting to start," so it drops out of
-    // the ranked queue regardless of which screen (this one, or the Ideas list) triggered the move.
     await record.update({
       ...(settingOwner ? {
         ownerId,
         startDate: record.startDate || startDate || null,
-        targetGoLive: record.targetGoLive || targetGoLive || null,
       } : {}),
       queueRank: null,
-    }, { transaction: t });
-    await stageRow.update({
-      assigneeId, status: 'in_progress', startDate: stageRow.startDate || today(),
-    }, { transaction: t });
-    await StatusHistory.create({
-      entityType: 'application_track', entityId: record.id, fromStatus: 'development: not_started', toStatus: 'development: in_progress', changedBy: req.user.id, note: null,
     }, { transaction: t });
   });
 
@@ -777,21 +748,6 @@ async function moveToBuild(id, {
       }]);
     } catch (err) {
       logger.error('Failed to create move-to-build owner notification', {
-        applicationTrackId: id, error: { message: err.message, stack: err.stack },
-      });
-    }
-  }
-  if (assigneeId !== req.user.id) {
-    try {
-      await notificationsService.createMany([{
-        userId: assigneeId,
-        type: 'application_track_stage_assigned',
-        title: 'You were assigned to a track stage',
-        message: `You're on the Development stage of "${name}" — it's now in progress.`,
-        link: `/application-tracking/${id}`,
-      }]);
-    } catch (err) {
-      logger.error('Failed to create move-to-build notification', {
         applicationTrackId: id, error: { message: err.message, stack: err.stack },
       });
     }
@@ -1301,6 +1257,74 @@ async function assigneeCandidates() {
   return changeRequestsService.assigneeCandidates();
 }
 
+// A stage still needs the assignee's action exactly when it's not_started or in_progress — once
+// `complete`, there's nothing left for them to do on it. Same list changeRequests.service.js's own
+// ACTIONABLE_STAGE_STATUSES uses, so an idea-sourced track's stage counts by the identical rule a
+// feature-request-sourced change request's stage already does.
+const ACTIONABLE_STAGE_STATUSES = ['not_started', 'in_progress'];
+
+/**
+ * The idea-track half of the Dashboard's "My Development"/"My Testing"/"My Deployment" tiles —
+ * dashboard.service.js#getSummary adds this to changeRequestsService.myStageCounts' own count, so
+ * a tile's number covers BOTH an approved idea's own track AND a feature-request-sourced change
+ * request, not just the latter. Restricted to `active` tracks (unlike change requests, a track can
+ * be on_hold/cancelled/live — a stage sitting not_started/in_progress on a PAUSED track isn't
+ * something its assignee can actually act on right now, so it shouldn't inflate the count).
+ */
+async function myStageCounts(userId) {
+  const rows = await ApplicationTrackStage.findAll({
+    attributes: ['stage', [sequelize.fn('COUNT', sequelize.col('ApplicationTrackStage.id')), 'count']],
+    where: { assigneeId: userId, status: { [Op.in]: ACTIONABLE_STAGE_STATUSES } },
+    include: [{
+      model: ApplicationTrack, as: 'applicationTrack', attributes: [], where: { status: 'active' }, required: true,
+    }],
+    group: ['stage'],
+    raw: true,
+  });
+  const counts = { development: 0, testing: 0, deployment: 0 };
+  rows.forEach((r) => { counts[r.stage] = Number(r.count); });
+  return counts;
+}
+
+/**
+ * The idea-track half of GET /change-requests/my-stages — that route merges this in alongside its
+ * own change-request rows (see changeRequests.controller.js#myAssignedStages) so the list a
+ * Dashboard tile clicks into actually shows everything the tile's own count just promised, not
+ * just the change-request slice of it. Same shape as changeRequests.service.js#myAssignedStages'
+ * own rows (stageId/title/applicationName/status/url) so the frontend renders either kind
+ * identically without knowing which one it's looking at.
+ */
+async function myAssignedStages(userId, stage) {
+  const rows = await ApplicationTrackStage.findAll({
+    where: { assigneeId: userId, stage, status: { [Op.in]: ACTIONABLE_STAGE_STATUSES } },
+    include: [{
+      model: ApplicationTrack,
+      as: 'applicationTrack',
+      where: { status: 'active' },
+      required: true,
+      include: [{ model: Idea, as: 'idea', attributes: ['id', 'title'], include: [{ model: Department, as: 'department', attributes: ['id', 'name'] }] }],
+    }],
+    order: [['createdAt', 'ASC']],
+  });
+
+  return rows.map((row) => {
+    const track = row.applicationTrack;
+    return {
+      stageId: row.id,
+      stage: row.stage,
+      status: row.status,
+      startDate: row.startDate,
+      applicationTrackId: track.id,
+      title: track.name || track.idea?.title || 'Untitled',
+      // A track has no real Application yet (that's only born at go-live) — its department is the
+      // closest equivalent "which area this belongs to" context a change request's own application
+      // name gives.
+      applicationName: track.idea?.department?.name || null,
+      url: `/application-tracking/${track.id}`,
+    };
+  });
+}
+
 module.exports = {
   list,
   getById,
@@ -1320,6 +1344,8 @@ module.exports = {
   resume,
   cancel,
   assigneeCandidates,
+  myStageCounts,
+  myAssignedStages,
   STAGE_ORDER,
   STAGE_LABELS,
 };

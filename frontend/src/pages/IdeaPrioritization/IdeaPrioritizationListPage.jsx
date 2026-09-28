@@ -24,11 +24,11 @@ import StatusBadge from '../../components/common/StatusBadge';
 import useToast from '../../hooks/useToast';
 import usePermission from '../../routes/usePermission';
 import { applicationTrackingApi } from '../../services/domains';
-import useBreadcrumbLabel from '../../hooks/useBreadcrumbLabel';
 import usePageMeta from '../../hooks/usePageMeta';
 import MoveToBuildDialog from '../Ideas/MoveToBuildDialog';
 import { deriveStatusChip } from '../../utils/applicationTrackStatus';
 import initials from '../../utils/initials';
+import TypeBadge from '../../components/common/TypeBadge';
 
 // Matches DataTable.jsx's own header/row styling exactly (see its own comments) — this page can't
 // use that shared component (drag-and-drop reorder, per-row action buttons, two separate tables),
@@ -84,11 +84,17 @@ function OrderBadge({ children, muted }) {
   );
 }
 
+// itemType 'track' is always idea-sourced (an idea's own approved track); 'changeRequest' is
+// always feature-request-sourced (see toMoveToBuildRow's identical mapping just below) — so the
+// type badge reads directly off itemType, no separate flag needed.
 function ItemCell({ item }) {
   return (
-    <Link component={RouterLink} to={item.detailPath} underline="hover" variant="body2" fontWeight={600}>
-      {item.name}
-    </Link>
+    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+      <Link component={RouterLink} to={item.detailPath} underline="hover" variant="body2" fontWeight={600}>
+        {item.name}
+      </Link>
+      <TypeBadge type={item.itemType === 'track' ? 'idea' : 'feature_request'} />
+    </Stack>
   );
 }
 
@@ -129,7 +135,6 @@ export default function IdeaPrioritizationListPage() {
   const canMoveIdeasToBuild = usePermission('ideas', 'moveToBuild');
   const canMoveFeatureRequestsToBuild = usePermission('feature_requests', 'moveToBuild');
   const canManageAnyQueue = canMoveIdeasToBuild || canMoveFeatureRequestsToBuild;
-  useBreadcrumbLabel('Idea Prioritization');
   usePageMeta('Idea Prioritization', 'Set the build order for approved work.');
 
   const [queue, setQueue] = useState({ waiting: [], started: [] });

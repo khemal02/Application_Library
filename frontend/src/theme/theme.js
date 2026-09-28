@@ -84,15 +84,44 @@ export function getTheme(mode) {
           // enough rows appear to trigger scrolling, with nothing about the filters themselves
           // having changed.
           html: { scrollbarGutter: 'stable' },
-          body: { scrollbarColor: `${neutral[isDark ? 700 : 300]} transparent` },
+          // scrollbarWidth alone (Firefox's own property) doesn't touch Chrome/Edge — without an
+          // explicit ::-webkit-scrollbar override too, Chrome keeps rendering its classic
+          // full-width scrollbar, complete with up/down arrow buttons, just recolored. This gives
+          // every browser the same slim, button-less thumb.
+          body: {
+            scrollbarColor: `${neutral[isDark ? 700 : 300]} transparent`,
+            scrollbarWidth: 'thin',
+            '&::-webkit-scrollbar': { width: 10, height: 10 },
+            '&::-webkit-scrollbar-track': { background: 'transparent' },
+            '&::-webkit-scrollbar-thumb': {
+              backgroundColor: neutral[isDark ? 700 : 300],
+              borderRadius: 999,
+              border: '2px solid',
+              borderColor: isDark ? '#0b0d13' : '#ffffff',
+            },
+            '&::-webkit-scrollbar-button': { display: 'none', width: 0, height: 0 },
+          },
         },
       },
       MuiDialogContent: {
         styleOverrides: {
           // Dialog content scrolls in its own box (separate from <body>), so it needs its own
           // visible scrollbar — otherwise a dialog with more fields than fit the viewport looks
-          // like it simply ends, hiding whatever content is below the fold.
-          root: { scrollbarColor: `${neutral[isDark ? 600 : 400]} transparent`, scrollbarWidth: 'thin' },
+          // like it simply ends, hiding whatever content is below the fold. Same webkit override
+          // as body's own (see MuiCssBaseline above) so it's slim and button-less in Chrome too.
+          root: {
+            scrollbarColor: `${neutral[isDark ? 600 : 400]} transparent`,
+            scrollbarWidth: 'thin',
+            '&::-webkit-scrollbar': { width: 10, height: 10 },
+            '&::-webkit-scrollbar-track': { background: 'transparent' },
+            '&::-webkit-scrollbar-thumb': {
+              backgroundColor: neutral[isDark ? 600 : 400],
+              borderRadius: 999,
+              border: '2px solid',
+              borderColor: isDark ? '#12151d' : '#ffffff',
+            },
+            '&::-webkit-scrollbar-button': { display: 'none', width: 0, height: 0 },
+          },
         },
       },
       MuiPaper: {

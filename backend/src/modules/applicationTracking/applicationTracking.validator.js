@@ -24,7 +24,6 @@ const idParam = Joi.object({
 // silently-dropped field.
 const update = Joi.object({
   priority: Joi.string().valid('critical', 'high', 'medium', 'low'),
-  targetGoLive: Joi.date().iso().allow(null),
   ownerId: Joi.string().uuid().allow(null),
   name: Joi.string().max(200).allow('', null),
   description: Joi.string().allow('', null),

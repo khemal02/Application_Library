@@ -7,7 +7,6 @@ import { LoadingBlock, ErrorBlock } from '../../components/common/AsyncState';
 import StatusBadge from '../../components/common/StatusBadge';
 import { changeRequestsApi } from '../../services/domains';
 import useResource from '../../hooks/useResource';
-import useBreadcrumbLabel from '../../hooks/useBreadcrumbLabel';
 
 const STAGE_LABELS = { development: 'Development', testing: 'Testing', deployment: 'Deployment' };
 const STAGE_STATUS_META = {
@@ -31,7 +30,6 @@ export default function MyAssignedStagesPage() {
   const stageLabel = STAGE_LABELS[stage];
 
   const { data, loading, error, reload } = useResource(() => changeRequestsApi.myAssignedStages(stage), [stage]);
-  useBreadcrumbLabel(`My ${stageLabel}`);
 
   if (loading) return <LoadingBlock />;
   if (error) return <ErrorBlock message={error} onRetry={reload} />;

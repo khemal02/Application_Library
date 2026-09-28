@@ -12,9 +12,9 @@ const { DEMO_PASSWORD } = require('./20260101000004-users');
  *
  * Looks departments/roles up by name/value rather than importing helpers/refs.js — that file's
  * UUIDs are regenerated on every `require`, so they only line up with the live DB within the
- * single seed run that first created those rows. Java and SAP ABAP in particular aren't even in
- * that original seeder (added later, straight to the live table), so name-based lookup is the only
- * way this seeder works against the actual current department set.
+ * single seed run that first created those rows. Java App Programmer and S4H ABAP in particular
+ * aren't referenced by a DEPARTMENT_IDS key (added later, straight to the live table), so
+ * name-based lookup is the only way this seeder works against the actual current department set.
  */
 module.exports = {
   async up(queryInterface) {
@@ -34,11 +34,11 @@ module.exports = {
     const teamLeadRoleId = roleId('team_lead');
     const employeeRoleId = roleId('employee');
 
-    const aiDept = deptId('SAP Analytics & AI');
-    const fioriDept = deptId('SAP Fiori & UX');
-    const opsDept = deptId('SAP Cloud Operations');
-    const javaDept = deptId('Java');
-    const abapDept = deptId('SAP ABAP');
+    const aiDept = deptId('SAC Functional');
+    const fioriDept = deptId('Java App UI/IUX');
+    const opsDept = deptId('Management');
+    const javaDept = deptId('Java App Programmer');
+    const abapDept = deptId('S4H ABAP');
 
     const ids = {
       aiManager: uuidv4(), aiTeamLead: uuidv4(),

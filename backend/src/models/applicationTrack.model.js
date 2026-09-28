@@ -16,11 +16,9 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.ENUM('active', 'on_hold', 'live', 'cancelled'), allowNull: false, defaultValue: 'active',
     },
     ownerId: { type: DataTypes.UUID, allowNull: true },
-    // Both optionally set at idea-approval time, alongside the owner picker — see
-    // ideas.service.js#finalizeIdea. Neither is required; a track created without them just has
-    // these unset, same as before this pair existed.
+    // Optionally set at idea-approval time, alongside the owner picker — see
+    // ideas.service.js#finalizeIdea. Not required; a track created without it just has this unset.
     startDate: { type: DataTypes.DATEONLY, allowNull: true },
-    targetGoLive: { type: DataTypes.DATEONLY, allowNull: true },
     // Set only when the Deployment stage completes (go-live) — null for the entire life of the
     // track until then.
     applicationId: { type: DataTypes.UUID, allowNull: true },
@@ -28,9 +26,12 @@ module.exports = (sequelize, DataTypes) => {
     closedAt: { type: DataTypes.DATEONLY, allowNull: true },
     // Manual build-sequence rank for the "Waiting to start" queue — see
     // 20260130000053-add-application-track-queue-rank.js for the full rationale. NULL whenever
-    // this track isn't currently eligible for that queue (anything but active-with-Development-
-    // not_started) — maintained at every relevant transition in applicationTracking.service.js
-    // (creation, hold, resume, cancel, moveToBuild), never computed on the fly.
+    // this track isn't currently eligible for that queue: not active (on_hold/live/cancelled), OR
+    // active but already committed to build (moveToBuild cleared it) — the latter can still have
+    // Development sitting at not_started with no assignee, since moveToBuild no longer forces it
+    // to start; only the stage's own status (not queueRank) says whether work has actually begun.
+    // Maintained at every relevant transition in applicationTracking.service.js (creation, hold,
+    // resume, cancel, moveToBuild), never computed on the fly.
     queueRank: { type: DataTypes.DOUBLE, allowNull: true },
   }, {
     tableName: 'application_tracks',

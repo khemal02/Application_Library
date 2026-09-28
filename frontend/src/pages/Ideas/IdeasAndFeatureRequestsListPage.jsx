@@ -18,12 +18,9 @@ import Switch from '@mui/material/Switch';
 import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
 import FilterListIcon from '@mui/icons-material/FilterList';
-import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
-import BuildOutlinedIcon from '@mui/icons-material/BuildOutlined';
 import HourglassEmptyOutlinedIcon from '@mui/icons-material/HourglassEmptyOutlined';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined';
-import { alpha } from '@mui/material/styles';
 import useToast from '../../hooks/useToast';
 import usePermission from '../../routes/usePermission';
 import usePageMeta from '../../hooks/usePageMeta';
@@ -31,38 +28,13 @@ import { ideasApi, featureRequestsApi, departmentsApi } from '../../services/dom
 import DataTable from '../../components/common/DataTable';
 import FilterPopoverField from '../../components/common/FilterPopoverField';
 import StatusBadge from '../../components/common/StatusBadge';
+import TypeBadge, { TYPE_META } from '../../components/common/TypeBadge';
 import initials from '../../utils/initials';
 import { IDEA_STATUS_OPTIONS, INDUSTRY_OPTIONS, FUNCTIONAL_AREA_OPTIONS, ideaStatusLabel } from '../../constants/options';
 import IdeaFormDialog from './IdeaFormDialog';
 import FeatureRequestFormDialog from './FeatureRequestFormDialog';
 import MoveToBuildDialog from './MoveToBuildDialog';
 
-// Same blue/orange pairing used for the Type column's pill and each row's left accent border —
-// blue for a brand-new idea, orange for a feature request against an existing application.
-// idea's blue already equals the theme's own primary (#2563EB) — no separate token needed.
-// feature_request's orange is the approved reference's own distinct "feature-request accent"
-// token (#C2570C), not the old warning color it used to borrow before the navy/blue restyle.
-const TYPE_META = {
-  idea: { label: 'New Idea', color: '#2563EB', icon: LightbulbOutlinedIcon },
-  feature_request: { label: 'Feature Request', color: '#C2570C', icon: BuildOutlinedIcon },
-};
-
-function TypeBadge({ type }) {
-  const meta = TYPE_META[type];
-  const Icon = meta.icon;
-  return (
-    <Chip
-      size="small"
-      icon={<Icon fontSize="small" />}
-      label={meta.label}
-      sx={{
-        bgcolor: alpha(meta.color, 0.12), color: meta.color, border: 'none',
-        fontSize: '11.6px', fontWeight: 700,
-        '& .MuiChip-icon': { color: 'inherit' },
-      }}
-    />
-  );
-}
 
 // The three LIVE idea statuses (see constants/options.js's LIVE_IDEA_STATUSES) — every row this
 // page can ever show is one of these, so each gets its own real icon rather than forcing a
@@ -424,7 +396,7 @@ export default function IdeasAndFeatureRequestsListPage() {
             onto the toolbar row, pushed to its far right. */}
         <Stack direction="row" spacing={1} sx={{ ml: { sm: 'auto' } }}>
           {canSeeIdeas && (
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setIdeaFormOpen(true)}>Submit Idea</Button>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setIdeaFormOpen(true)}>Submit New Idea</Button>
           )}
           {canSeeFeatureRequests && (
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => setFeatureRequestFormOpen(true)}>Submit Feature Request</Button>
@@ -437,6 +409,8 @@ export default function IdeasAndFeatureRequestsListPage() {
         anchorEl={filtersAnchor}
         onClose={() => setFiltersAnchor(null)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+        PaperProps={{ sx: { mt: 0.5 } }}
       >
         <Box sx={{ p: 2, width: 280 }}>
           <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>Filters</Typography>

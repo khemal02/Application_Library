@@ -31,7 +31,10 @@ function ChangeRequestRow({ cr, canDelete, onDelete, onClick }) {
       }}
       sx={{
         py: 1.5, px: 1.5, cursor: 'pointer',
-        border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper',
+        // Each change request really is its own bordered/rounded box in the approved reference
+        // (confirmed by zooming into it — a low-res read of it earlier looked like a plain
+        // divider list, which was wrong), not a divider-separated list.
+        border: 1, borderColor: 'divider', borderRadius: 1.5, bgcolor: 'background.paper',
         '&:hover': { bgcolor: 'action.hover' },
         '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: '-2px' },
       }}
@@ -44,8 +47,8 @@ function ChangeRequestRow({ cr, canDelete, onDelete, onClick }) {
               variant="body2"
               color="text.secondary"
               sx={{
-                display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical',
-                overflow: 'hidden', textOverflow: 'ellipsis',
+                display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                overflow: 'hidden', textOverflow: 'ellipsis', mt: 0.25,
               }}
             >
               {cr.description}
@@ -77,9 +80,8 @@ function ChangeRequestRow({ cr, canDelete, onDelete, onClick }) {
               row's own onClick (the whole row is a click target). */}
           {cr.source?.type && (
             <Link
-              component={RouterLink} to={cr.source.url} variant="caption" color="text.secondary"
+              component={RouterLink} to={cr.source.url} variant="caption" color="primary" underline="always"
               onClick={(e) => e.stopPropagation()}
-              sx={{ '&:hover': { textDecoration: 'underline' } }}
             >
               {cr.source.type === 'feature_request' ? `From feature request #${cr.source.number}` : 'From a reported issue'}
             </Link>

@@ -2,7 +2,6 @@ import { useNavigate } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Grid from '@mui/material/Grid';
-import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import Link from '@mui/material/Link';
 import dayjs from 'dayjs';
@@ -15,7 +14,8 @@ function InfoField({ label, value, fullWidth }) {
     <Grid item xs={fullWidth ? 12 : 6} sm={fullWidth ? 12 : 4} md={fullWidth ? 12 : 3}>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{label}</Typography>
       {typeof value === 'string' ? (
-        <Typography variant="body2" sx={{ mt: 0.25, whiteSpace: 'pre-wrap' }}>{value}</Typography>
+        // Bold, not the default body2 weight — matches the approved reference's own field values.
+        <Typography variant="body2" fontWeight={700} sx={{ mt: 0.25, whiteSpace: 'pre-wrap' }}>{value}</Typography>
       ) : (
         <Box sx={{ mt: 0.25 }}>{value}</Box>
       )}
@@ -39,19 +39,20 @@ export default function ProjectInfoBox({ application }) {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openStages(); }
       }}
       sx={{
-        p: 2, mt: 2, cursor: 'pointer',
+        p: 2, mt: 2, cursor: 'pointer', position: 'relative',
         '&:hover': { bgcolor: 'action.hover' },
         '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: '-2px' },
       }}
     >
-      <Stack direction="row" justifyContent="flex-end" alignItems="center" sx={{ mb: 3 }}>
-        {/* Just the current status, not the whole Development -> Testing -> Live journey — by the
-            time an app is registered here (almost always via Application Tracking's go-live step),
-            it's already live; showing the full stepper implied it was still mid-rollout. The
-            application's name itself is now the page's own title above (ApplicationDetailPage),
-            not repeated here. */}
+      {/* Just the current status, not the whole Development -> Testing -> Live journey — by the
+          time an app is registered here (almost always via Application Tracking's go-live step),
+          it's already live; showing the full stepper implied it was still mid-rollout. The
+          application's name itself is now the page's own title above (ApplicationDetailPage), not
+          repeated here. Absolutely positioned, not its own row above the grid — sits inline with
+          the field labels' own line instead of pushing them down, matching the approved reference. */}
+      <Box sx={{ position: 'absolute', top: 16, right: 16 }}>
         <StatusBadge value={application.status} label={applicationStatusLabel(application.status)} />
-      </Stack>
+      </Box>
 
       <Grid container spacing={2}>
         <InfoField label="Department" value={application.department?.name || '—'} />

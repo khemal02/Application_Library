@@ -1,15 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
+import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
 import Chip from '@mui/material/Chip';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
-import Accordion from '@mui/material/Accordion';
-import AccordionSummary from '@mui/material/AccordionSummary';
-import AccordionDetails from '@mui/material/AccordionDetails';
 import Collapse from '@mui/material/Collapse';
 import Divider from '@mui/material/Divider';
 import Grid from '@mui/material/Grid';
@@ -120,7 +119,7 @@ function ReportDialog({ open, onClose, onSubmit }) {
     }
   }, [open]);
 
-  const canSubmit = !!title.trim() && !!severity;
+  const canSubmit = !!title.trim() && !!severity && !!description.trim() && !!affectedVersion.trim();
 
   const handleSubmit = async () => {
     if (!canSubmit || submitting) return;
@@ -128,7 +127,7 @@ function ReportDialog({ open, onClose, onSubmit }) {
     setError(null);
     try {
       await onSubmit({
-        title: title.trim(), severity, description: description.trim() || undefined, affectedVersion: affectedVersion.trim() || undefined,
+        title: title.trim(), severity, description: description.trim(), affectedVersion: affectedVersion.trim(),
       });
       onClose();
     } catch (err) {
@@ -145,16 +144,16 @@ function ReportDialog({ open, onClose, onSubmit }) {
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         <Stack spacing={2} sx={{ mt: 0.5 }}>
           <TextField
-            autoFocus fullWidth label="Title" value={title} inputProps={{ maxLength: 200 }}
+            autoFocus fullWidth required label="Title" value={title} inputProps={{ maxLength: 200 }}
             onChange={(e) => setTitle(e.target.value)}
           />
-          <TextField select fullWidth label="Severity" value={severity} onChange={(e) => setSeverity(e.target.value)}>
+          <TextField select fullWidth required label="Severity" value={severity} onChange={(e) => setSeverity(e.target.value)}>
             {SEVERITY_REPORT_OPTIONS.map((opt) => (
               <MenuItem key={opt.value} value={opt.value}>{opt.label} — {opt.description}</MenuItem>
             ))}
           </TextField>
-          <TextField fullWidth multiline minRows={3} label="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
-          <TextField fullWidth label="Affected version (optional)" value={affectedVersion} inputProps={{ maxLength: 50 }} onChange={(e) => setAffectedVersion(e.target.value)} />
+          <TextField fullWidth required multiline minRows={3} label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
+          <TextField fullWidth required label="Affected version" value={affectedVersion} inputProps={{ maxLength: 50 }} onChange={(e) => setAffectedVersion(e.target.value)} />
         </Stack>
       </DialogContent>
       <DialogActions>
@@ -523,7 +522,9 @@ export default function IssuesCard({ applicationId, applicationOwnerId }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [accordionOpen, setAccordionOpen] = useState(false);
+  // Open by default now — matches the approved reference's own Issues card, which shows its
+  // tabs/rows (or empty state) immediately, not hidden behind a click.
+  const [accordionOpen, setAccordionOpen] = useState(true);
   const [tab, setTab] = useState('open');
   const [showAll, setShowAll] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
@@ -626,25 +627,31 @@ export default function IssuesCard({ applicationId, applicationOwnerId }) {
 
   return (
     <Box>
-      <Accordion
-        variant="outlined" disableGutters
-        expanded={accordionOpen}
-        onChange={(e, isExpanded) => setAccordionOpen(isExpanded)}
-        sx={{ '&:before': { display: 'none' } }}
-      >
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+      {/* Plain card, open by default — matches ChangeRequestsCard.jsx's own chrome and the
+          approved reference, which shows the Report button and tabs immediately, not behind an
+          accordion click. The chevron on the right still lets a viewer collapse it away. */}
+      <Paper variant="outlined" sx={{ p: 2 }}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: accordionOpen ? 1.5 : 0 }}>
           <Stack direction="row" alignItems="baseline" spacing={1}>
             <Typography variant="subtitle1" fontWeight={700}>Issues</Typography>
             {rows.length > 0 && <Typography variant="caption" color="text.secondary">{headerCount}</Typography>}
           </Stack>
-        </AccordionSummary>
-        <AccordionDetails>
-          <Stack direction="row" justifyContent="flex-end" sx={{ mb: 1.5 }}>
+          <Stack direction="row" alignItems="center" spacing={0.5}>
             <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={() => setReportOpen(true)}>
               Report an issue
             </Button>
+            <IconButton
+              size="small"
+              aria-label={accordionOpen ? 'Collapse issues' : 'Expand issues'}
+              aria-expanded={accordionOpen}
+              onClick={() => setAccordionOpen((o) => !o)}
+            >
+              {accordionOpen ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+            </IconButton>
           </Stack>
+        </Stack>
 
+        <Collapse in={accordionOpen} timeout="auto" unmountOnExit>
           <Tabs value={tab} onChange={(e, v) => setTab(v)} variant="standard" sx={{ mb: 1.5, minHeight: 36 }}>
             {TABS.map((t) => (
               <Tab key={t.key} value={t.key} label={`${t.label} (${rowsByTab[t.key].length})`} sx={{ minHeight: 36, py: 0.5 }} />
@@ -698,8 +705,8 @@ export default function IssuesCard({ applicationId, applicationOwnerId }) {
               )}
             </>
           )}
-        </AccordionDetails>
-      </Accordion>
+        </Collapse>
+      </Paper>
 
       <ReportDialog open={reportOpen} onClose={() => setReportOpen(false)} onSubmit={handleReport} />
       <TriageDialog

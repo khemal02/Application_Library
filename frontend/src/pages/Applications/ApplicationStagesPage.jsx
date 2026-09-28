@@ -8,7 +8,7 @@ import Link from '@mui/material/Link';
 import dayjs from 'dayjs';
 import { applicationsApi } from '../../services/domains';
 import useResource from '../../hooks/useResource';
-import useBreadcrumbLabel from '../../hooks/useBreadcrumbLabel';
+import usePageMeta from '../../hooks/usePageMeta';
 import { LoadingBlock, ErrorBlock } from '../../components/common/AsyncState';
 import BackButton from '../../components/common/BackButton';
 import StatusBadge from '../../components/common/StatusBadge';
@@ -57,11 +57,10 @@ function StageCard({ stage, stageData }) {
         <StatusBadge color={STAGE_CHIP_COLOR[stageData.status]} label={STAGE_STATUS_LABELS[stageData.status]} />
       </Stack>
       <Grid container spacing={2}>
-        <Grid item xs={6} sm={2.4}><ReadField label="Assignee" value={stageData.assignee?.name} /></Grid>
-        <Grid item xs={6} sm={2.4}><ReadField label="Started" value={formatDate(stageData.startDate)} /></Grid>
-        <Grid item xs={6} sm={2.4}><ReadField label="Expected finish" value={formatDate(stageData.endDate)} /></Grid>
-        <Grid item xs={6} sm={2.4}><ReadField label="Finished date" value={formatDate(stageData.finishedDate)} /></Grid>
-        <Grid item xs={6} sm={2.4}>
+        <Grid item xs={6} sm={3}><ReadField label="Assignee" value={stageData.assignee?.name} /></Grid>
+        <Grid item xs={6} sm={3}><ReadField label="Started" value={formatDate(stageData.startDate)} /></Grid>
+        <Grid item xs={6} sm={3}><ReadField label="Finished date" value={formatDate(stageData.finishedDate)} /></Grid>
+        <Grid item xs={6} sm={3}>
           <ReadField
             label="Document link"
             value={stageData.documentUrl ? (
@@ -108,9 +107,11 @@ function StageCard({ stage, stageData }) {
  */
 export default function ApplicationStagesPage() {
   const { id } = useParams();
+  // Same title/subtitle as the Applications list page — the topbar shouldn't go blank just
+  // because the viewer navigated from the list into one specific application.
+  usePageMeta('Applications', 'Every live and in-progress application.');
   const { data: application, loading: loadingApp, error: appError, reload: reloadApp } = useResource(() => applicationsApi.getById(id), [id]);
   const { data: origin, loading: loadingOrigin, error: originError, reload: reloadOrigin } = useResource(() => applicationsApi.getOrigin(id), [id]);
-  useBreadcrumbLabel(application?.name);
 
   if (loadingApp || loadingOrigin) return <LoadingBlock />;
   if (appError) return <ErrorBlock message={appError} onRetry={reloadApp} />;
@@ -138,9 +139,9 @@ export default function ApplicationStagesPage() {
         <>
           {origin.idea && (
             <Box sx={{ mb: 2 }}>
-              <IdeaFieldAccordion label="Problem Statement" value={origin.idea.description} defaultOpen />
-              <IdeaFieldAccordion label="Proposed Solution" value={origin.idea.proposedSolution} defaultOpen />
-              <IdeaFieldAccordion label="Technologies" value={origin.idea.technologiesAndEfficiency} defaultOpen />
+              <IdeaFieldAccordion label="Problem Statement" value={origin.idea.description} />
+              <IdeaFieldAccordion label="Proposed Solution" value={origin.idea.proposedSolution} />
+              <IdeaFieldAccordion label="Technologies" value={origin.idea.technologiesAndEfficiency} />
             </Box>
           )}
 

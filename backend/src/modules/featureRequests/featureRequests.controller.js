@@ -51,7 +51,7 @@ controller.analytics = asyncHandler(async (req, res) => {
 });
 
 controller.moveToBuild = asyncHandler(async (req, res) => {
-  const record = await service.moveToBuild(req.params.id, req.body, req);
+  const record = await service.moveToBuild(req.params.id, req);
   return ApiResponse.success(res, record, 'Moved to build');
 });
 

@@ -16,13 +16,14 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import dayjs from 'dayjs';
 import { featureRequestsApi } from '../../services/domains';
 import useResource from '../../hooks/useResource';
-import useBreadcrumbLabel from '../../hooks/useBreadcrumbLabel';
+import usePageMeta from '../../hooks/usePageMeta';
 import useToast from '../../hooks/useToast';
 import { useAppSelector } from '../../app/hooks';
 import { LoadingBlock, ErrorBlock } from '../../components/common/AsyncState';
 import CommentThread from '../../components/common/CommentThread';
 import BackButton from '../../components/common/BackButton';
 import FeatureRequestPanelCard from './FeatureRequestPanelCard';
+import TypeBadge from '../../components/common/TypeBadge';
 import usePermission from '../../routes/usePermission';
 import humanize from '../../utils/humanize';
 
@@ -35,6 +36,9 @@ import humanize from '../../utils/humanize';
 export default function FeatureRequestDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  // Same title/subtitle as the Ideas list page — the topbar shouldn't go blank just because the
+  // viewer navigated from the list into one specific feature request.
+  usePageMeta('Ideas', 'New ideas and feature requests awaiting review.');
   const [editingDescription, setEditingDescription] = useState(false);
   const [descDraft, setDescDraft] = useState('');
   const [savingDesc, setSavingDesc] = useState(false);
@@ -51,7 +55,6 @@ export default function FeatureRequestDetailPage() {
 
   const { data: featureRequest, loading, error, reload } = useResource(() => featureRequestsApi.getById(id), [id]);
   const { data: history } = useResource(() => featureRequestsApi.statusHistory(id), [id]);
-  useBreadcrumbLabel(featureRequest?.title);
 
   // Reset the whole vote form whenever the request itself changes — React Router doesn't remount
   // this component just because :id changed, so without this a decision picked on one request
@@ -175,6 +178,7 @@ export default function FeatureRequestDetailPage() {
         <Typography variant="body2" color="text.secondary">
           Submitted by, <Typography component="span" variant="body2" fontWeight={700} color="text.primary">{featureRequest.submitter?.name || '—'}</Typography>
         </Typography>
+        <TypeBadge type="feature_request" sx={{ ml: 1 }} />
       </Stack>
       {featureRequest.application?.name && (
         <Stack direction="row" spacing={0.25} alignItems="center" sx={{ mt: 0.5 }}>

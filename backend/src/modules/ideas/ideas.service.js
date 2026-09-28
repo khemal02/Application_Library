@@ -440,7 +440,7 @@ async function panelCandidates(id, kind, req) {
  * authorization; you can only ever record your own row.
  */
 async function submitReview(id, {
-  decision, note, ownerId, startDate, targetGoLive,
+  decision, note, ownerId, startDate,
 }, req) {
   const idea = await Idea.findByPk(id, { include });
   if (!idea) throw ApiError.notFound('Idea not found');
@@ -450,7 +450,7 @@ async function submitReview(id, {
   }
 
   const myRow = await IdeaReview.findOne({ where: { ideaId: idea.id, userId: req.user.id } });
-  if (!myRow) return submitTieBreak(idea, { decision, note, ownerId, startDate, targetGoLive }, req);
+  if (!myRow) return submitTieBreak(idea, { decision, note, ownerId, startDate }, req);
 
   if (myRow.kind === 'reviewer') {
     if (decision === 'request_changes' && !note?.trim()) {
@@ -491,7 +491,7 @@ async function submitReview(id, {
 
   const outcome = approveCount > rejectCount ? 'approve' : 'reject';
   return finalizeIdea(idea, {
-    actingRow: myRow, actingRowIsNew: false, actingDecision: decision, note, ownerId, startDate, targetGoLive, outcome, reasonRows: allRows,
+    actingRow: myRow, actingRowIsNew: false, actingDecision: decision, note, ownerId, startDate, outcome, reasonRows: allRows,
   }, req);
 }
 
@@ -506,7 +506,7 @@ async function submitReview(id, {
  * approvers act in parallel now, so reviewer completion has no bearing on whether a tie exists.
  */
 async function submitTieBreak(idea, {
-  decision, note, ownerId, startDate, targetGoLive,
+  decision, note, ownerId, startDate,
 }, req) {
   if (idea.status !== 'under_review') {
     throw ApiError.badRequest('Reviews can only be submitted for an idea that is Under Review.');
@@ -530,7 +530,7 @@ async function submitTieBreak(idea, {
   }
 
   return finalizeIdea(idea, {
-    actingRow: null, actingRowIsNew: true, actingDecision: decision, note, ownerId, startDate, targetGoLive, outcome: decision, reasonRows: allRows,
+    actingRow: null, actingRowIsNew: true, actingDecision: decision, note, ownerId, startDate, outcome: decision, reasonRows: allRows,
   }, req);
 }
 
@@ -545,7 +545,7 @@ async function submitTieBreak(idea, {
  * ordering would produce.
  */
 async function finalizeIdea(idea, {
-  actingRow, actingRowIsNew, actingDecision, note, ownerId, startDate, targetGoLive, outcome, reasonRows,
+  actingRow, actingRowIsNew, actingDecision, note, ownerId, startDate, outcome, reasonRows,
 }, req) {
   const toStatus = outcome === 'approve' ? 'approved' : 'rejected';
   // Same trigger condition as before Application Tracking existed, unchanged (per explicit
@@ -559,9 +559,9 @@ async function finalizeIdea(idea, {
   // window) moved to a separate, later, narrower action: applicationTracking.service.js#moveToBuild
   // (CEO/Manager/Admin only). A track is still created here with `ownerId: null` until then — see
   // that function's own docstring for how it fills this in and what stays locked (isOwnerOrSuper)
-  // until it does. `ownerId`/`startDate`/`targetGoLive` stay accepted here (not removed from the
-  // signature or the validator) purely so a caller who already has this data can still supply it
-  // up front if they want to — nothing requires it any more.
+  // until it does. `ownerId`/`startDate` stay accepted here (not removed from the signature or the
+  // validator) purely so a caller who already has this data can still supply it up front if they
+  // want to — nothing requires it any more.
   const needsTrack = toStatus === 'approved' && !idea.applicationId;
   if (needsTrack && startDate) {
     // Joi's `.date()` coerces this into a real Date object; the DB-side comparisons elsewhere in
@@ -645,7 +645,6 @@ async function finalizeIdea(idea, {
           name: null,
           description: null,
           startDate: startDate || null,
-          targetGoLive: targetGoLive || null,
           queueRank: await applicationTrackingService.nextQueueRank(t),
         }, { transaction: t });
         await ApplicationTrackStage.bulkCreate(
@@ -843,15 +842,13 @@ async function analytics() {
 /**
  * PATCH /:id/move-to-build — narrowly permissioned (`ideas:moveToBuild`, held today by CEO/
  * Manager/Admin via their existing resource-level `manage` grant — see hasPermission()'s wildcard
- * rule, no separate grant migration needed). Approving an idea already requires picking the
- * track's OWNER (finalizeIdea's needsTrack guard above) — that's a different decision from this
- * one: who actually does the Development work, made by whoever holds this permission, not
- * necessarily the track owner themselves. The real mutation (naming the Development stage's
- * assignee and starting it) lives on the track itself — see
- * applicationTracking.service.js#moveToBuild, reused here rather than duplicated.
+ * rule, no separate grant migration needed). Starts the Development stage unassigned — the
+ * track's owner picks who's actually doing that work afterward, via Application Tracking's own
+ * per-stage Assignee control, not here. The real mutation (starting the stage) lives on the track
+ * itself — see applicationTracking.service.js#moveToBuild, reused here rather than duplicated.
  */
 async function moveToBuild(id, {
-  assigneeId, ownerId, startDate, targetGoLive,
+  ownerId, startDate,
 }, req) {
   const idea = await Idea.findByPk(id, { attributes: ['id', 'title', 'status'] });
   if (!idea) throw ApiError.notFound('Idea not found');
@@ -882,7 +879,7 @@ async function moveToBuild(id, {
   }
 
   return applicationTrackingService.moveToBuild(track.id, {
-    assigneeId, ownerId: !track.ownerId ? ownerId : undefined, startDate, targetGoLive,
+    ownerId: !track.ownerId ? ownerId : undefined, startDate,
   }, req);
 }
 

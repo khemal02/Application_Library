@@ -637,12 +637,12 @@ async function analytics() {
  * PATCH /:id/move-to-build — narrowly permissioned (`feature_requests:moveToBuild`, held today by
  * CEO/Manager/Admin via their existing resource-level `manage` grant, no separate grant migration
  * needed — same shape as ideas.service.js#moveToBuild). Approving a feature request creates a
- * change request with every stage `not_started` and no assignee at all (unlike an idea, which
- * already requires picking a track OWNER at approval) — this fills that real gap: who actually
- * does the Development work. The real mutation lives on the change request itself — see
- * changeRequests.service.js#moveToBuild, reused here rather than duplicated.
+ * change request with every stage `not_started` — this starts Development, unassigned; the
+ * change request's owner picks who's actually doing that work afterward, via Application
+ * Tracking's own per-stage Assignee control. The real mutation lives on the change request itself
+ * — see changeRequests.service.js#moveToBuild, reused here rather than duplicated.
  */
-async function moveToBuild(id, { assigneeId }, req) {
+async function moveToBuild(id, req) {
   const featureRequest = await FeatureRequest.findByPk(id, {
     attributes: ['id'],
     include: [{ model: ChangeRequest, as: 'changeRequest', attributes: ['id'] }],
@@ -650,7 +650,7 @@ async function moveToBuild(id, { assigneeId }, req) {
   if (!featureRequest) throw ApiError.notFound('Feature request not found');
   if (!featureRequest.changeRequest) throw ApiError.conflict('No change request exists for this feature request yet.');
 
-  return changeRequestsService.moveToBuild(featureRequest.changeRequest.id, assigneeId, req);
+  return changeRequestsService.moveToBuild(featureRequest.changeRequest.id, req);
 }
 
 module.exports = {

@@ -8,8 +8,8 @@ const Joi = require('joi');
 const create = Joi.object({
   title: Joi.string().max(200).required(),
   severity: Joi.string().valid('low', 'medium', 'high', 'critical').required(),
-  description: Joi.string().allow('', null),
-  affectedVersion: Joi.string().max(50).allow('', null),
+  description: Joi.string().trim().min(1).required(),
+  affectedVersion: Joi.string().trim().min(1).max(50).required(),
   status: Joi.forbidden(),
   reportedBy: Joi.forbidden(),
   assigneeId: Joi.forbidden(),

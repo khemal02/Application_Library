@@ -6,7 +6,6 @@ import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import Link from '@mui/material/Link';
 import Button from '@mui/material/Button';
-import Tooltip from '@mui/material/Tooltip';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
 import Grid from '@mui/material/Grid';
@@ -23,7 +22,7 @@ import dayjs from 'dayjs';
 import { applicationTrackingApi, attachmentsApi } from '../../services/domains';
 import { useAppSelector } from '../../app/hooks';
 import useResource from '../../hooks/useResource';
-import useBreadcrumbLabel from '../../hooks/useBreadcrumbLabel';
+import usePageMeta from '../../hooks/usePageMeta';
 import useToast from '../../hooks/useToast';
 import usePermission from '../../routes/usePermission';
 import { LoadingBlock, ErrorBlock } from '../../components/common/AsyncState';
@@ -206,38 +205,24 @@ function ActivityTimeline({ history }) {
 function StageSection({
   stage, stageData, canAct, canAssign, candidates, canWriteNotes, isBlockedByPredecessor, predecessorLabel, predecessorAssigneeName,
   hasPreviousStage, hasNextStage, nextStageLabel,
-  trackStartDate, trackTargetGoLive, isViewerStage, isRequestReady, trackStatus, onStart, onSaveDates, onAssign, onOpenComplete,
+  isViewerStage, isRequestReady, trackStatus, onStart, onSaveDates, onAssign, onOpenComplete,
   onOpenAdvance, onOpenSendBack, submitting,
 }) {
   const isComplete = stageData.status === 'complete';
   const isInProgress = stageData.status === 'in_progress';
-  // Owner/super-admin only — same reasoning as canAssign, not canAct: planning Started is the
-  // owner's job (same person who names the assignee), not the assignee's own to edit. Reuses
-  // canAssign's exact condition rather than duplicating it — the two are the same permission
-  // scope. Deliberately NOT gated on isInProgress either — the owner can plan every stage's start
-  // right after the track is created, laying out the whole Development -> Testing -> Deployment
-  // timeline before any of them actually begin. Only a completed stage locks this back down to a
-  // historical record (canAssign already excludes complete stages).
-  const datesEditable = canAssign;
-  // Narrower than datesEditable — the document link is the assignee's own deliverable to attach,
-  // same reasoning canWriteNotesOnStage already applies to Notes: the owner doesn't get a pass here
-  // just for being able to start/complete the stage, and it's only meaningful once work is
-  // actually under way.
+  // Narrower than canAssign — the document link is the assignee's own deliverable to attach, same
+  // reasoning canWriteNotesOnStage already applies to Notes: the owner doesn't get a pass here just
+  // for being able to start/complete the stage, and it's only meaningful once work is actually
+  // under way.
   const linkEditable = isInProgress && canWriteNotes;
   const [assigning, setAssigning] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const fileInputRef = useRef(null);
 
-  const [startDraft, setStartDraft] = useState(stageData.startDate || '');
   const [assigneeDraft, setAssigneeDraft] = useState(stageData.assigneeId || '');
-  useEffect(() => {
-    setStartDraft(stageData.startDate || '');
-  }, [stageData.startDate]);
-  // Deliberately its own effect, not folded into the one above — saving dates (Save button) must
-  // never wipe out an assignee the owner already picked but hasn't confirmed yet via the
-  // "Assignee" button. This one only resyncs when the stage's STORED assigneeId itself changes
-  // (i.e. after a real commit, or someone else's edit coming in via reload).
+  // Resyncs when the stage's STORED assigneeId itself changes (i.e. after a real commit, or
+  // someone else's edit coming in via reload).
   useEffect(() => {
     setAssigneeDraft(stageData.assigneeId || '');
   }, [stageData.assigneeId]);
@@ -249,42 +234,26 @@ function StageSection({
     ? candidates
     : [{ id: stageData.assigneeId, name: stageData.assignee?.name, roleLabel: null }, ...candidates];
 
-  // "Assignee" only enables once every field it commits is actually filled in — name AND Started.
-  // Picking "Unassigned" keeps it disabled too, same as leaving the name blank — there's no
-  // exception for clearing an existing assignment through this button.
-  const needsDatesFirst = !!assigneeDraft && !startDraft;
-  const assigneeDirty = canAssign && !!assigneeDraft && !!startDraft;
+  const assigneeDirty = canAssign && !!assigneeDraft;
   const confirmAssign = async () => {
     setAssigning(true);
     try {
-      // Carries the draft Started date along with the assignment — this is now the ONLY way the
-      // owner's Started date ever gets persisted, there's no separate Save for it any more.
-      await onAssign({
-        assigneeId: assigneeDraft || null,
-        ...(assigneeDraft && datesEditable ? { startDate: startDraft || null } : {}),
-      });
+      // No Started date here any more — naming someone doesn't plan a date, it just says who's on
+      // it. The date is set automatically, the moment that person actually clicks "Start
+      // {stage}" (see updateStage's own in_progress default), not chosen by the owner up front.
+      await onAssign({ assigneeId: assigneeDraft || null });
     } finally {
       setAssigning(false);
     }
   };
 
-  // A planned date is the owner's own draft of a stage nobody's picked up yet — showing it to every
-  // viewer before anyone's actually assigned made an unassigned stage look like it already had a
-  // start in motion. The owner still sees their own plan (they're the one editing it); everyone
-  // else sees "—" for these fields until the stage genuinely has an assignee, same as the Assignee
-  // field itself already reads while unassigned.
-  const datesVisible = !!stageData.assigneeId || canAssign;
+  // A stage nobody's picked up yet shouldn't look like it already has a start in motion — everyone
+  // sees "—" for Started/Finished/Document link until the stage genuinely has an assignee.
+  const datesVisible = !!stageData.assigneeId;
 
-  // ISO 'YYYY-MM-DD' strings sort correctly lexicographically, so plain string min/max works here
-  // without parsing into real Date objects. Bounded by the track's own overall window — Started
-  // can't be planned before the track's own Start Date or after its Expected Deployment Date.
-  const startMin = trackStartDate || undefined;
-  const startMax = trackTargetGoLive || undefined;
-
-  // There's no "Save" button anywhere on this card any more. The owner's Started date
-  // only ever commits together with the Assignee button (confirmAssign carries the draft date
-  // along); the assignee's Document Link now commits itself the moment a file finishes uploading —
-  // picking the file IS the confirm action, so there's nothing left standing around to "save".
+  // There's no "Save" button anywhere on this card any more. The assignee's Document Link commits
+  // itself the moment a file finishes uploading — picking the file IS the confirm action, so
+  // there's nothing left standing around to "save".
   const handleDocumentUpload = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -345,19 +314,11 @@ function StageSection({
           )}
         </Grid>
         <Grid item xs={6} sm={3}>
-          {/* Locked during submitting/assigning — dates now commit only via the Assignee button, so
-              its own in-flight state is what could otherwise race an in-progress edit here, same
-              reasoning the Assignee dropdown's own disabled={assigning} already covers. */}
-          {datesEditable ? (
-            <TextField
-              fullWidth size="small" label="Started" type="date" InputLabelProps={{ shrink: true }}
-              value={startDraft} disabled={submitting || assigning}
-              onChange={(e) => setStartDraft(e.target.value)}
-              inputProps={{ min: startMin, max: startMax }}
-            />
-          ) : (
-            <ReadField label="Started" value={datesVisible ? formatDate(stageData.startDate) : null} />
-          )}
+          {/* Always read-only, for everyone, including the owner — Started is never chosen by
+              hand any more. It's set automatically, the instant the assignee themselves clicks
+              "Start {stage}" (updateStage's own in_progress default), so it reads "—" until then,
+              exactly like Finished date does. */}
+          <ReadField label="Started" value={datesVisible ? formatDate(stageData.startDate) : null} />
         </Grid>
         <Grid item xs={6} sm={3}>
           <ReadField label="Finished date" value={datesVisible ? formatDate(stageData.finishedDate) : null} />
@@ -440,13 +401,9 @@ function StageSection({
                 </Button>
               )}
               {canAssign && (
-                <Tooltip title={needsDatesFirst ? 'Set Started before assigning someone.' : ''}>
-                  <span>
-                    <Button variant="contained" disabled={assigning || !assigneeDirty || needsDatesFirst} onClick={confirmAssign}>
-                      Assignee
-                    </Button>
-                  </span>
-                </Tooltip>
+                <Button variant="contained" disabled={assigning || !assigneeDirty} onClick={confirmAssign}>
+                  Assignee
+                </Button>
               )}
               {/* Warning-toned, deliberately not primary — this is the one place a stage can move
                   backward, and it must never be confusable with the forward Move/Mark-complete
@@ -485,6 +442,9 @@ function StageSection({
 
 export default function ApplicationTrackingDetailPage() {
   const { id } = useParams();
+  // Same title/subtitle as the Application Tracking list page — the topbar shouldn't go blank
+  // just because the viewer navigated from the list into one specific track.
+  usePageMeta('Application Tracking', 'Where every build stands today.');
   const user = useAppSelector((s) => s.auth.user);
   const isSuperAdmin = usePermission('*', 'manage');
   const { showSuccess, showError } = useToast();
@@ -496,8 +456,6 @@ export default function ApplicationTrackingDetailPage() {
   const [confirmingGoLive, setConfirmingGoLive] = useState(false);
   const [candidates, setCandidates] = useState([]);
   const [history, setHistory] = useState([]);
-
-  useBreadcrumbLabel(track?.name);
 
   useEffect(() => {
     applicationTrackingApi.assigneeCandidates(id)
@@ -708,18 +666,18 @@ export default function ApplicationTrackingDetailPage() {
             The application it produced has since been removed.
           </Typography>
         )}
-        {(track.startDate || track.targetGoLive) && (
+        {track.startDate && (
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-            Track window: {formatDate(track.startDate)} – {formatDate(track.targetGoLive)}
+            Start Date: {formatDate(track.startDate)}
           </Typography>
         )}
       </Box>
 
       {track.idea && (
         <Box sx={{ mb: 2 }}>
-          <IdeaFieldAccordion label="Problem Statement" value={track.idea.description} defaultOpen />
-          <IdeaFieldAccordion label="Proposed Solution" value={track.idea.proposedSolution} defaultOpen />
-          <IdeaFieldAccordion label="Technologies" value={track.idea.technologiesAndEfficiency} defaultOpen />
+          <IdeaFieldAccordion label="Problem Statement" value={track.idea.description} />
+          <IdeaFieldAccordion label="Proposed Solution" value={track.idea.proposedSolution} />
+          <IdeaFieldAccordion label="Technologies" value={track.idea.technologiesAndEfficiency} />
         </Box>
       )}
 
@@ -765,8 +723,6 @@ export default function ApplicationTrackingDetailPage() {
                 canAssign={canAssignStage(stageData)}
                 candidates={candidates}
                 canWriteNotes={canWriteNotesOnStage(stageData)}
-                trackStartDate={track.startDate}
-                trackTargetGoLive={track.targetGoLive}
                 isViewerStage={index === viewerStageIndex}
                 isRequestReady={isActive}
                 trackStatus={track.status}

@@ -62,10 +62,9 @@ const submitReview = Joi.object({
   decision: Joi.string().valid('approve', 'request_changes', 'reject').required(),
   note: Joi.string().allow('', null),
   ownerId: Joi.string().uuid(),
-  // Optional, shown alongside the owner picker on the same approve step — neither is required
-  // (unlike ownerId, which finalizeIdea() conditionally requires).
+  // Optional, shown alongside the owner picker on the same approve step — not required (unlike
+  // ownerId, which finalizeIdea() conditionally requires).
   startDate: Joi.date().iso().allow(null),
-  targetGoLive: Joi.date().iso().allow(null),
 });
 
 // Adds one or more people to an idea's panel — see ideas.service.js#addParticipants. Who may call
@@ -81,16 +80,15 @@ const panelCandidatesQuery = Joi.object({
   kind: Joi.string().valid('reviewer', 'approver').required(),
 });
 
-// PATCH /:id/move-to-build — see ideas.service.js#moveToBuild. ownerId/startDate/targetGoLive are
-// only actually required (enforced in the service, which knows whether the track already has an
-// owner) the first time this is called for a given idea's track — Joi can't see that state, so
-// they stay optional here. Who may reach this at all is the route's own `ideas:moveToBuild`
-// permission gate; Joi only owns the body shape.
+// PATCH /:id/move-to-build — see ideas.service.js#moveToBuild. It just starts Development
+// unassigned — the track's owner assigns who's doing it afterward via Application Tracking's own
+// per-stage Assignee control. ownerId/startDate are only actually required (enforced in the
+// service, which knows whether the track already has an owner) the first time this is called for
+// a given idea's track — Joi can't see that state, so they stay optional here. Who may reach this
+// at all is the route's own `ideas:moveToBuild` permission gate; Joi only owns the body shape.
 const moveToBuild = Joi.object({
-  assigneeId: Joi.string().uuid().required(),
   ownerId: Joi.string().uuid(),
   startDate: Joi.date().iso().allow(null),
-  targetGoLive: Joi.date().iso().allow(null),
 });
 
 module.exports = {

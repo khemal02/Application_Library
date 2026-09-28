@@ -198,7 +198,7 @@ export default function FeatureRequestPanelCard({
       const stillToVote = otherApprovers.filter((a) => a.decision === null).length;
       return {
         severity: 'info',
-        text: `You are 1 of ${panel.approversTotal} approvers. ${stillToVote} more still need to vote — the request is decided by majority once everyone has.`,
+        text: `You are 1 of ${panel.approversTotal} approvers. ${stillToVote} more still need to vote.`,
       };
     }
     if (!voteDecision) {

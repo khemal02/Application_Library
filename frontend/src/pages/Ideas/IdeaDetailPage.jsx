@@ -15,7 +15,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import dayjs from 'dayjs';
 import { ideasApi } from '../../services/domains';
 import useResource from '../../hooks/useResource';
-import useBreadcrumbLabel from '../../hooks/useBreadcrumbLabel';
+import usePageMeta from '../../hooks/usePageMeta';
 import useToast from '../../hooks/useToast';
 import { useAppSelector } from '../../app/hooks';
 import { LoadingBlock, ErrorBlock } from '../../components/common/AsyncState';
@@ -23,12 +23,16 @@ import CommentThread from '../../components/common/CommentThread';
 import BackButton from '../../components/common/BackButton';
 import IdeaPanelCard from './IdeaPanelCard';
 import AccordionSection from '../../components/common/AccordionSection';
+import TypeBadge from '../../components/common/TypeBadge';
 import usePermission from '../../routes/usePermission';
 import humanize from '../../utils/humanize';
 
 export default function IdeaDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  // Same title/subtitle as the Ideas list page — the topbar shouldn't go blank just because the
+  // viewer navigated from the list into one specific idea.
+  usePageMeta('Ideas', 'New ideas and feature requests awaiting review.');
   const [editingDescription, setEditingDescription] = useState(false);
   const [descDraft, setDescDraft] = useState('');
   const [savingDesc, setSavingDesc] = useState(false);
@@ -51,7 +55,6 @@ export default function IdeaDetailPage() {
 
   const { data: idea, loading, error, reload } = useResource(() => ideasApi.getById(id), [id]);
   const { data: history } = useResource(() => ideasApi.statusHistory(id), [id]);
-  useBreadcrumbLabel(idea?.title);
 
   // Reset the whole vote form whenever the idea itself changes — React Router doesn't remount
   // this component just because :id changed, so without this a decision picked on one idea could
@@ -216,6 +219,7 @@ export default function IdeaDetailPage() {
         <Typography variant="body2" color="text.secondary">
           Submitted by, <Typography component="span" variant="body2" fontWeight={700} color="text.primary">{idea.submitter?.name || '—'}</Typography>
         </Typography>
+        <TypeBadge type="idea" sx={{ ml: 1 }} />
       </Stack>
       <Box sx={{ mb: 2 }}>
         <Typography fontWeight={800} sx={{ fontSize: '24px' }}>{idea.title}</Typography>
@@ -242,7 +246,7 @@ export default function IdeaDetailPage() {
             full width on mobile via xs={12}. */}
         <Grid item xs={12} sx={{ flexBasis: { md: '60%' }, maxWidth: { md: '60%' } }}>
           {(idea.description || canEditIdeaFields) && (
-            <AccordionSection title="Problem Statement" defaultOpen>
+            <AccordionSection title="Problem Statement">
               {editingDescription ? (
                 <Box>
                   <TextField
@@ -275,7 +279,7 @@ export default function IdeaDetailPage() {
           )}
 
           {(idea.proposedSolution || canEditIdeaFields) && (
-            <AccordionSection title="Proposed Solution" defaultOpen>
+            <AccordionSection title="Proposed Solution">
               {editingSolution ? (
                 <Box>
                   <TextField
@@ -308,7 +312,7 @@ export default function IdeaDetailPage() {
           )}
 
           {(idea.technologiesAndEfficiency || canEditIdeaFields) && (
-            <AccordionSection title="Technologies" defaultOpen>
+            <AccordionSection title="Technologies">
               {editingTech ? (
                 <Box>
                   <TextField
