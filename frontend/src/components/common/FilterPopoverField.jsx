@@ -11,7 +11,7 @@ import MenuItem from '@mui/material/MenuItem';
 export default function FilterPopoverField({ label, allLabel, value, onChange, options }) {
   return (
     <Box>
-      <Typography sx={{ fontSize: '12.5px', fontWeight: 600, color: 'text.secondary', mb: 0.75 }}>{label}</Typography>
+      <Typography sx={{ fontSize: '12.5px', fontWeight: 600, color: 'text.secondary', mb: 0.5 }}>{label}</Typography>
       <TextField
         select fullWidth size="small"
         value={value ?? ''}

@@ -412,9 +412,9 @@ export default function IdeasAndFeatureRequestsListPage() {
         transformOrigin={{ vertical: 'top', horizontal: 'left' }}
         PaperProps={{ sx: { mt: 0.5 } }}
       >
-        <Box sx={{ p: 2, width: 280 }}>
-          <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>Filters</Typography>
-          <Stack spacing={1.5}>
+        <Box sx={{ p: 2, width: 320 }}>
+          <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>Filters</Typography>
+          <Stack spacing={1}>
             <FilterPopoverField
               label="Department" allLabel="All departments"
               value={filters.departmentId} onChange={(v) => handleFilterChange('departmentId', v)}
@@ -446,7 +446,7 @@ export default function IdeasAndFeatureRequestsListPage() {
               label="Awaiting my review"
             />
           </Stack>
-          <Divider sx={{ my: 2 }} />
+          <Divider sx={{ my: 1.5 }} />
           <Stack direction="row" justifyContent="space-between">
             <Button size="small" onClick={clearAllFilters} disabled={activeFilterCount === 0}>Clear all</Button>
             <Button size="small" variant="contained" onClick={() => setFiltersAnchor(null)}>Done</Button>

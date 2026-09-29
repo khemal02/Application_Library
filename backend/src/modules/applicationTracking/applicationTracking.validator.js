@@ -11,6 +11,9 @@ const listQuery = Joi.object({
   stage: Joi.string().valid('development', 'testing', 'deployment'),
   assigneeId: Joi.string().uuid(),
   ownerId: Joi.string().uuid(),
+  // Matches a track's own name override OR its source idea's title — see
+  // applicationTracking.service.js#list's own comment on why that's a two-step query.
+  search: Joi.string().trim().max(200).allow(''),
   page: Joi.number().integer().min(1),
   limit: Joi.number().integer().min(1).max(100),
 });

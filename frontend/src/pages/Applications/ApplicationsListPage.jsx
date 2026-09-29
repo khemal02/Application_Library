@@ -118,9 +118,9 @@ export default function ApplicationsListPage() {
         transformOrigin={{ vertical: 'top', horizontal: 'left' }}
         PaperProps={{ sx: { mt: 0.5 } }}
       >
-        <Box sx={{ p: 2, width: 280 }}>
-          <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>Filters</Typography>
-          <Stack spacing={1.5}>
+        <Box sx={{ p: 2, width: 320 }}>
+          <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>Filters</Typography>
+          <Stack spacing={1}>
             <FilterPopoverField
               label="Status" allLabel="All statuses"
               value={list.filters.status} onChange={(v) => handleFilterChange('status', v)}
@@ -142,7 +142,7 @@ export default function ApplicationsListPage() {
               options={FUNCTIONAL_AREA_OPTIONS}
             />
           </Stack>
-          <Divider sx={{ my: 2 }} />
+          <Divider sx={{ my: 1.5 }} />
           <Stack direction="row" justifyContent="space-between">
             <Button size="small" onClick={clearAllFilters} disabled={activeFilterCount === 0}>Clear all</Button>
             <Button size="small" variant="contained" onClick={() => setFiltersAnchor(null)}>Done</Button>

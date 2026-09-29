@@ -55,10 +55,10 @@ export default function ProjectInfoBox({ application }) {
       </Box>
 
       <Grid container spacing={2}>
-        <InfoField label="Department" value={application.department?.name || '—'} />
         <InfoField label="Owner" value={application.owner?.name || '—'} />
-        <InfoField label="Industry" value={application.industry ? humanize(application.industry) : '—'} />
+        <InfoField label="Department" value={application.department?.name || '—'} />
         <InfoField label="Functional Area" value={application.functionalArea ? humanize(application.functionalArea) : '—'} />
+        <InfoField label="Industry" value={application.industry ? humanize(application.industry) : '—'} />
         <InfoField label="Start Date" value={formatDate(application.startDate)} />
         <InfoField label="Release Date" value={formatDate(application.releaseDate)} />
         {application.repositoryUrl && (

@@ -148,6 +148,11 @@ async function list(query, req) {
   if (query.priority) where.priority = query.priority;
   if (query.ownerId) where.ownerId = query.ownerId;
 
+  // Two independent id-narrowing filters can both be active at once (e.g. a stage filter AND a
+  // search term) — each pushes its own condition here rather than writing straight to `where.id`,
+  // which would let the second one silently clobber the first instead of ANDing with it.
+  const andConditions = [];
+
   if (query.stage || query.assigneeId) {
     const stageWhere = {};
     if (query.stage) stageWhere.stage = query.stage;
@@ -156,8 +161,25 @@ async function list(query, req) {
     const ids = matches.map((m) => m.applicationTrackId);
     // No matches -> a where clause that can never be true, rather than an empty IN() (which some
     // Sequelize/Postgres combinations turn into "always true" if left to chance).
-    where.id = { [Op.in]: ids.length ? ids : ['00000000-0000-0000-0000-000000000000'] };
+    andConditions.push({ id: { [Op.in]: ids.length ? ids : ['00000000-0000-0000-0000-000000000000'] } });
   }
+
+  if (query.search) {
+    // Matches either the track's own name override OR its source idea's title — a track with no
+    // override displays the idea's title (see resolveTrack), so search has to check both sides of
+    // that fallback, not just the literal `name` column.
+    const term = `%${query.search}%`;
+    const matchingIdeas = await Idea.findAll({ where: { title: { [Op.iLike]: term } }, attributes: ['id'] });
+    const ideaIds = matchingIdeas.map((i) => i.id);
+    andConditions.push({
+      [Op.or]: [
+        { name: { [Op.iLike]: term } },
+        ...(ideaIds.length ? [{ ideaId: { [Op.in]: ideaIds } }] : []),
+      ],
+    });
+  }
+
+  if (andConditions.length > 0) where[Op.and] = andConditions;
 
   // A literal ORDER BY referencing the main table's alias behaves inconsistently between
   // findAndCountAll's separate COUNT and SELECT queries once includes are present (the COUNT query

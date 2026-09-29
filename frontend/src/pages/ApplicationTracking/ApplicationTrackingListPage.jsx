@@ -6,8 +6,10 @@ import Typography from '@mui/material/Typography';
 import Avatar from '@mui/material/Avatar';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
+import InputAdornment from '@mui/material/InputAdornment';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Switch from '@mui/material/Switch';
+import SearchIcon from '@mui/icons-material/Search';
 import dayjs from 'dayjs';
 import DataTable from '../../components/common/DataTable';
 import StatusBadge from '../../components/common/StatusBadge';
@@ -50,12 +52,11 @@ function ApplicationCell({ track }) {
  * Application Tracking — the displayed name now matches the module/route/API name throughout
  * this module (it used to display as "Idea Prioritization", by explicit request). Sits between an
  * approved idea and the Applications catalogue. No create button (a track is only ever born from
- * an idea being approved)
- * and no search box (the backend list has none to back it — see applicationTracking.service.js#list,
- * which owns the order: priority-then-target-date normally, or start-date-first the moment either
- * "mine" toggle below is on — not a user-sortable column-header kind of order). `useServerList`
- * isn't used here for the same reason: it always injects `sort`/`search` query params this
- * endpoint's validator would 400 on.
+ * an idea being approved). Still not built on `useServerList` — that hook always injects a `sort`
+ * query param this endpoint's validator would 400 on (there's no user-sortable column-header kind
+ * of order here, only the fixed newest-first/start-date-first order applicationTracking.service.js
+ * #list owns) — `search` is now real (matches a track's own name override or its source idea's
+ * title), just wired up by hand alongside the rest of this page's own params.
  */
 export default function ApplicationTrackingListPage() {
   const navigate = useNavigate();
@@ -64,6 +65,7 @@ export default function ApplicationTrackingListPage() {
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
+  const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState('');
   const [assignedToMe, setAssignedToMe] = useState(false);
   const [myApps, setMyApps] = useState(false);
@@ -76,6 +78,7 @@ export default function ApplicationTrackingListPage() {
     setLoading(true);
     setError(null);
     const params = { page, limit };
+    if (search) params.search = search;
     if (stageFilter) params.stage = stageFilter;
     if (assignedToMe && user?.id) params.assigneeId = user.id;
     if (myApps && user?.id) params.ownerId = user.id;
@@ -83,7 +86,7 @@ export default function ApplicationTrackingListPage() {
       .then((res) => { setRows(res.data); setPagination(res.meta?.pagination || null); })
       .catch((err) => setError(err.response?.data?.message || 'Failed to load tracks'))
       .finally(() => setLoading(false));
-  }, [page, limit, stageFilter, assignedToMe, myApps, user?.id]);
+  }, [page, limit, search, stageFilter, assignedToMe, myApps, user?.id]);
 
   const columns = [
     { key: 'application', label: 'Application', render: (t) => <MutedCell track={t}><ApplicationCell track={t} /></MutedCell> },
@@ -129,7 +132,15 @@ export default function ApplicationTrackingListPage() {
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="flex-end" alignItems="center" flexWrap="wrap" useFlexGap rowGap={1} sx={{ mb: 2 }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" useFlexGap rowGap={1} sx={{ mb: 2 }}>
+        <TextField
+          size="small"
+          placeholder="Search here..."
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          sx={{ width: 220, flexShrink: 0 }}
+          InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
+        />
         <Stack direction="row" spacing={2} alignItems="center">
           <TextField
             select size="small" label="Stage" value={stageFilter}
