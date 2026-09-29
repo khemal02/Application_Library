@@ -12,7 +12,6 @@ import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import Divider from '@mui/material/Divider';
-import WorkOutlineIcon from '@mui/icons-material/WorkOutline';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { alpha } from '@mui/material/styles';
@@ -64,23 +63,6 @@ export default function Topbar() {
                 <Typography color="text.secondary" noWrap sx={{ fontSize: 12.5, display: 'block' }}>{pageMeta.subtitle}</Typography>
               )}
             </Box>
-          )}
-
-          {user?.role?.label && (
-            <Chip
-              icon={<WorkOutlineIcon />}
-              label={user.role.label.toUpperCase()}
-              size="small"
-              sx={{
-                flexShrink: 0,
-                fontSize: '11px',
-                fontWeight: 700,
-                letterSpacing: 0.4,
-                bgcolor: '#EAF2FE',
-                color: '#1D4ED8',
-                '& .MuiChip-icon': { color: '#1D4ED8' },
-              }}
-            />
           )}
         </Stack>
 

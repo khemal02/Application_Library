@@ -131,12 +131,12 @@ const today = () => new Date().toISOString().slice(0, 10);
  * two-step: find which track ids have a matching stage row, then filter the main (fully-included)
  * query on `id IN (...)`. `ownerId` IS a plain column on the track itself, so it's just a WHERE.
  *
- * Order is the feature: normally priority critical->low, then created_at ascending as the
- * tiebreaker — a literal CASE expression, since Sequelize has no built-in "order by this enum's
- * declared order". But once the caller is looking at only THEIR OWN tracks ("Assigned to me" /
- * "My Apps" — assigneeId or ownerId given), the question changes from "what matters most
- * org-wide" to "what do I personally need to start next" — so the order switches to the track's
- * own start_date ascending (nulls last) instead.
+ * Order is the feature: normally newest-created first — "last in, first shown," so a track that
+ * just entered the list (an idea just approved, a track just resumed) is always row one, by
+ * explicit request, not priority-ranked. But once the caller is looking at only THEIR OWN tracks
+ * ("Assigned to me" / "My Apps" — assigneeId or ownerId given), the question changes from "what's
+ * newest org-wide" to "what do I personally need to start next" — so the order switches to the
+ * track's own start_date ascending (nulls last) instead.
  */
 async function list(query, req) {
   const page = Math.max(parseInt(query.page, 10) || 1, 1);
@@ -173,8 +173,7 @@ async function list(query, req) {
       ['createdAt', 'ASC'],
     ]
     : [
-      [sequelize.literal("CASE \"ApplicationTrack\".\"priority\" WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END"), 'ASC'],
-      ['createdAt', 'ASC'],
+      ['createdAt', 'DESC'],
     ];
 
   const count = await ApplicationTrack.count({ where, distinct: true, col: 'id' });
