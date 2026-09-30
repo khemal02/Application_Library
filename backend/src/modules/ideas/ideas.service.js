@@ -24,12 +24,11 @@ const applicationTrackingService = require('../applicationTracking/applicationTr
 // to a new_idea in the first place. `category` stays a real column (existing status_history rows
 // reference it, and dropping it buys nothing) but the validator no longer accepts anything but
 // 'new_idea' going forward.
-const SEARCHABLE_FIELDS = ['title', 'description', 'businessProblem', 'proposedSolution'];
-const FILTERABLE_FIELDS = ['status', 'priority', 'departmentId', 'submittedBy', 'estimatedComplexity', 'applicationId', 'industry', 'functionalArea', 'internalUse'];
+const SEARCHABLE_FIELDS = ['title', 'description', 'proposedSolution'];
+const FILTERABLE_FIELDS = ['status', 'priority', 'departmentId', 'submittedBy', 'applicationId', 'industry', 'functionalArea', 'internalUse'];
 
 const include = [
   { model: User, as: 'submitter', attributes: ['id', 'name', 'avatarUrl'] },
-  { model: User, as: 'reviewer', attributes: ['id', 'name', 'avatarUrl'] },
   { model: Department, as: 'department', attributes: ['id', 'name'] },
   { model: Application, as: 'application', attributes: ['id', 'name'] },
   // Powers the Ideas/Feature Requests list page's "Build" column — needs to know, per row, whether

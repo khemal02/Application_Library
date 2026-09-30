@@ -16,19 +16,12 @@ const create = Joi.object({
   industry: Joi.string().valid(...INDUSTRIES).allow('', null),
   functionalArea: Joi.string().valid(...FUNCTIONAL_AREAS).allow('', null),
   internalUse: Joi.boolean(),
-  businessProblem: Joi.string().allow('', null),
   proposedSolution: Joi.string().allow('', null),
-  expectedBenefits: Joi.string().allow('', null),
-  aiUsage: Joi.string().allow('', null),
-  technologySuggestion: Joi.string().allow('', null),
   technologiesAndEfficiency: Joi.string().allow('', null),
   // Not collected on the form — auto-filled from the target Application's own department (falling
   // back to the submitter's) in featureRequests.service.js#create. An explicit value here still
   // wins. Display/org-chart data only.
   departmentId: Joi.string().uuid().allow(null),
-  targetUsers: Joi.string().max(300).allow('', null),
-  estimatedComplexity: Joi.string().valid('low', 'medium', 'high'),
-  estimatedDevTime: Joi.string().max(60).allow('', null),
   priority: Joi.string().valid('low', 'medium', 'high', 'critical'),
   tags: Joi.array().items(Joi.string().max(60)),
 });

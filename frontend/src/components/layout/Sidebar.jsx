@@ -176,14 +176,14 @@ export default function Sidebar({ open }) {
           <NotificationPanel iconSx={{ color: '#AFC6EA', fontSize: 19 }} />
         </Box>
         <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)', mx: open ? -2.5 : 0 }} />
-        <Tooltip title={!open && user ? `${user.name} — ${user.role?.label || ''}` : ''} placement="right">
+        <Tooltip title={!open && user ? `${user.email} — ${user.role?.label || ''}` : ''} placement="right">
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, justifyContent: open ? 'flex-start' : 'center', mt: 1.5 }}>
             <Avatar sx={{ width: 34, height: 34, fontSize: '13px', bgcolor: '#163565', color: '#fff', fontWeight: 700, flexShrink: 0 }}>
               {initials(user?.name)}
             </Avatar>
             {open && (
               <Box sx={{ overflow: 'hidden', minWidth: 0, flex: 1 }}>
-                <Typography variant="body2" fontWeight={700} noWrap sx={{ color: '#fff' }}>{user?.name}</Typography>
+                <Typography variant="body2" fontWeight={700} noWrap sx={{ color: '#fff' }}>{user?.email}</Typography>
                 <Typography variant="caption" noWrap sx={{ color: '#7FB0EE', display: 'block' }}>{user?.role?.label}</Typography>
               </Box>
             )}

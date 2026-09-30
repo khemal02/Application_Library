@@ -13,16 +13,9 @@ module.exports = (sequelize, DataTypes) => {
     // migration might seed directly.
     addedBy: { type: DataTypes.UUID, allowNull: true },
     addedAt: { type: DataTypes.DATE, allowNull: true },
-    // null until this person records a verdict. Legacy-only columns below.
+    // null until this person records a verdict.
     decision: { type: DataTypes.ENUM('approve', 'request_changes', 'reject'), allowNull: true },
     note: { type: DataTypes.TEXT },
-    // Legacy fields, retained for the 7 rows backfilled from the old team_lead/manager/ceo chain
-    // (see 20260130000026-idea-panel-participants.js) — every row from here on leaves both NULL
-    // and is identified by userId/kind instead. reviewerId duplicated the same person userId now
-    // points at for those 7 rows; roleName snapshot which chain slot (team_lead/manager/ceo) they
-    // filled, independent of their current DB role.
-    reviewerId: { type: DataTypes.UUID, allowNull: true },
-    roleName: { type: DataTypes.STRING(40), allowNull: true },
   }, {
     tableName: 'idea_reviews',
     indexes: [{ fields: ['idea_id'] }],
@@ -32,9 +25,6 @@ module.exports = (sequelize, DataTypes) => {
     IdeaReview.belongsTo(db.Idea, { foreignKey: 'ideaId', as: 'idea' });
     IdeaReview.belongsTo(db.User, { foreignKey: 'userId', as: 'user' });
     IdeaReview.belongsTo(db.User, { foreignKey: 'addedBy', as: 'addedByUser' });
-    // Legacy-only association — reviewer is always the same person as `user` for the 7 backfilled
-    // rows; kept so nothing that still reads `.reviewer` on an old row breaks.
-    IdeaReview.belongsTo(db.User, { foreignKey: 'reviewerId', as: 'reviewer' });
   };
 
   return IdeaReview;

@@ -15,8 +15,8 @@ const changeRequestsService = require('../changeRequests/changeRequests.service'
 const { cleanupEntityRefs } = require('../../utils/entityCleanup');
 const { getStorageDriver } = require('../attachments/storage');
 
-const SEARCHABLE_FIELDS = ['title', 'description', 'businessProblem', 'proposedSolution'];
-const FILTERABLE_FIELDS = ['status', 'priority', 'departmentId', 'submittedBy', 'estimatedComplexity', 'applicationId', 'industry', 'functionalArea', 'internalUse'];
+const SEARCHABLE_FIELDS = ['title', 'description', 'proposedSolution'];
+const FILTERABLE_FIELDS = ['status', 'priority', 'departmentId', 'submittedBy', 'applicationId', 'industry', 'functionalArea', 'internalUse'];
 
 const include = [
   { model: User, as: 'submitter', attributes: ['id', 'name', 'avatarUrl'] },

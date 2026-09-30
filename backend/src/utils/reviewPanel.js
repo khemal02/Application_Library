@@ -123,52 +123,6 @@ async function eligibleReviewersForRoles(entity, roleNames) {
   return result;
 }
 
-/**
- * Builds the review-panel view for an entity (an Idea or a Suggestion): one entry per panel role
- * (REVIEW_SLOTS), merging any recorded review-row decision with live eligibility data.
- * `candidatesByRole` is null for a non-live panel (the entity isn't currently at its panel status)
- * — eligibility is only meaningful while voting is actually open, so a historical panel just shows
- * what was decided, with usedFallback reported as null rather than a stale/misleading true-or-false.
- */
-async function buildReviewPanel({ ReviewModel, entityIdField, entityId, candidatesByRole }) {
-  const reviews = await ReviewModel.findAll({
-    where: { [entityIdField]: entityId },
-    include: [{ model: User, as: 'reviewer', attributes: ['id', 'name'] }],
-  });
-  const byRole = new Map(reviews.map((r) => [r.roleName, r]));
-
-  const slots = REVIEW_SLOTS.map((roleName) => {
-    const review = byRole.get(roleName);
-    return {
-      roleName,
-      roleLabel: ROLE_LABELS[roleName] || roleName,
-      reviewerLabel: REVIEWER_LABELS[roleName] || roleName,
-      decision: review?.decision ?? null,
-      note: review?.note ?? null,
-      reviewer: review?.reviewer ? { id: review.reviewer.id, name: review.reviewer.name } : null,
-      reviewedAt: review?.updatedAt ?? null,
-      usedFallback: candidatesByRole ? (candidatesByRole.get(roleName)?.usedFallback ?? null) : null,
-    };
-  });
-
-  const panelComplete = ['team_lead', 'manager'].every((roleName) => byRole.has(roleName));
-
-  return { slots, panelComplete };
-}
-
-/** Null unless the viewer's own role is a panel slot AND the panel is currently live. */
-function buildMyReviewSlot(user, candidatesByRole, slots) {
-  if (!candidatesByRole || !REVIEW_SLOTS.includes(user.roleName)) return null;
-  const mySlot = slots.find((s) => s.roleName === user.roleName);
-  const eligible = (candidatesByRole.get(user.roleName)?.users || []).some((u) => u.id === user.id);
-  return {
-    roleName: user.roleName,
-    decision: mySlot?.decision ?? null,
-    note: mySlot?.note ?? null,
-    eligible,
-  };
-}
-
 module.exports = {
-  REVIEW_SLOTS, ROLE_LABELS, REVIEWER_LABELS, eligibleReviewers, eligibleReviewersForRoles, buildReviewPanel, buildMyReviewSlot,
+  REVIEW_SLOTS, ROLE_LABELS, REVIEWER_LABELS, eligibleReviewers, eligibleReviewersForRoles,
 };

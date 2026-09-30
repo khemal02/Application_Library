@@ -17,16 +17,9 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: 'new_idea',
     },
     applicationId: { type: DataTypes.UUID, allowNull: true },
-    businessProblem: { type: DataTypes.TEXT },
     proposedSolution: { type: DataTypes.TEXT },
-    expectedBenefits: { type: DataTypes.TEXT },
-    aiUsage: { type: DataTypes.TEXT },
-    technologySuggestion: { type: DataTypes.TEXT },
     technologiesAndEfficiency: { type: DataTypes.TEXT },
     departmentId: { type: DataTypes.UUID, allowNull: true },
-    targetUsers: { type: DataTypes.STRING(300) },
-    estimatedComplexity: { type: DataTypes.ENUM('low', 'medium', 'high'), defaultValue: 'medium' },
-    estimatedDevTime: { type: DataTypes.STRING(60) },
     // submitted/technical_review_1/technical_review_2/review/discussion/development_ready are all
     // retired now (discussion and development_ready by this phase — discussion is no longer a live
     // gate, ideas are created directly at under_review; development_ready is folded into approved)
@@ -41,13 +34,6 @@ module.exports = (sequelize, DataTypes) => {
     },
     priority: { type: DataTypes.ENUM('low', 'medium', 'high', 'critical'), allowNull: false, defaultValue: 'medium' },
     submittedBy: { type: DataTypes.UUID, allowNull: false },
-    // Unused as of the strict-chain phase — the single-reviewer-claim model this backed
-    // (assignReviewer(), PATCH /ideas/:id/reviewer) was deleted along with the rest of the old
-    // stage machine. Left as a column rather than dropped: dropping it needs its own migration
-    // and buys nothing, since nothing reads or writes it anymore.
-    reviewerId: { type: DataTypes.UUID, allowNull: true },
-    reviewNotes: { type: DataTypes.TEXT },
-    reviewerFeedback: { type: DataTypes.TEXT },
     searchVector: { type: DataTypes.TSVECTOR },
   }, {
     tableName: 'ideas',
@@ -71,7 +57,6 @@ module.exports = (sequelize, DataTypes) => {
     Idea.belongsTo(db.Department, { foreignKey: 'departmentId', as: 'department' });
     Idea.belongsTo(db.Application, { foreignKey: 'applicationId', as: 'application' });
     Idea.belongsTo(db.User, { foreignKey: 'submittedBy', as: 'submitter' });
-    Idea.belongsTo(db.User, { foreignKey: 'reviewerId', as: 'reviewer' });
     Idea.hasMany(db.IdeaReview, { foreignKey: 'ideaId', as: 'reviews' });
     // Mirrors FeatureRequest.hasOne(ChangeRequest, { as: 'changeRequest' }) — an approved idea gets
     // exactly one track (finalizeIdea's own idempotency check), so the reverse side is a hasOne too.

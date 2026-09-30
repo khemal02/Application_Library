@@ -18,20 +18,13 @@ const create = Joi.object({
   // call outside this change's scope, flagged rather than changed here.
   functionalArea: Joi.string().valid(...FUNCTIONAL_AREAS).required(),
   internalUse: Joi.boolean(),
-  businessProblem: Joi.string().allow('', null),
   proposedSolution: Joi.string().allow('', null),
-  expectedBenefits: Joi.string().allow('', null),
-  aiUsage: Joi.string().allow('', null),
-  technologySuggestion: Joi.string().allow('', null),
   technologiesAndEfficiency: Joi.string().allow('', null),
   // Not collected on the New Idea form — the submitter is never asked. ideas.service.js#create
   // auto-fills it from req.user.departmentId when omitted; an explicit value here (e.g. an admin
   // creating on someone's behalf) still wins. Display/org-chart data only — review routing isn't
   // driven by any field on the idea anymore, see the panel model in ideas.service.js.
   departmentId: Joi.string().uuid().allow(null),
-  targetUsers: Joi.string().max(300).allow('', null),
-  estimatedComplexity: Joi.string().valid('low', 'medium', 'high'),
-  estimatedDevTime: Joi.string().max(60).allow('', null),
   priority: Joi.string().valid('low', 'medium', 'high', 'critical'),
   tags: Joi.array().items(Joi.string().max(60)),
 });

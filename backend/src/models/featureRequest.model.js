@@ -15,16 +15,9 @@ module.exports = (sequelize, DataTypes) => {
     functionalArea: { type: DataTypes.STRING(60), allowNull: true },
     internalUse: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     applicationId: { type: DataTypes.UUID, allowNull: false },
-    businessProblem: { type: DataTypes.TEXT },
     proposedSolution: { type: DataTypes.TEXT },
-    expectedBenefits: { type: DataTypes.TEXT },
-    aiUsage: { type: DataTypes.TEXT },
-    technologySuggestion: { type: DataTypes.TEXT },
     technologiesAndEfficiency: { type: DataTypes.TEXT },
     departmentId: { type: DataTypes.UUID, allowNull: true },
-    targetUsers: { type: DataTypes.STRING(300) },
-    estimatedComplexity: { type: DataTypes.ENUM('low', 'medium', 'high'), defaultValue: 'medium' },
-    estimatedDevTime: { type: DataTypes.STRING(60) },
     // Only the 3 LIVE values — unlike ideas.status, this table never carried the retired
     // submitted/discussion/technical_review_1/2/review/development_ready values, so there's
     // nothing historical to keep the enum wide for.
